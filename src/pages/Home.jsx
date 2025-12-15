@@ -1,30 +1,23 @@
-import React, { useEffect, useState } from 'react'
-import axios from 'axios'
+import VoiceControls from '../components/VoiceControls'
+import JournalSidebar from '../components/JournalSidebar'
+import '../styles/theme.css'
 
-function Home() {
-  const [message, setMessage] = useState('Loading...')
-
-  useEffect(() => {
-    axios.get(`${import.meta.env.VITE_MUFASA_API}/`)
-      .then(res => setMessage(res.data.message))
-      .catch(err => setMessage('Error connecting to API: ' + err.message))
-  }, [])
-
+export default function Home() {
   return (
-    <div style={{
-      backgroundColor: '#111',
-      color: '#fff',
-      minHeight: '100vh',
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'center',
-      flexDirection: 'column',
-      fontFamily: 'sans-serif'
-    }}>
-      <h1>Prince of Pan-Africa 🌍</h1>
-      <p>{message}</p>
+    <div className="app-container">
+      <JournalSidebar />
+      <main className="chat-area">
+        <div className="chat-header">
+          <h1>Prince of Pan-Africa</h1>
+          <p>Every month is Black History. Powered by Mufasa.</p>
+        </div>
+
+        <div className="chat-window">
+          <div id="chat-output"></div>
+        </div>
+
+        <VoiceControls />
+      </main>
     </div>
   )
 }
-
-export default Home
