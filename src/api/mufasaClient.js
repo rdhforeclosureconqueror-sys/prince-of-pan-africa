@@ -23,8 +23,30 @@ async function callMufasaAPI(endpoint, payload = {}, method = "POST") {
 
 // --- Chat ---
 export async function sendChatMessage(message) {
-  return callMufasaAPI("/chat/message", { message });
+  try {
+    const res = await fetch(`${import.meta.env.VITE_MUFASA_API}/chat/message`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ message }),
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`HTTP ${res.status}: ${err}`);
+    }
+
+    const data = await res.json();
+
+    // Normalize response fields (some FastAPI routes may return .reply or .response)
+    return data.reply || data.response || data.answer || "🦁 Mufasa is silent...";
+  } catch (error) {
+    console.error("Error talking to Mufasa:", error);
+    return "⚠️ Could not reach Mufasa. Check backend connection.";
+  }
 }
+
 
 // --- Portal ---
 export async function startPortal(portalId) {
