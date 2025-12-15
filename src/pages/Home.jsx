@@ -1,24 +1,30 @@
-import React from "react";
-import { Link } from "react-router-dom";
+import React, { useEffect, useState } from 'react'
+import axios from 'axios'
 
-export default function Home() {
+function Home() {
+  const [message, setMessage] = useState('Loading...')
+
+  useEffect(() => {
+    axios.get(`${import.meta.env.VITE_MUFASA_API}/`)
+      .then(res => setMessage(res.data.message))
+      .catch(err => setMessage('Error connecting to API: ' + err.message))
+  }, [])
+
   return (
-    <div className="text-center py-12 px-6">
-      <h1 className="text-4xl font-bold text-pangold mb-6">
-        PRINCE OF PAN-AFRICA
-      </h1>
-      <p className="text-gray-300 mb-8">
-        Explore portals of Black history, language, and wisdom. <br />
-        Every month is Black History.
-      </p>
-      <div className="flex flex-col gap-4 items-center">
-        <Link
-          to="/portal/decolonize"
-          className="bg-panred hover:bg-pangreen text-white px-6 py-3 rounded-lg font-semibold"
-        >
-          Enter Portal: Decolonize the Mind
-        </Link>
-      </div>
+    <div style={{
+      backgroundColor: '#111',
+      color: '#fff',
+      minHeight: '100vh',
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      flexDirection: 'column',
+      fontFamily: 'sans-serif'
+    }}>
+      <h1>Prince of Pan-Africa 🌍</h1>
+      <p>{message}</p>
     </div>
-  );
+  )
 }
+
+export default Home
