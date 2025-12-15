@@ -96,3 +96,46 @@ body {
 .send-btn:hover {
   background: #ffd700;
 }
+/* --- MOBILE RESPONSIVENESS --- */
+@media (max-width: 768px) {
+  .app-container {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .chat-area {
+    width: 100%;
+    padding: 1rem;
+  }
+
+  .chat-window {
+    max-height: 60vh;
+  }
+
+  .chat-input-area {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .chat-input {
+    width: 100%;
+    height: 80px;
+  }
+
+  .send-btn {
+    width: 100%;
+  }
+
+  .chat-bubble {
+    max-width: 85%;
+    font-size: 0.95rem;
+  }
+
+  .chat-header h1 {
+    font-size: 1.4rem;
+  }
+
+  .chat-header p {
+    font-size: 0.9rem;
+  }
+}
