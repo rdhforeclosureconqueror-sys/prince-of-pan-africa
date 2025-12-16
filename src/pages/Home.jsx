@@ -10,38 +10,31 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const chatEndRef = useRef(null);
 
-  // Auto-scroll to bottom when messages update
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, loading]);
+  }, [messages]);
 
   const handleSend = async () => {
     if (!input.trim() || loading) return;
 
-    // Add user's message to chat
     const userMessage = { role: "user", text: input };
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
     setLoading(true);
 
     try {
-      // 🔥 Send message to Mufasa backend
       const reply = await sendChatMessage(input);
-
       const replyText =
         typeof reply === "string"
           ? reply
           : reply.reply || reply.response || reply.answer || "🦁 Mufasa is silent...";
 
-      const aiMessage = { role: "assistant", text: replyText };
+      const aiMessage = {
+        role: "assistant",
+        text: replyText,
+        audio_url: reply.audio_url || null,
+      };
       setMessages((prev) => [...prev, aiMessage]);
-
-      // 🎧 If Mufasa’s reply includes a voice, play it
-      const audioUrl = reply.audio_url || reply.audio || null;
-      if (audioUrl) {
-        const audio = new Audio(audioUrl);
-        audio.play().catch((err) => console.warn("Autoplay blocked:", err));
-      }
     } catch (error) {
       console.error("Chat error:", error);
       setMessages((prev) => [
@@ -60,12 +53,15 @@ export default function Home() {
     }
   };
 
+  // Get latest AI message for VoiceControls
+  const latestReply = messages
+    .filter((msg) => msg.role === "assistant")
+    .slice(-1)[0]?.text || "";
+
   return (
     <div className="app-container">
-      {/* 📜 Sidebar */}
       <JournalSidebar />
 
-      {/* 💬 Main Chat Section */}
       <main className="chat-area">
         {/* Header */}
         <div className="chat-header">
@@ -76,7 +72,7 @@ export default function Home() {
           </p>
         </div>
 
-        {/* Chat Messages */}
+        {/* Chat Window */}
         <div className="chat-window" id="chat-output">
           {messages.map((msg, i) => (
             <div
@@ -103,8 +99,7 @@ export default function Home() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyPress}
-            placeholder="Speak or type your question to Mufasa..."
-            disabled={loading}
+            placeholder="Type your question to Mufasa..."
           />
           <button
             className={`send-btn ${loading ? "disabled" : ""}`}
@@ -115,10 +110,8 @@ export default function Home() {
           </button>
         </div>
 
-        {/* 🎙️ Voice Controls */}
-        <div className="mt-6">
-          <VoiceControls />
-        </div>
+        {/* Voice Controls */}
+        <VoiceControls latestMessage={latestReply} />
       </main>
     </div>
   );
