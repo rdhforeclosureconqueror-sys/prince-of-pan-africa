@@ -1,137 +1,91 @@
-import React, { useState, useRef } from "react";
+import React, { useState } from "react";
 import axios from "axios";
 import { FaMicrophone, FaVolumeUp, FaStop } from "react-icons/fa";
 
 const MUFASA_API = import.meta.env.VITE_MUFASA_API || "https://mufasa-knowledge-bank.onrender.com";
 
-export default function VoiceControls() {
-  const [text, setText] = useState("");
-  const [reply, setReply] = useState("");
+export default function VoiceControls({ latestMessage }) {
+  const [voice, setVoice] = useState("alloy");
   const [recording, setRecording] = useState(false);
   const [playing, setPlaying] = useState(false);
-  const mediaRecorderRef = useRef(null);
-  const audioChunksRef = useRef([]);
+  const [loading, setLoading] = useState(false);
 
-  // 🗣️ Send text to Mufasa and play his reply
-  const handleSpeak = async () => {
-    if (!text.trim()) return alert("Enter a message first!");
-
+  const handlePlayVoice = async () => {
+    if (!latestMessage) {
+      alert("No recent reply to play.");
+      return;
+    }
     try {
-      setReply("");
+      setLoading(true);
       const res = await axios.post(`${MUFASA_API}/chat/message`, {
-        message: text,
+        message: latestMessage,
         voice: true,
       });
-
-      setReply(res.data.reply);
-      console.log("🦁 Mufasa reply:", res.data);
-
-      if (res.data.audio_url) {
-        const audio = new Audio(res.data.audio_url);
+      const audioUrl = res.data.audio_url;
+      if (audioUrl) {
+        const audio = new Audio(audioUrl);
         setPlaying(true);
         audio.play();
         audio.onended = () => setPlaying(false);
+      } else {
+        alert("No voice available for this message.");
       }
-    } catch (err) {
-      console.error("Chat failed:", err);
-      alert("⚠️ Could not connect to Mufasa.");
+    } catch (error) {
+      console.error("Voice playback failed:", error);
+      alert("Voice playback failed.");
+    } finally {
+      setLoading(false);
     }
   };
 
-  // 🎙️ Record user voice and send to Mufasa voice chat
   const handleRecord = async () => {
-    if (recording) {
-      mediaRecorderRef.current.stop();
-      setRecording(false);
-      return;
-    }
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
-      audioChunksRef.current = [];
-
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) audioChunksRef.current.push(e.data);
-      };
-
-      mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-        const formData = new FormData();
-        formData.append("file", audioBlob, "voice.webm");
-
-        try {
-          const res = await axios.post(`${MUFASA_API}/chat/voice`, formData, {
-            headers: { "Content-Type": "multipart/form-data" },
-          });
-
-          console.log("🦁 Voice chat result:", res.data);
-          setReply(res.data.reply);
-
-          if (res.data.audio_url) {
-            const audio = new Audio(res.data.audio_url);
-            setPlaying(true);
-            audio.play();
-            audio.onended = () => setPlaying(false);
-          }
-        } catch (err) {
-          console.error("Voice chat failed:", err);
-          alert("❌ Voice chat failed.");
-        }
-      };
-
-      mediaRecorder.start();
-      setRecording(true);
-    } catch (err) {
-      console.error("Mic access denied:", err);
-      alert("🎤 Please allow microphone access.");
-    }
+    alert("🎤 Voice input feature coming soon!");
   };
 
   return (
-    <div className="p-4 bg-black/30 rounded-lg border border-yellow-700 shadow-md text-center">
-      <h2 className="text-xl font-bold mb-3 text-yellow-400">
-        🦁 Talk to Mufasa
+    <div className="p-4 bg-black/40 rounded-lg border border-yellow-700 shadow-md mt-4">
+      <h2 className="text-xl font-bold mb-2 text-yellow-400 flex items-center gap-2">
+        🦁 Mufasa Voice Controls
       </h2>
 
-      {/* Input */}
-      <textarea
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        placeholder="Ask Mufasa something wise..."
-        className="w-full p-3 rounded bg-black text-white border border-yellow-600 mb-3 resize-none"
-        rows={3}
-      />
+      {/* Voice selection dropdown */}
+      <div className="flex items-center gap-2 mb-3">
+        <label htmlFor="voice" className="text-yellow-200 text-sm">
+          Choose Voice:
+        </label>
+        <select
+          id="voice"
+          value={voice}
+          onChange={(e) => setVoice(e.target.value)}
+          className="bg-black text-yellow-300 border border-yellow-700 rounded px-2 py-1"
+        >
+          <option value="alloy">Alloy (Strong & Deep)</option>
+          <option value="verse">Verse (Smooth & Warm)</option>
+          <option value="echo">Echo (Narrative)</option>
+        </select>
+      </div>
 
       {/* Buttons */}
-      <div className="flex justify-center gap-4">
+      <div className="flex gap-3 justify-center">
         <button
-          onClick={handleSpeak}
-          disabled={playing}
+          onClick={handlePlayVoice}
+          disabled={loading || playing}
           className="bg-yellow-600 hover:bg-yellow-500 text-black px-4 py-2 rounded flex items-center gap-2 font-semibold"
         >
           <FaVolumeUp />
-          {playing ? "Playing..." : "Ask Mufasa"}
+          {playing ? "Playing..." : loading ? "Loading Voice..." : "Play Voice"}
         </button>
 
         <button
           onClick={handleRecord}
           className={`${
-            recording ? "bg-red-600 hover:bg-red-500" : "bg-green-600 hover:bg-green-500"
+            recording ? "bg-red-600" : "bg-green-600 hover:bg-green-500"
           } text-black px-4 py-2 rounded flex items-center gap-2 font-semibold`}
         >
           {recording ? <FaStop /> : <FaMicrophone />}
-          {recording ? "Stop Recording" : "Speak"}
+          {recording ? "Stop" : "Speak"}
         </button>
       </div>
-
-      {/* Reply */}
-      {reply && (
-        <div className="mt-4 p-3 bg-black/60 rounded border border-yellow-700 text-yellow-200 text-left whitespace-pre-line">
-          {reply}
-        </div>
-      )}
     </div>
   );
 }
