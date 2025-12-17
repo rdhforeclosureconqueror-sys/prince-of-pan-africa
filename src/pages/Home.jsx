@@ -106,21 +106,19 @@ const aiMessage = {
         {/* Chat Window */}
         <div className="chat-window" id="chat-output">
           {messages.map((msg, i) => (
-            <div
-              key={i}
-              className={`chat-bubble ${
-                msg.role === "user" ? "user" : "assistant"
-              }`}
-            >
-              {msg.text}
-              {msg.audio_url && (
-                <audio controls preload="auto" className="voice-reply">
-                  <source src={msg.audio_url} type="audio/mpeg" />
-                  Your browser does not support the audio playback.
-                </audio>
-              )}
-            </div>
-          ))}
+  <div key={i} className={`chat-bubble ${msg.role}`}>
+    <div>
+      {msg.text}
+      {msg.audio_url && (
+        <audio controls preload="auto" className="voice-reply">
+          <source src={msg.audio_url} type="audio/mpeg" />
+          Your browser does not support audio playback.
+        </audio>
+      )}
+    </div>
+  </div>
+))}
+
           {loading && (
             <div className="chat-bubble assistant thinking">
               🦁 Mufasa is thinking...
