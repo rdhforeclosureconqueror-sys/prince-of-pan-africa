@@ -17,7 +17,9 @@ export default function VoiceControls({ latestMessage, onVoiceSend }) {
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
 
-  // 🎧 Play/Pause functionality
+  const baseURL = "https://mufasa-knowledge-bank.onrender.com";
+
+  // 🎧 Play / Pause functionality
   const handlePlayPause = () => {
     const audio = audioRef.current;
     if (!audio) return;
@@ -40,7 +42,7 @@ export default function VoiceControls({ latestMessage, onVoiceSend }) {
     }
   };
 
-  // ⏱️ Track progress
+  // ⏱️ Track playback progress
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
@@ -60,7 +62,7 @@ export default function VoiceControls({ latestMessage, onVoiceSend }) {
     };
   }, [audioUrl]);
 
-  // 🎧 Convert text reply to speech
+  // 🗣️ Convert the latest message into speech
   const handleGenerateVoice = async () => {
     if (!latestMessage?.trim()) {
       alert("There’s no message to speak yet.");
@@ -68,7 +70,7 @@ export default function VoiceControls({ latestMessage, onVoiceSend }) {
     }
 
     try {
-      const res = await fetch("https://mufasa-knowledge-bank.onrender.com/chat/tts", {
+      const res = await fetch(`${baseURL}/chat/tts`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -77,16 +79,27 @@ export default function VoiceControls({ latestMessage, onVoiceSend }) {
         }),
       });
 
-   const baseURL = "https://mufasa-knowledge-bank.onrender.com";
-if (data.audio_url) {
-  setAudioUrl(`${baseURL}${data.audio_url}`);
-  setTimeout(() => {
-    const audio = audioRef.current;
-    if (audio) audio.play();
-  }, 500);
-} else {
-  alert("Mufasa could not generate voice.");
-}
+      const data = await res.json();
+      if (data.audio_url) {
+        const fullUrl = data.audio_url.startsWith("http")
+          ? data.audio_url
+          : `${baseURL}${data.audio_url}`;
+
+        setAudioUrl(fullUrl);
+
+        // 🎵 Autoplay when loaded
+        setTimeout(() => {
+          const audio = audioRef.current;
+          if (audio) audio.play();
+        }, 500);
+      } else {
+        alert("Mufasa could not generate voice.");
+      }
+    } catch (err) {
+      console.error("TTS Error:", err);
+      alert("There was a problem generating Mufasa’s voice.");
+    }
+  };
 
   // 🎙️ Record and send voice input to Mufasa
   const handleRecord = async () => {
@@ -113,7 +126,7 @@ if (data.audio_url) {
         if (onVoiceSend) {
           onVoiceSend(audioBlob);
         } else {
-          console.warn("⚠️ onVoiceSend not connected to parent.");
+          console.warn("⚠️ onVoiceSend not connected to parent component.");
         }
       };
 
@@ -121,11 +134,11 @@ if (data.audio_url) {
       setRecording(true);
     } catch (err) {
       console.error("Mic access denied:", err);
-      alert("Please allow microphone access.");
+      alert("Please allow microphone access to speak with Mufasa.");
     }
   };
 
-  // ⏱️ Timer format
+  // ⏱️ Format playback time
   const formatTime = (time) => {
     const m = Math.floor(time / 60).toString().padStart(2, "0");
     const s = Math.floor(time % 60).toString().padStart(2, "0");
@@ -153,7 +166,7 @@ if (data.audio_url) {
         </select>
       </div>
 
-      {/* Controls */}
+      {/* Control Buttons */}
       <div className="flex justify-center flex-wrap gap-3">
         <button
           onClick={handleGenerateVoice}
@@ -190,7 +203,7 @@ if (data.audio_url) {
         </button>
       </div>
 
-      {/* Timer + Hidden Player */}
+      {/* Playback Timer + Hidden Audio Player */}
       {audioUrl && (
         <div className="mt-3 text-yellow-300 text-sm">
           {formatTime(audioTime.current)} /{" "}
