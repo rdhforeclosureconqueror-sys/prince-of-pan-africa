@@ -77,16 +77,16 @@ export default function VoiceControls({ latestMessage, onVoiceSend }) {
         }),
       });
 
-      const data = await res.json();
-      if (data.audio_url) {
-        setAudioUrl(data.audio_url);
-      } else {
-        alert("Mufasa could not generate voice.");
-      }
-    } catch (err) {
-      console.error("TTS Error:", err);
-    }
-  };
+   const baseURL = "https://mufasa-knowledge-bank.onrender.com";
+if (data.audio_url) {
+  setAudioUrl(`${baseURL}${data.audio_url}`);
+  setTimeout(() => {
+    const audio = audioRef.current;
+    if (audio) audio.play();
+  }, 500);
+} else {
+  alert("Mufasa could not generate voice.");
+}
 
   // 🎙️ Record and send voice input to Mufasa
   const handleRecord = async () => {
