@@ -60,7 +60,7 @@ const handleVoiceInput = async (audioFile) => {
     // Show user placeholder message while processing
     setMessages((prev) => [
       ...prev,
-      { role: "user", text: "🎙️ You spoke to Mufasa..." },
+      { role: "user", text: reply.transcript || "🎙️ You spoke to Mufasa..."},
     ]);
 
     const data = await sendVoiceMessage(audioFile);
