@@ -82,6 +82,13 @@ export default function Home() {
               }`}
             >
               {msg.text}
+{msg.audio_url && (
+  <audio controls preload="auto" className="voice-reply">
+    <source src={msg.audio_url} type="audio/mpeg" />
+    Your browser does not support the audio element.
+  </audio>
+)}
+
             </div>
           ))}
           {loading && (
