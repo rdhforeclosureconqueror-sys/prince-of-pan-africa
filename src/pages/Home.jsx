@@ -65,14 +65,12 @@ const handleVoiceInput = async (audioFile) => {
 
     const data = await sendVoiceMessage(audioFile);
 
-    const aiMessage = {
-      role: "assistant",
-      text:
-        data.reply ||
-        data.response ||
-        "🦁 Mufasa spoke, but no text was returned.",
-      audio_url: data.audio_url || null,
-    };
+    const baseURL = "https://mufasa-knowledge-bank.onrender.com";
+const aiMessage = {
+  role: "assistant",
+  text: replyText,
+  audio_url: reply.audio_url ? `${baseURL}${reply.audio_url}` : null,
+};
 
     setMessages((prev) => [...prev, aiMessage]);
   } catch (err) {
