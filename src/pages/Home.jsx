@@ -3,6 +3,7 @@ import VoiceControls from "../components/VoiceControls";
 import JournalSidebar from "../components/JournalSidebar";
 import "../styles/theme.css";
 import { sendChatMessage } from "../api/mufasaClient";
+import { sendVoiceMessage } from "../api/mufasaClient";
 
 export default function Home() {
   const [messages, setMessages] = useState([]);
@@ -52,6 +53,38 @@ export default function Home() {
       handleSend();
     }
   };
+// 🎤 Handle Voice Input (Mufasa Voice Fix)
+const handleVoiceInput = async (audioFile) => {
+  setLoading(true);
+  try {
+    // Show user placeholder message while processing
+    setMessages((prev) => [
+      ...prev,
+      { role: "user", text: "🎙️ You spoke to Mufasa..." },
+    ]);
+
+    const data = await sendVoiceMessage(audioFile);
+
+    const aiMessage = {
+      role: "assistant",
+      text:
+        data.reply ||
+        data.response ||
+        "🦁 Mufasa spoke, but no text was returned.",
+      audio_url: data.audio_url || null,
+    };
+
+    setMessages((prev) => [...prev, aiMessage]);
+  } catch (err) {
+    console.error("Voice chat failed:", err);
+    setMessages((prev) => [
+      ...prev,
+      { role: "assistant", text: "⚠️ Voice chat failed to connect." },
+    ]);
+  } finally {
+    setLoading(false);
+  }
+};
 
   // Get latest AI message for VoiceControls
   const latestReply = messages
@@ -85,7 +118,7 @@ export default function Home() {
               {msg.audio_url && (
                 <audio controls preload="auto" className="voice-reply">
                   <source src={msg.audio_url} type="audio/mpeg" />
-                  Your browser does not support the audio element.
+                  Your browser does not support the audio playback.
                 </audio>
               )}
             </div>
@@ -117,7 +150,7 @@ export default function Home() {
         </div>
 
         {/* Voice Controls */}
-        <VoiceControls latestMessage={latestReply} />
+       <VoiceControls latestMessage={latestReply} onVoiceSend={handleVoiceInput} />
       </main>
     </div>
   );
