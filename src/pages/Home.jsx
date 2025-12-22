@@ -2,8 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import VoiceControls from "../components/VoiceControls";
 import JournalSidebar from "../components/JournalSidebar";
 import "../styles/theme.css";
-import { sendChatMessage } from "../api/mufasaClient";
-import { sendVoiceMessage } from "../api/mufasaClient";
+import { sendChatMessage, sendVoiceMessage } from "../api/mufasaClient";
+
 
 export default function Home() {
   const [messages, setMessages] = useState([]);
@@ -53,24 +53,60 @@ export default function Home() {
       handleSend();
     }
   };
-// 🎤 Handle Voice Input (Mufasa Voice Fix)
-const handleVoiceInput = async (audioFile) => {
+// 🎤 Handle Voice Input (Fixed)
+const handleVoiceInput = async (audioBlob) => {
+  if (loading) return;
+
   setLoading(true);
+
+  // Optional placeholder while we wait
+  setMessages((prev) => [
+    ...prev,
+    { role: "user", text: "🎙️ You spoke to Mufasa..." },
+  ]);
+
   try {
-    // Show user placeholder message while processing
-    setMessages((prev) => [
-      ...prev,
-      { role: "user", text: reply.transcript || "🎙️ You spoke to Mufasa..."},
-    ]);
+    const data = await sendVoiceMessage(audioBlob);
 
-    const data = await sendVoiceMessage(audioFile);
+    // data might be { transcript, reply, audio_url } or similar
+    const transcript =
+      data?.transcript || data?.text || data?.user_text || null;
 
+    const replyText =
+      data?.reply ||
+      data?.response ||
+      data?.answer ||
+      data?.message ||
+      (typeof data === "string" ? data : "") ||
+      "🦁 Mufasa is silent...";
+
+    // If transcript exists, replace the placeholder user message with transcript
+    if (transcript) {
+      setMessages((prev) => {
+        const next = [...prev];
+        // Replace the last user placeholder we just added
+        for (let i = next.length - 1; i >= 0; i--) {
+          if (next[i].role === "user" && next[i].text.includes("You spoke")) {
+            next[i] = { role: "user", text: `🎙️ ${transcript}` };
+            break;
+          }
+        }
+        return next;
+      });
+    }
+
+    // Normalize audio_url (sometimes backend returns full URL, sometimes "/static/...")
     const baseURL = "https://mufasa-knowledge-bank.onrender.com";
-const aiMessage = {
-  role: "assistant",
-  text: replyText,
-  audio_url: reply.audio_url ? `${baseURL}${reply.audio_url}` : null,
-};
+    const rawAudio = data?.audio_url || data?.audioUrl || null;
+
+    const fullAudioUrl =
+      rawAudio && rawAudio.startsWith("http") ? rawAudio : rawAudio ? `${baseURL}${rawAudio}` : null;
+
+    const aiMessage = {
+      role: "assistant",
+      text: replyText,
+      audio_url: fullAudioUrl,
+    };
 
     setMessages((prev) => [...prev, aiMessage]);
   } catch (err) {
