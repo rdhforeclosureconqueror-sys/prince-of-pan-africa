@@ -1,11 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { FaMicrophone, FaPlay, FaPause, FaStop } from "react-icons/fa";
 
-/**
- * VoiceControls Component
- * 🦁 Handles text-to-speech, microphone recording, and sending voice messages to Mufasa
- * Integrated with Home.jsx via onVoiceSend()
- */
 export default function VoiceControls({ latestMessage, onVoiceSend }) {
   const [voice, setVoice] = useState("alloy");
   const [audioUrl, setAudioUrl] = useState(null);
@@ -17,29 +12,58 @@ export default function VoiceControls({ latestMessage, onVoiceSend }) {
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
 
+  // ✅ NEW: keep a handle to the mic stream so we can stop it
+  const streamRef = useRef(null);
+
   const baseURL = "https://mufasa-knowledge-bank.onrender.com";
 
-  // 🎧 Play / Pause functionality
-  const handlePlayPause = () => {
+  // ✅ Helper: safely play audio (handles iOS autoplay restrictions)
+  const safePlay = async () => {
     const audio = audioRef.current;
     if (!audio) return;
+    try {
+      await audio.play();
+      setPlaying(true);
+    } catch (e) {
+      // Autoplay can fail until user taps play
+      console.warn("Audio play blocked by browser:", e);
+      setPlaying(false);
+    }
+  };
+
+  // ✅ Helper: stop TTS playback cleanly
+  const stopAudio = () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.pause();
+    audio.currentTime = 0;
+    setPlaying(false);
+  };
+
+  // ✅ Helper: stop mic tracks (critical)
+  const stopMicStream = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+  };
+
+  // 🎧 Play / Pause
+  const handlePlayPause = async () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
     if (playing) {
       audio.pause();
       setPlaying(false);
     } else {
-      audio.play();
-      setPlaying(true);
+      await safePlay();
     }
   };
 
   // ⏹️ Stop playback
   const handleStop = () => {
-    const audio = audioRef.current;
-    if (audio) {
-      audio.pause();
-      audio.currentTime = 0;
-      setPlaying(false);
-    }
+    stopAudio();
   };
 
   // ⏱️ Track playback progress
@@ -54,19 +78,29 @@ export default function VoiceControls({ latestMessage, onVoiceSend }) {
       });
     };
 
+    const onEnded = () => setPlaying(false);
+
     audio.addEventListener("timeupdate", updateTime);
-    audio.addEventListener("ended", () => setPlaying(false));
+    audio.addEventListener("ended", onEnded);
 
     return () => {
       audio.removeEventListener("timeupdate", updateTime);
+      audio.removeEventListener("ended", onEnded);
     };
   }, [audioUrl]);
 
-  // 🗣️ Convert the latest message into speech
+  // 🗣️ Convert latest message into speech
   const handleGenerateVoice = async () => {
     if (!latestMessage?.trim()) {
       alert("There’s no message to speak yet.");
       return;
+    }
+
+    // ✅ Prevent overlap: if recording, stop it first
+    if (recording && mediaRecorderRef.current?.state === "recording") {
+      mediaRecorderRef.current.stop();
+      setRecording(false);
+      stopMicStream();
     }
 
     try {
@@ -87,11 +121,13 @@ export default function VoiceControls({ latestMessage, onVoiceSend }) {
 
         setAudioUrl(fullUrl);
 
-        // 🎵 Autoplay when loaded
+        // ✅ Stop any existing playback first
+        stopAudio();
+
+        // ✅ Play as soon as the element updates
         setTimeout(() => {
-          const audio = audioRef.current;
-          if (audio) audio.play();
-        }, 500);
+          safePlay();
+        }, 150);
       } else {
         alert("Mufasa could not generate voice.");
       }
@@ -101,16 +137,26 @@ export default function VoiceControls({ latestMessage, onVoiceSend }) {
     }
   };
 
-  // 🎙️ Record and send voice input to Mufasa
+  // 🎙️ Record and send voice input
   const handleRecord = async () => {
+    // If currently recording, stop
     if (recording) {
-      mediaRecorderRef.current.stop();
+      if (mediaRecorderRef.current?.state === "recording") {
+        mediaRecorderRef.current.stop();
+      }
       setRecording(false);
+      // stream will be stopped in onstop as well, but do it here too (safe)
+      stopMicStream();
       return;
     }
 
+    // ✅ Prevent overlap: stop TTS audio before opening mic
+    stopAudio();
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
@@ -120,9 +166,13 @@ export default function VoiceControls({ latestMessage, onVoiceSend }) {
       };
 
       mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        // ✅ CRITICAL: release the mic hardware
+        stopMicStream();
 
-        // ✅ Send blob back to parent Home.jsx
+        const audioBlob = new Blob(audioChunksRef.current, {
+          type: "audio/webm",
+        });
+
         if (onVoiceSend) {
           onVoiceSend(audioBlob);
         } else {
@@ -138,7 +188,20 @@ export default function VoiceControls({ latestMessage, onVoiceSend }) {
     }
   };
 
-  // ⏱️ Format playback time
+  // ✅ Cleanup on unmount (prevents lingering mic lock)
+  useEffect(() => {
+    return () => {
+      try {
+        if (mediaRecorderRef.current?.state === "recording") {
+          mediaRecorderRef.current.stop();
+        }
+      } catch {}
+      stopMicStream();
+      stopAudio();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const formatTime = (time) => {
     const m = Math.floor(time / 60).toString().padStart(2, "0");
     const s = Math.floor(time % 60).toString().padStart(2, "0");
@@ -149,7 +212,6 @@ export default function VoiceControls({ latestMessage, onVoiceSend }) {
     <div className="p-4 bg-black/50 rounded-2xl border border-yellow-600 shadow-md text-center mt-4">
       <h2 className="text-xl font-bold mb-3 text-yellow-400">🦁 Mufasa Voice</h2>
 
-      {/* Voice Selector */}
       <div className="flex items-center justify-center gap-2 mb-3">
         <label htmlFor="voice" className="text-yellow-300 text-sm">
           Voice:
@@ -166,7 +228,6 @@ export default function VoiceControls({ latestMessage, onVoiceSend }) {
         </select>
       </div>
 
-      {/* Control Buttons */}
       <div className="flex justify-center flex-wrap gap-3">
         <button
           onClick={handleGenerateVoice}
@@ -203,7 +264,6 @@ export default function VoiceControls({ latestMessage, onVoiceSend }) {
         </button>
       </div>
 
-      {/* Playback Timer + Hidden Audio Player */}
       {audioUrl && (
         <div className="mt-3 text-yellow-300 text-sm">
           {formatTime(audioTime.current)} /{" "}
