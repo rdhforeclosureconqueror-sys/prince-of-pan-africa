@@ -102,6 +102,19 @@
     .btn.green{ border-color: rgba(16,185,129,.55); }
     .btn.gold{ border-color: rgba(214,178,94,.65); }
 
+    .select{
+      border-radius: 999px;
+      padding:10px 12px;
+      border: 1px solid rgba(214,178,94,.45);
+      background: rgba(0,0,0,.25);
+      color: var(--text);
+      box-shadow: 0 10px 30px rgba(0,0,0,.25);
+      font-weight:600;
+      font-size:13px;
+      outline:none;
+      cursor:pointer;
+    }
+
     .wrap{ max-width:1100px; margin:0 auto; padding:22px 18px 60px; }
 
     .hero{
@@ -250,6 +263,14 @@
 
       <div class="nav">
         <a class="btn gold" href="/">← Back to Black History</a>
+
+        <!-- AI voice selector (uses your Mufasa /chat/tts voices) -->
+        <select class="select" id="voiceModel" title="AI Voice">
+          <option value="alloy">Alloy (Strong)</option>
+          <option value="verse">Verse (Smooth)</option>
+          <option value="echo">Echo (Narrative)</option>
+        </select>
+
         <button class="btn green" id="btnSpeakAll" type="button">🔊 Speak Lesson</button>
         <button class="btn red" id="btnStop" type="button">⏹ Stop</button>
       </div>
@@ -262,13 +283,13 @@
         <div class="panel">
           <h2 class="title" id="lessonTitle">Swahili Lesson of the Day</h2>
           <p class="subtitle" id="lessonSubtitle">
-            Three words. One sentence. One cultural note. Practice out loud (TTS + voice input when supported).
+            Three words. One sentence. One cultural note. Practice out loud (AI TTS + mic practice when supported).
           </p>
 
           <div class="kicker">
             <div class="pill"><b id="dayNum">Day</b></div>
             <div class="pill">Theme: <b id="theme">—</b></div>
-            <div class="pill">Mode: <b id="mode">Text + Audio</b></div>
+            <div class="pill">Mode: <b id="mode">Text + AI Audio</b></div>
           </div>
 
           <div class="row" style="margin-top:16px">
@@ -295,11 +316,16 @@
               <div class="note" id="culture">—</div>
 
               <div class="footer">
-                <div><b style="color:#fff3c4">How it works:</b> Tap <code>Speak Lesson</code> to hear it. Tap <code>Practice (Mic)</code> to repeat words. If your browser blocks mic/voice, you still get the full lesson by text.</div>
+                <div>
+                  <b style="color:#fff3c4">How it works:</b>
+                  Tap <code>Speak Lesson</code> for AI voice.
+                  Tap <code>Practice (Mic)</code> to repeat words.
+                  If your browser blocks mic, you still get full lessons by text.
+                </div>
               </div>
 
               <div id="compat" class="note danger" style="display:none;margin-top:12px">
-                Your browser doesn’t support Speech Recognition here. Use Chrome on Android for best results.
+                Your browser doesn’t support Speech Recognition here. Use Chrome for best results.
               </div>
             </div>
           </div>
@@ -327,41 +353,130 @@
     </div>
   </div>
 
+  <!-- IMPORTANT: AI audio player lives in the BODY (not inside <script>) -->
+  <audio id="aiTtsPlayer" preload="auto"></audio>
+
 <script>
   // ------------------------------
-  // Load JSON lesson pack
-  // Put swahili_30days.json next to this swahili.html (same folder) OR update the path below.
+  // CONFIG
   // ------------------------------
-  const DATA_URL = "swahili_30days.json";
+  const DATA_URL = "swahili_30days.json"; // must be next to this swahili.html in /public/languages/
+  const MUFASA_BASE = "https://mufasa-knowledge-bank.onrender.com"; // your live backend
+  const TTS_ENDPOINT = `${MUFASA_BASE}/chat/tts`; // expects { text, voice_model }
 
   let PACK = null;
   let idx = 0;
 
-  // Speech (TTS)
-  function speak(text){
+  const ttsPlayer = document.getElementById("aiTtsPlayer");
+  const voiceSelect = document.getElementById("voiceModel");
+
+  // ------------------------------
+  // UI helpers
+  // ------------------------------
+  function setStatus(msg){
+    document.getElementById("status").textContent = msg;
+  }
+
+  // ------------------------------
+  // STOP (stops AI audio + mic)
+  // ------------------------------
+  function stopAll(){
+    try{
+      if (ttsPlayer){
+        ttsPlayer.pause();
+        ttsPlayer.currentTime = 0;
+        // do not clear src; leaving it allows replay without re-fetch
+      }
+    }catch(e){}
+
+    if(rec){
+      try{ rec.abort(); }catch(e){}
+    }
+    setStatus("Stopped.");
+  }
+
+  // ------------------------------
+  // AI TTS (THIS is the “intelligent voice”)
+  // ------------------------------
+  async function speak(text){
+    if(!text || !text.trim()) return;
+
+    // Must be triggered by a user gesture for autoplay to work.
+    // All calls come from button clicks, so we’re good.
+    const voice_model = (voiceSelect?.value || "alloy");
+
+    setStatus("Generating AI voice…");
+
+    try{
+      stopAll(); // stop anything currently playing
+
+      const res = await fetch(TTS_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type":"application/json" },
+        body: JSON.stringify({ text, voice_model })
+      });
+
+      const data = await res.json();
+
+      // Backends often return "/static/audio/....mp3"
+      const raw = data?.audio_url || data?.audioUrl || null;
+      if(!raw){
+        setStatus("AI voice failed (no audio_url). Falling back to browser voice.");
+        return speakFallback(text);
+      }
+
+      const fullUrl = raw.startsWith("http") ? raw : `${MUFASA_BASE}${raw}`;
+
+      // Play via <audio> (not speechSynthesis)
+      ttsPlayer.src = fullUrl;
+
+      // Some browsers need load() before play()
+      try{ ttsPlayer.load(); }catch(e){}
+
+      await ttsPlayer.play();
+      setStatus("Playing AI voice…");
+    }catch(err){
+      console.error("AI TTS error:", err);
+      setStatus("AI voice error. Falling back to browser voice.");
+      speakFallback(text);
+    }
+  }
+
+  // Browser fallback (robotic voice) only if AI TTS fails
+  function speakFallback(text){
     try{
       window.speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(text);
       u.rate = 0.95;
       u.pitch = 1.0;
       window.speechSynthesis.speak(u);
+      setStatus("Playing browser voice (fallback).");
     }catch(e){
-      console.warn("TTS error", e);
+      console.warn("Fallback TTS error", e);
+      setStatus("Voice not supported on this browser.");
     }
   }
 
-  // Speech Recognition (STT)
+  // Keep status honest when audio ends
+  if(ttsPlayer){
+    ttsPlayer.addEventListener("ended", () => setStatus("Done. Tap Speak again anytime."));
+    ttsPlayer.addEventListener("error", () => setStatus("Audio playback error."));
+  }
+
+  // ------------------------------
+  // Speech Recognition (Mic practice)
+  // ------------------------------
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   let rec = null;
 
   function initRec(){
     if(!SpeechRecognition){
       document.getElementById("compat").style.display = "block";
-      document.getElementById("mode").textContent = "Text only";
+      document.getElementById("mode").textContent = "Text + AI Audio (no mic)";
       return;
     }
     rec = new SpeechRecognition();
-    rec.lang = "en-US"; // recognition language; Swahili still works OK for short words
+    rec.lang = "en-US";
     rec.interimResults = false;
     rec.maxAlternatives = 1;
 
@@ -373,10 +488,9 @@
     rec.onend = () => setStatus("Mic ready.");
   }
 
-  function setStatus(msg){
-    document.getElementById("status").textContent = msg;
-  }
-
+  // ------------------------------
+  // Render lesson
+  // ------------------------------
   function render(){
     const d = PACK.days[idx];
     const dayLabel = `Day ${d.day} • ${d.theme}`;
@@ -390,7 +504,6 @@
     const wordsWrap = document.getElementById("words");
     wordsWrap.innerHTML = "";
 
-    // Sentence from the pack: we’ll use the provided sentence in the 3rd word item
     const sentence = d.words?.[2]?.sentence || "";
     document.getElementById("sentenceBox").innerHTML = sentence
       ? `<b style="color:#fff3c4">${sentence}</b>`
@@ -415,27 +528,28 @@
       wordsWrap.appendChild(el);
     });
 
-    // Wire buttons inside word cards
+    // Speak per-word (AI voice)
     wordsWrap.querySelectorAll("[data-speak]").forEach(btn => {
-      btn.addEventListener("click", () => {
+      btn.addEventListener("click", async () => {
         const w = d.words[Number(btn.getAttribute("data-speak"))];
-        speak(`${w.swahili}. ${w.english}. Pronunciation: ${w.pronunciation}.`);
+        await speak(`${w.swahili}. ${w.english}. Pronunciation: ${w.pronunciation}.`);
       });
     });
 
+    // Practice (mic)
     wordsWrap.querySelectorAll("[data-practice]").forEach(btn => {
       btn.addEventListener("click", () => {
         if(!rec){ initRec(); }
         if(!rec){ return; }
         setStatus("Listening… say the word 3 times.");
-        rec.start();
+        try{ rec.start(); }catch(e){ setStatus("Mic busy. Tap Stop and try again."); }
       });
     });
 
-    setStatus("Lesson loaded. Tap Speak Lesson or Practice (Mic).");
+    setStatus("Lesson loaded. Tap Speak Lesson (AI voice) or Practice (Mic).");
   }
 
-  function speakAll(){
+  async function speakAll(){
     const d = PACK.days[idx];
     const parts = [];
     parts.push(`Swahili lesson, day ${d.day}. Theme: ${d.theme}.`);
@@ -444,7 +558,7 @@
     if(sentence) parts.push(`Sentence: ${sentence}`);
     parts.push(`Tip: ${d.tip}`);
     parts.push(`Culture note: ${d.culture}`);
-    speak(parts.join(" "));
+    await speak(parts.join(" "));
   }
 
   async function load(){
@@ -452,9 +566,11 @@
       const res = await fetch(DATA_URL, { cache: "no-store" });
       if(!res.ok) throw new Error("HTTP " + res.status);
       PACK = await res.json();
-      // Default: use local day-of-month as a simple “daily rotation”
+
+      // rotate based on day-of-month
       const day = new Date().getDate(); // 1..31
       idx = Math.min((day - 1) % 30, PACK.days.length - 1);
+
       render();
       initRec();
     }catch(e){
@@ -463,12 +579,15 @@
     }
   }
 
-  // Top controls
+  // ------------------------------
+  // Controls
+  // ------------------------------
   document.getElementById("btnSpeakAll").addEventListener("click", speakAll);
+
   document.getElementById("btnStop").addEventListener("click", () => {
+    // stop AI audio + mic + fallback speech synthesis
     try{ window.speechSynthesis.cancel(); }catch(e){}
-    if(rec){ try{ rec.abort(); }catch(e){} }
-    setStatus("Stopped.");
+    stopAll();
   });
 
   document.getElementById("btnPrev").addEventListener("click", () => {
@@ -476,6 +595,7 @@
     idx = (idx - 1 + PACK.days.length) % PACK.days.length;
     render();
   });
+
   document.getElementById("btnNext").addEventListener("click", () => {
     if(!PACK) return;
     idx = (idx + 1) % PACK.days.length;
@@ -486,21 +606,17 @@
     if(!rec){ initRec(); }
     if(!rec){ return; }
     setStatus("Listening… say today’s sentence once.");
-    rec.start();
+    try{ rec.start(); }catch(e){ setStatus("Mic busy. Tap Stop and try again."); }
   });
 
-  document.getElementById("btnSpeakSentence").addEventListener("click", () => {
+  document.getElementById("btnSpeakSentence").addEventListener("click", async () => {
     if(!PACK) return;
     const d = PACK.days[idx];
     const sentence = d.words?.[2]?.sentence || "";
-    if(sentence) speak(sentence);
+    if(sentence) await speak(sentence);
   });
 
   load();
 </script>
-
-<!-- AI Voice Player (MUST be before closing body) -->
-<audio id="aiTtsPlayer" preload="auto"></audio>
-
 </body>
 </html>
