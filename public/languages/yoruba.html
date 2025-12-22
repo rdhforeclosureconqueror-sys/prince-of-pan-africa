@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Mufasa • YORUBA Lesson of the Day</title>
+  <title>Mufasa • Yoruba Lesson of the Day</title>
 
   <style>
     :root{
@@ -49,8 +49,7 @@
     }
     .mark{
       width:42px; height:42px; border-radius: 12px;
-      background:
-        linear-gradient(135deg, rgba(214,178,94,.35), rgba(214,178,94,.06));
+      background: linear-gradient(135deg, rgba(214,178,94,.35), rgba(214,178,94,.06));
       border: 1px solid rgba(214,178,94,.45);
       box-shadow: 0 10px 28px rgba(214,178,94,.10);
       display:grid; place-items:center;
@@ -101,6 +100,19 @@
     .btn.red{ border-color: rgba(225,29,46,.55); }
     .btn.green{ border-color: rgba(16,185,129,.55); }
     .btn.gold{ border-color: rgba(214,178,94,.65); }
+
+    .select{
+      border-radius: 999px;
+      padding:10px 12px;
+      border: 1px solid rgba(214,178,94,.45);
+      background: rgba(0,0,0,.25);
+      color: var(--text);
+      box-shadow: 0 10px 30px rgba(0,0,0,.25);
+      font-weight:600;
+      font-size:13px;
+      outline:none;
+      cursor:pointer;
+    }
 
     .wrap{ max-width:1100px; margin:0 auto; padding:22px 18px 60px; }
 
@@ -243,13 +255,21 @@
       <div class="brand">
         <div class="mark"><span>M</span></div>
         <div style="min-width:0">
-          <h1>Mufasa • YORUBA Lesson</h1>
+          <h1>Mufasa • Yoruba Lesson</h1>
           <p id="todayLabel">Lesson of the Day • Loading…</p>
         </div>
       </div>
 
       <div class="nav">
-        <a class="btn gold" href="index.html">← Back to Black History</a>
+        <a class="btn gold" href="/">← Back to Black History</a>
+
+        <!-- AI voice selector -->
+        <select class="select" id="voiceModel" title="AI Voice">
+          <option value="alloy">Alloy (Strong)</option>
+          <option value="verse">Verse (Smooth)</option>
+          <option value="echo">Echo (Narrative)</option>
+        </select>
+
         <button class="btn green" id="btnSpeakAll" type="button">🔊 Speak Lesson</button>
         <button class="btn red" id="btnStop" type="button">⏹ Stop</button>
       </div>
@@ -260,15 +280,15 @@
     <div class="hero">
       <div class="hero-grid">
         <div class="panel">
-          <h2 class="title" id="lessonTitle">Swahili Lesson of the Day</h2>
+          <h2 class="title" id="lessonTitle">Yoruba Lesson of the Day</h2>
           <p class="subtitle" id="lessonSubtitle">
-            Three words. One sentence. One cultural note. Practice out loud (TTS + voice input when supported).
+            Three words. One sentence. One cultural note. Practice out loud (AI TTS + mic practice when supported).
           </p>
 
           <div class="kicker">
             <div class="pill"><b id="dayNum">Day</b></div>
             <div class="pill">Theme: <b id="theme">—</b></div>
-            <div class="pill">Mode: <b id="mode">Text + Audio</b></div>
+            <div class="pill">Mode: <b id="mode">Text + AI Audio</b></div>
           </div>
 
           <div class="row" style="margin-top:16px">
@@ -295,11 +315,16 @@
               <div class="note" id="culture">—</div>
 
               <div class="footer">
-                <div><b style="color:#fff3c4">How it works:</b> Tap <code>Speak Lesson</code> to hear it. Tap <code>Practice (Mic)</code> to repeat words. If your browser blocks mic/voice, you still get the full lesson by text.</div>
+                <div>
+                  <b style="color:#fff3c4">How it works:</b>
+                  Tap <code>Speak Lesson</code> for AI voice.
+                  Tap <code>Practice (Mic)</code> to repeat words.
+                  If your browser blocks mic, you still get full lessons by text.
+                </div>
               </div>
 
               <div id="compat" class="note danger" style="display:none;margin-top:12px">
-                Your browser doesn’t support Speech Recognition here. Use Chrome on Android for best results.
+                Your browser doesn’t support Speech Recognition here. Use Chrome for best results.
               </div>
             </div>
           </div>
@@ -327,41 +352,114 @@
     </div>
   </div>
 
+  <!-- AI audio player (must be inside body) -->
+  <audio id="aiTtsPlayer" preload="auto"></audio>
+
 <script>
   // ------------------------------
-  // Load JSON lesson pack
-  // Put swahili_30days.json next to this swahili.html (same folder) OR update the path below.
+  // CONFIG
   // ------------------------------
-  const DATA_URL = "yoruba_30days.json";
+  const DATA_URL = "yoruba_30days.json";          // put next to this yoruba.html
+  const MUFASA_BASE = "https://mufasa-knowledge-bank.onrender.com";
+  const TTS_ENDPOINT = `${MUFASA_BASE}/chat/tts`; // expects { text, voice_model }
 
   let PACK = null;
   let idx = 0;
 
-  // Speech (TTS)
-  function speak(text){
+  const ttsPlayer = document.getElementById("aiTtsPlayer");
+  const voiceSelect = document.getElementById("voiceModel");
+
+  function setStatus(msg){
+    document.getElementById("status").textContent = msg;
+  }
+
+  function stopAll(){
+    try{
+      if (ttsPlayer){
+        ttsPlayer.pause();
+        ttsPlayer.currentTime = 0;
+      }
+    }catch(e){}
+
+    if(rec){
+      try{ rec.abort(); }catch(e){}
+    }
+    setStatus("Stopped.");
+  }
+
+  // AI TTS (intelligent voice)
+  async function speak(text){
+    if(!text || !text.trim()) return;
+
+    const voice_model = (voiceSelect?.value || "alloy");
+    setStatus("Generating AI voice…");
+
+    try{
+      stopAll();
+
+      const res = await fetch(TTS_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type":"application/json" },
+        body: JSON.stringify({ text, voice_model })
+      });
+
+      const data = await res.json();
+      const raw = data?.audio_url || data?.audioUrl || null;
+
+      if(!raw){
+        setStatus("AI voice failed (no audio_url). Falling back to browser voice.");
+        return speakFallback(text);
+      }
+
+      const fullUrl = raw.startsWith("http") ? raw : `${MUFASA_BASE}${raw}`;
+      ttsPlayer.src = fullUrl;
+      try{ ttsPlayer.load(); }catch(e){}
+      await ttsPlayer.play();
+      setStatus("Playing AI voice…");
+    }catch(err){
+      console.error("AI TTS error:", err);
+      setStatus("AI voice error. Falling back to browser voice.");
+      speakFallback(text);
+    }
+  }
+
+  function speakFallback(text){
     try{
       window.speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(text);
       u.rate = 0.95;
       u.pitch = 1.0;
       window.speechSynthesis.speak(u);
+      setStatus("Playing browser voice (fallback).");
     }catch(e){
-      console.warn("TTS error", e);
+      setStatus("Voice not supported on this browser.");
     }
   }
 
-  // Speech Recognition (STT)
+  if(ttsPlayer){
+    ttsPlayer.addEventListener("ended", () => setStatus("Done. Tap Speak again anytime."));
+    ttsPlayer.addEventListener("error", () => setStatus("Audio playback error."));
+  }
+
+  // ------------------------------
+  // Speech Recognition (mic practice)
+  // NOTE: Yoruba STT support varies by browser. We set a reasonable default.
+  // ------------------------------
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   let rec = null;
 
   function initRec(){
     if(!SpeechRecognition){
       document.getElementById("compat").style.display = "block";
-      document.getElementById("mode").textContent = "Text only";
+      document.getElementById("mode").textContent = "Text + AI Audio (no mic)";
       return;
     }
+
     rec = new SpeechRecognition();
-    rec.lang = "yo-NG"; // Yoruba (Nigeria)
+
+    // Many browsers don't reliably support yo-NG. We'll keep en-US for stability.
+    // If your Chrome supports yo-NG, you can switch this to "yo-NG".
+    rec.lang = "en-US";
 
     rec.interimResults = false;
     rec.maxAlternatives = 1;
@@ -374,15 +472,12 @@
     rec.onend = () => setStatus("Mic ready.");
   }
 
-  function setStatus(msg){
-    document.getElementById("status").textContent = msg;
-  }
-
   function render(){
     const d = PACK.days[idx];
+
     const dayLabel = `Day ${d.day} • ${d.theme}`;
     document.getElementById("todayLabel").textContent = dayLabel;
-    document.getElementById("lessonTitle").textContent = `Swahili Lesson • Day ${d.day}`;
+    document.getElementById("lessonTitle").textContent = `Yoruba Lesson • Day ${d.day}`;
     document.getElementById("dayNum").textContent = `Day ${d.day}/30`;
     document.getElementById("theme").textContent = d.theme;
     document.getElementById("tip").textContent = d.tip;
@@ -391,7 +486,7 @@
     const wordsWrap = document.getElementById("words");
     wordsWrap.innerHTML = "";
 
-    // Sentence from the pack: we’ll use the provided sentence in the 3rd word item
+    // sentence (same schema you used in Swahili pack)
     const sentence = d.words?.[2]?.sentence || "";
     document.getElementById("sentenceBox").innerHTML = sentence
       ? `<b style="color:#fff3c4">${sentence}</b>`
@@ -401,12 +496,18 @@
       const el = document.createElement("div");
       el.className = "word";
 
+      // NOTE: Your Yoruba JSON might use w.yoruba instead of w.swahili.
+      // This supports both.
+      const localWord = w.yoruba ?? w.swahili ?? w.word ?? "";
+      const english = w.english ?? w.en ?? "";
+      const pronunciation = w.pronunciation ?? w.pronounce ?? "";
+
       el.innerHTML = `
         <div class="word-top">
-          <div class="sw">${w.swahili}</div>
-          <div class="en">${w.english}</div>
+          <div class="sw">${localWord}</div>
+          <div class="en">${english}</div>
         </div>
-        <div class="mini">Pronunciation: <b style="color:#fff3c4">${w.pronunciation}</b></div>
+        <div class="mini">Pronunciation: <b style="color:#fff3c4">${pronunciation}</b></div>
         <div class="controls" style="margin:0">
           <button class="btn green" type="button" data-speak="${i}">🔊 Speak</button>
           <button class="btn red" type="button" data-practice="${i}">🎙 Practice</button>
@@ -416,60 +517,74 @@
       wordsWrap.appendChild(el);
     });
 
-    // Wire buttons inside word cards
+    // Speak per-word (AI voice)
     wordsWrap.querySelectorAll("[data-speak]").forEach(btn => {
-      btn.addEventListener("click", () => {
+      btn.addEventListener("click", async () => {
         const w = d.words[Number(btn.getAttribute("data-speak"))];
-        speak(`${w.swahili}. ${w.english}. Pronunciation: ${w.pronunciation}.`);
+        const localWord = w.yoruba ?? w.swahili ?? w.word ?? "";
+        const english = w.english ?? w.en ?? "";
+        const pronunciation = w.pronunciation ?? w.pronounce ?? "";
+        await speak(`${localWord}. ${english}. Pronunciation: ${pronunciation}.`);
       });
     });
 
+    // Mic practice
     wordsWrap.querySelectorAll("[data-practice]").forEach(btn => {
       btn.addEventListener("click", () => {
         if(!rec){ initRec(); }
         if(!rec){ return; }
         setStatus("Listening… say the word 3 times.");
-        rec.start();
+        try{ rec.start(); }catch(e){ setStatus("Mic busy. Tap Stop and try again."); }
       });
     });
 
-    setStatus("Lesson loaded. Tap Speak Lesson or Practice (Mic).");
+    setStatus("Lesson loaded. Tap Speak Lesson (AI voice) or Practice (Mic).");
   }
 
-  function speakAll(){
+  async function speakAll(){
     const d = PACK.days[idx];
     const parts = [];
-    parts.push(`YORUBA lesson, day ${d.day}. Theme: ${d.theme}.`);
-    d.words.forEach(w => parts.push(`${w.swahili}. ${w.english}. Pronunciation: ${w.pronunciation}.`));
+    parts.push(`Yoruba lesson, day ${d.day}. Theme: ${d.theme}.`);
+
+    d.words.forEach(w => {
+      const localWord = w.yoruba ?? w.swahili ?? w.word ?? "";
+      const english = w.english ?? w.en ?? "";
+      const pronunciation = w.pronunciation ?? w.pronounce ?? "";
+      parts.push(`${localWord}. ${english}. Pronunciation: ${pronunciation}.`);
+    });
+
     const sentence = d.words?.[2]?.sentence;
     if(sentence) parts.push(`Sentence: ${sentence}`);
     parts.push(`Tip: ${d.tip}`);
     parts.push(`Culture note: ${d.culture}`);
-    speak(parts.join(" "));
+
+    await speak(parts.join(" "));
   }
 
   async function load(){
     try{
-     const res = await fetch("/api/yoruba/today");
+      const res = await fetch(DATA_URL, { cache: "no-store" });
       if(!res.ok) throw new Error("HTTP " + res.status);
+
       PACK = await res.json();
-      // Default: use local day-of-month as a simple “daily rotation”
+
       const day = new Date().getDate(); // 1..31
       idx = Math.min((day - 1) % 30, PACK.days.length - 1);
+
       render();
       initRec();
     }catch(e){
       console.error(e);
-      setStatus("Could not load YORUBA_30days.json. Make sure it is in the same folder as YORUBA.html.");
+      setStatus("Could not load yoruba_30days.json. Make sure it is in the same folder as yoruba.html.");
     }
   }
 
   // Top controls
   document.getElementById("btnSpeakAll").addEventListener("click", speakAll);
+
   document.getElementById("btnStop").addEventListener("click", () => {
     try{ window.speechSynthesis.cancel(); }catch(e){}
-    if(rec){ try{ rec.abort(); }catch(e){} }
-    setStatus("Stopped.");
+    stopAll();
   });
 
   document.getElementById("btnPrev").addEventListener("click", () => {
@@ -477,6 +592,7 @@
     idx = (idx - 1 + PACK.days.length) % PACK.days.length;
     render();
   });
+
   document.getElementById("btnNext").addEventListener("click", () => {
     if(!PACK) return;
     idx = (idx + 1) % PACK.days.length;
@@ -487,14 +603,14 @@
     if(!rec){ initRec(); }
     if(!rec){ return; }
     setStatus("Listening… say today’s sentence once.");
-    rec.start();
+    try{ rec.start(); }catch(e){ setStatus("Mic busy. Tap Stop and try again."); }
   });
 
-  document.getElementById("btnSpeakSentence").addEventListener("click", () => {
+  document.getElementById("btnSpeakSentence").addEventListener("click", async () => {
     if(!PACK) return;
     const d = PACK.days[idx];
     const sentence = d.words?.[2]?.sentence || "";
-    if(sentence) speak(sentence);
+    if(sentence) await speak(sentence);
   });
 
   load();
