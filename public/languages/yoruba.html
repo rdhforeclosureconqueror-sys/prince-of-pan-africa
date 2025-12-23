@@ -100,6 +100,14 @@
     .hero-grid{ display:grid; grid-template-columns: 1.2fr .8fr; gap:16px; }
     @media (max-width: 900px){ .hero-grid{ grid-template-columns:1fr; } }
 
+    .panel{
+      border-radius: var(--radius);
+      border: 1px solid rgba(214,178,94,.20);
+      background: var(--panel);
+      padding: 16px;
+      box-shadow: 0 14px 40px rgba(0,0,0,.35);
+    }
+
     .title{
       margin:0;
       font-size: 22px;
@@ -110,13 +118,6 @@
     }
     .subtitle{ margin: 8px 0 0; color: var(--muted); line-height:1.5; font-size: 13.5px; }
 
-    .panel{
-      border-radius: var(--radius);
-      border: 1px solid rgba(214,178,94,.20);
-      background: var(--panel);
-      padding: 16px;
-      box-shadow: 0 14px 40px rgba(0,0,0,.35);
-    }
     .kicker{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:14px; }
     .pill{
       padding:8px 12px;
@@ -127,8 +128,10 @@
       font-size: 12px;
     }
     .pill b{ color: var(--text); font-weight:700; }
+
     .row{ display:grid; grid-template-columns: 1fr 1fr; gap:16px; margin-top: 16px; }
     @media (max-width: 900px){ .row{ grid-template-columns:1fr; } }
+
     .section-title{ margin:0 0 10px; font-size: 12px; letter-spacing:.18em; text-transform:uppercase; color: var(--muted); }
 
     .word{
@@ -151,14 +154,7 @@
 
     .controls{ display:flex; gap:10px; flex-wrap:wrap; margin-top: 12px; }
     .status{ margin-top: 10px; font-size: 12px; color: var(--muted); }
-    .footer{
-      margin-top: 18px;
-      color: rgba(201,194,179,.85);
-      font-size: 12px;
-      line-height: 1.5;
-      border-top: 1px solid rgba(214,178,94,.16);
-      padding-top: 14px;
-    }
+
     .note{
       border-left: 3px solid rgba(214,178,94,.7);
       padding: 10px 12px;
@@ -169,14 +165,12 @@
       line-height: 1.55;
     }
     .danger{ border-left-color: rgba(225,29,46,.7); }
-    code{ color: #fff3c4; }
-    .small{ font-size:12px; color: var(--muted); margin-top:8px; }
-    .divider{ height:10px; }
+
     .debug{
       margin-top:12px;
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
       font-size: 11px;
-      color: rgba(201,194,179,.9);
+      color: rgba(201,194,179,.95);
       background: rgba(0,0,0,.35);
       border: 1px dashed rgba(214,178,94,.25);
       border-radius: 12px;
@@ -199,9 +193,9 @@
       </div>
 
       <div class="nav">
-        <a class="btn gold" href="/">← Back to Black History</a>
+        <a class="btn gold" id="backBtn" href="/">← Back to Black History</a>
+        <a class="btn green" id="openJsonBtn" href="#" target="_blank" rel="noreferrer">📄 Open JSON</a>
         <button class="btn green" id="btnSpeakAll" type="button">🔊 Speak Lesson</button>
-        <button class="btn green" id="btnOpenJson" type="button">🧾 Open JSON</button>
         <button class="btn red" id="btnStop" type="button">⏹ Stop</button>
       </div>
     </div>
@@ -210,6 +204,7 @@
   <div class="wrap">
     <div class="hero">
       <div class="hero-grid">
+
         <div class="panel">
           <h2 class="title" id="lessonTitle">Yorùbá Lesson of the Day</h2>
           <p class="subtitle">
@@ -219,7 +214,7 @@
           <div class="kicker">
             <div class="pill"><b id="dayNum">Day</b></div>
             <div class="pill">Theme: <b id="theme">—</b></div>
-            <div class="pill">Mode: <b id="mode">Text + AI Audio</b></div>
+            <div class="pill">Mode: <b id="mode">Text + Voice</b></div>
           </div>
 
           <div class="row">
@@ -234,7 +229,6 @@
               </div>
 
               <div class="status" id="status">Loading lesson data…</div>
-              <div class="small" id="dataHint"></div>
               <div class="debug" id="debugBox" style="display:none"></div>
             </div>
 
@@ -242,32 +236,30 @@
               <div class="section-title">Daily Tip</div>
               <div class="note" id="tip">—</div>
 
-              <div class="divider"></div>
+              <div style="height:10px"></div>
 
               <div class="section-title">Culture Note</div>
               <div class="note" id="culture">—</div>
 
-              <div class="footer">
-                <div><b style="color:#fff3c4">How it works:</b> Tap <code>Speak Lesson</code> for voice. Tap <code>Practice (Mic)</code> to speak back.</div>
+              <div id="compat" class="note danger" style="display:none;margin-top:12px">
+                Mic practice not supported here. Use Chrome desktop for best results.
               </div>
 
-              <div id="compat" class="note danger" style="display:none;margin-top:12px">
-                Your browser doesn’t support Speech Recognition here. Use Chrome for best results.
-              </div>
+              <div id="fatal" class="note danger" style="display:none;margin-top:12px"></div>
             </div>
           </div>
         </div>
 
         <div class="panel">
           <div class="section-title">Quick Practice Flow</div>
-          <div class="note" id="practiceFlow">
+          <div class="note">
             1) Listen to each word (🔊).<br/>
             2) Repeat it 3 times (🎙).<br/>
             3) Say the example sentence 2 times.<br/><br/>
             <b>Goal:</b> consistency + confidence — every day.
           </div>
 
-          <div class="divider"></div>
+          <div style="height:10px"></div>
 
           <div class="section-title">Today’s Sentence</div>
           <div class="note" id="sentenceBox">—</div>
@@ -276,43 +268,46 @@
             <button class="btn green" id="btnSpeakSentence" type="button">🔊 Speak Sentence</button>
           </div>
         </div>
+
       </div>
     </div>
   </div>
 
 <script>
-  /**
-   * THIS PAGE IS FIXED.
-   * If you still see "Unexpected token '<'", that means your JSON URL is returning HTML.
-   * This loader checks multiple possible URLs AND prints debug details.
-   */
+  // ==========================================================
+  // HARD-FIX LOADER
+  // - Always fetches JSON relative to THIS page URL
+  // - Adds cache-bust to avoid stale deploys
+  // - Detects HTML/404 (Unexpected token '<') and shows it
+  // ==========================================================
 
-  const CACHE_BUST = `cb=${Date.now()}`;
+  const statusEl = document.getElementById("status");
+  const debugBox = document.getElementById("debugBox");
+  const fatalEl = document.getElementById("fatal");
 
-  // We try all common variants:
-  // - Same folder as yoruba.html (correct if both are in /public/languages/)
-  // - /languages/ (lowercase)
-  // - /Languages/ (uppercase) because Windows/GitHub can confuse folder names, but Linux is case-sensitive.
-  const CANDIDATE_URLS = [
-    `./yoruba_30days.json?${CACHE_BUST}`,
-    `../languages/yoruba_30days.json?${CACHE_BUST}`,
-    `/languages/yoruba_30days.json?${CACHE_BUST}`,
-    `/Languages/yoruba_30days.json?${CACHE_BUST}`,
-    `./yoruba_30days.json` // last try without bust
-  ];
+  function setStatus(msg){ statusEl.textContent = msg; }
+  function showDebug(msg){
+    debugBox.style.display = "block";
+    debugBox.textContent = msg;
+  }
+  function showFatal(msg){
+    fatalEl.style.display = "block";
+    fatalEl.textContent = msg;
+  }
+
+  // Compute the JSON URL from the current page location.
+  // If you're on:  https://.../languages/yoruba.html
+  // This becomes: https://.../languages/yoruba_30days.json
+  const jsonUrl = new URL("yoruba_30days.json", window.location.href).toString();
+  const jsonUrlNoCache = jsonUrl + (jsonUrl.includes("?") ? "&" : "?") + "v=" + Date.now();
+
+  // Wire Open JSON button (so you can confirm EXACTLY what the page will fetch)
+  document.getElementById("openJsonBtn").href = jsonUrl;
 
   let PACK = null;
   let idx = 0;
-  let lastGoodUrl = null;
 
-  function setStatus(msg){ document.getElementById("status").textContent = msg; }
-  function showDebug(text){
-    const box = document.getElementById("debugBox");
-    box.style.display = "block";
-    box.textContent = text;
-  }
-
-  // Mic / Recognition
+  // --- Speech Recognition (Mic) ---
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   let rec = null;
 
@@ -326,16 +321,15 @@
     rec.lang = "en-US";
     rec.interimResults = false;
     rec.maxAlternatives = 1;
-
     rec.onresult = (e) => {
       const said = e.results?.[0]?.[0]?.transcript || "";
-      setStatus("Heard: “" + said + "”");
+      setStatus('Heard: “' + said + '”');
     };
     rec.onerror = (e) => setStatus("Mic error: " + (e.error || "unknown"));
     rec.onend = () => setStatus("Mic ready.");
   }
 
-  // TTS
+  // --- TTS ---
   function speak(text){
     try{
       window.speechSynthesis.cancel();
@@ -359,6 +353,7 @@
     document.getElementById("lessonTitle").textContent = `Yorùbá Lesson • Day ${d.day}`;
     document.getElementById("dayNum").textContent = `Day ${d.day}/${PACK.duration_days || PACK.days.length}`;
     document.getElementById("theme").textContent = d.theme || "—";
+
     document.getElementById("tip").textContent = d.daily_tip || "—";
     document.getElementById("culture").textContent = d.culture_note || "—";
 
@@ -369,14 +364,18 @@
     wordsWrap.innerHTML = "";
 
     (d.words || []).forEach((w, i) => {
+      const yo = w.yoruba || "";
+      const en = w.english || "";
+      const pron = w.pronunciation_hint || "—";
+
       const el = document.createElement("div");
       el.className = "word";
       el.innerHTML = `
         <div class="word-top">
-          <div class="yo">${w.yoruba || ""}</div>
-          <div class="en">${w.english || ""}</div>
+          <div class="yo">${yo}</div>
+          <div class="en">${en}</div>
         </div>
-        <div class="mini">Pronunciation: <b style="color:#fff3c4">${w.pronunciation_hint || "—"}</b></div>
+        <div class="mini">Pronunciation: <b style="color:#fff3c4">${pron}</b></div>
         ${w.example_yoruba ? `<div class="mini">Example: <b style="color:#fff3c4">${w.example_yoruba}</b>${w.example_english ? ` — ${w.example_english}` : ""}</div>` : ""}
         <div class="controls" style="margin:0">
           <button class="btn green" type="button" data-speak="${i}">🔊 Speak</button>
@@ -389,16 +388,22 @@
     wordsWrap.querySelectorAll("[data-speak]").forEach(btn => {
       btn.addEventListener("click", () => {
         const w = d.words[Number(btn.getAttribute("data-speak"))];
-        speak(`${w.yoruba}. ${w.english}. ${w.pronunciation_hint ? "Pronunciation: " + w.pronunciation_hint + "." : ""} ${w.example_yoruba ? "Example: " + w.example_yoruba + "." : ""} ${w.example_english || ""}`);
+        const parts = [];
+        if(w.yoruba) parts.push(w.yoruba + ".");
+        if(w.english) parts.push(w.english + ".");
+        if(w.pronunciation_hint) parts.push("Pronunciation: " + w.pronunciation_hint + ".");
+        if(w.example_yoruba) parts.push("Example: " + w.example_yoruba + ".");
+        if(w.example_english) parts.push(w.example_english);
+        speak(parts.join(" "));
       });
     });
 
     wordsWrap.querySelectorAll("[data-practice]").forEach(btn => {
       btn.addEventListener("click", () => {
-        if(!rec){ initRec(); }
+        if(!rec) initRec();
         if(!rec) return;
         const w = d.words[Number(btn.getAttribute("data-practice"))];
-        setStatus(`Listening… say "${w.yoruba}"`);
+        setStatus(`Listening… say "${w.yoruba || ""}"`);
         try{ rec.start(); }catch(e){}
       });
     });
@@ -411,7 +416,8 @@
     const parts = [];
     parts.push(`Yoruba lesson, day ${d.day}. Theme: ${d.theme || ""}.`);
     (d.words || []).forEach(w => {
-      parts.push(`${w.yoruba}. ${w.english}.`);
+      if(w.yoruba) parts.push(w.yoruba + ".");
+      if(w.english) parts.push(w.english + ".");
       if(w.pronunciation_hint) parts.push(`Pronunciation: ${w.pronunciation_hint}.`);
       if(w.example_yoruba) parts.push(`Example: ${w.example_yoruba}.`);
       if(w.example_english) parts.push(w.example_english);
@@ -421,103 +427,88 @@
     speak(parts.join(" "));
   }
 
-  async function fetchJsonWithDebug(url){
-    const res = await fetch(url, { cache: "no-store" });
-    const contentType = res.headers.get("content-type") || "";
-    const text = await res.text();
-
-    // Try parse JSON
-    try{
-      const data = JSON.parse(text);
-      return {
-        ok:true,
-        data,
-        debug:`OK: ${url}\nHTTP: ${res.status}\nContent-Type: ${contentType}\nFirst chars: ${text.slice(0,60).replace(/\s+/g," ").trim()}`
-      };
-    }catch(e){
-      const head = text.slice(0, 140).replace(/\s+/g," ").trim();
-      return {
-        ok:false,
-        debug:
-          `FAILED: ${url}\nHTTP: ${res.status}\nContent-Type: ${contentType}\n` +
-          `First chars: ${head}\n\n` +
-          `Meaning: this URL returned HTML (often a 404 page) OR your .json file contains HTML.\n`
-      };
-    }
-  }
-
   async function load(){
-    setStatus("Loading lesson data…");
-    document.getElementById("dataHint").textContent = `Looking for: yoruba_30days.json (same folder or /languages/)`;
+    try{
+      setStatus("Loading lesson data…");
+      showDebug(
+        "Page URL:\n" + window.location.href + "\n\n" +
+        "JSON URL (computed):\n" + jsonUrl + "\n\n" +
+        "Fetching (no-cache):\n" + jsonUrlNoCache + "\n"
+      );
 
-    const debugs = [];
+      const res = await fetch(jsonUrlNoCache, { cache: "no-store" });
+      const text = await res.text();
+      const ct = res.headers.get("content-type") || "";
 
-    for(const url of CANDIDATE_URLS){
-      const r = await fetchJsonWithDebug(url);
-      debugs.push(r.debug);
+      // If the server returns HTML or a 404 page, it usually starts with "<"
+      const head = (text || "").trim().slice(0, 80);
 
-      if(r.ok){
-        PACK = r.data;
-        lastGoodUrl = url;
-
-        // Pick "day of month" lesson
-        const total = PACK.days?.length || 30;
-        const day = new Date().getDate();
-        idx = Math.min((day - 1) % total, total - 1);
-
-        render();
-        initRec();
-        showDebug(debugs.join("\n------------------------\n"));
+      if(!res.ok){
+        showFatal(`Fetch failed (HTTP ${res.status}). Your server is not serving the JSON at the computed URL.`);
+        showDebug(debugBox.textContent + "\n\nResponse Content-Type:\n" + ct + "\n\nResponse head:\n" + head);
+        setStatus("Could not load JSON ❌");
         return;
       }
-    }
 
-    setStatus("Could not load JSON ❌ (see debug box)");
-    showDebug(debugs.join("\n------------------------\n"));
+      if(head.startsWith("<")){
+        showFatal("Your fetch got HTML instead of JSON (this causes: Unexpected token '<'). That means a 404 page or route is being served.");
+        showDebug(debugBox.textContent + "\n\nResponse Content-Type:\n" + ct + "\n\nResponse head:\n" + head + "\n\nFix: Ensure yoruba_30days.json is a real file at /public/languages/ and your deploy serves /public as static.");
+        setStatus("Could not load JSON ❌");
+        return;
+      }
+
+      PACK = JSON.parse(text);
+
+      if(!PACK || !Array.isArray(PACK.days)){
+        showFatal("JSON loaded but format is wrong. Expected: { days: [ ... ] }");
+        showDebug(debugBox.textContent + "\n\nLoaded keys:\n" + Object.keys(PACK || {}).join(", "));
+        setStatus("Bad JSON shape ❌");
+        return;
+      }
+
+      const total = PACK.days.length || 30;
+      const day = new Date().getDate();
+      idx = Math.min((day - 1) % total, total - 1);
+
+      initRec();
+      render();
+    }catch(e){
+      console.error(e);
+      showFatal("JS error while loading/parsing JSON. Open DevTools Console for the exact error.");
+      setStatus("Error ❌");
+    }
   }
 
-  // Buttons
+  // Controls
   document.getElementById("btnSpeakAll").addEventListener("click", () => PACK && speakAll());
   document.getElementById("btnStop").addEventListener("click", () => {
     try{ window.speechSynthesis.cancel(); }catch(e){}
     if(rec){ try{ rec.abort(); }catch(e){} }
     setStatus("Stopped.");
   });
-
   document.getElementById("btnPrev").addEventListener("click", () => {
     if(!PACK) return;
-    idx=(idx-1+PACK.days.length)%PACK.days.length;
+    idx = (idx - 1 + PACK.days.length) % PACK.days.length;
     render();
   });
-
   document.getElementById("btnNext").addEventListener("click", () => {
     if(!PACK) return;
-    idx=(idx+1)%PACK.days.length;
+    idx = (idx + 1) % PACK.days.length;
     render();
   });
-
   document.getElementById("btnMic").addEventListener("click", () => {
-    if(!rec){ initRec(); }
+    if(!rec) initRec();
     if(!rec) return;
     setStatus("Listening… say today’s sentence.");
     try{ rec.start(); }catch(e){}
   });
-
   document.getElementById("btnSpeakSentence").addEventListener("click", () => {
     if(!PACK) return;
-    const s=buildSentence(PACK.days[idx]);
+    const s = buildSentence(PACK.days[idx]);
     if(s) speak(s);
-  });
-
-  document.getElementById("btnOpenJson").addEventListener("click", () => {
-    const guess = lastGoodUrl || "./yoruba_30days.json";
-    // Open the non-cachebusted version too, for clean viewing
-    const clean = guess.split("?")[0];
-    window.open(clean, "_blank");
   });
 
   load();
 </script>
-
 </body>
 </html>
