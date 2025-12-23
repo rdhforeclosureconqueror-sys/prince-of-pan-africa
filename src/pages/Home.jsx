@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import VoiceControls from "../components/VoiceControls";
 import JournalSidebar from "../components/JournalSidebar";
+import CalendarPanel from "../components/CalendarPanel";
 import "../styles/theme.css";
 import { sendChatMessage, sendVoiceMessage } from "../api/mufasaClient";
 
@@ -57,25 +58,19 @@ export default function Home() {
     }
   };
 
-  // ✅ Voice input (Fixed)
+  // ✅ Voice input
   const handleVoiceInput = async (audioBlob) => {
     if (loading) return;
     setLoading(true);
 
-    // Placeholder user message
-    setMessages((prev) => [
-      ...prev,
-      { role: "user", text: "🎙️ You spoke to Mufasa..." },
-    ]);
+    setMessages((prev) => [...prev, { role: "user", text: "🎙️ You spoke to Mufasa..." }]);
 
     try {
       const data = await sendVoiceMessage(audioBlob);
 
-      // Transcript field variations
       const transcript =
         data?.transcript || data?.text || data?.user_text || data?.user || null;
 
-      // Reply field variations
       const replyText =
         data?.reply ||
         data?.response ||
@@ -84,7 +79,6 @@ export default function Home() {
         (typeof data === "string" ? data : "") ||
         "🦁 Mufasa is silent...";
 
-      // Replace placeholder with transcript if present
       if (transcript) {
         setMessages((prev) => {
           const next = [...prev];
@@ -98,7 +92,6 @@ export default function Home() {
         });
       }
 
-      // Normalize audio_url
       const baseURL = "https://mufasa-knowledge-bank.onrender.com";
       const rawAudio = data?.audio_url || data?.audioUrl || null;
 
@@ -108,13 +101,10 @@ export default function Home() {
           : `${baseURL}${rawAudio}`
         : null;
 
-      const aiMessage = {
-        role: "assistant",
-        text: replyText,
-        audio_url: fullAudioUrl,
-      };
-
-      setMessages((prev) => [...prev, aiMessage]);
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", text: replyText, audio_url: fullAudioUrl },
+      ]);
     } catch (err) {
       console.error("Voice chat failed:", err);
       setMessages((prev) => [
@@ -126,11 +116,9 @@ export default function Home() {
     }
   };
 
-  // Latest AI text for VoiceControls TTS
   const latestReply =
     messages.filter((msg) => msg.role === "assistant").slice(-1)[0]?.text || "";
 
-  // ✅ Language page links (served from /public/languages/)
   const openSwahili = () => window.open("/languages/swahili.html", "_self");
   const openYoruba = () => window.open("/languages/yoruba.html", "_self");
 
@@ -141,46 +129,55 @@ export default function Home() {
       <main className="chat-area">
         {/* Header */}
         <div className="chat-header">
-          <h1 className="title">Mufasa The Decolonizer</h1>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 380px", gap: 16 }}>
+            {/* Left header block */}
+            <div>
+              <h1 className="title">Mufasa The Decolonizer</h1>
 
-          <p className="subtitle">
-            Black History 365. Powered by{" "}
-            <span className="mufasa">Maat</span>.
-          </p>
+              <p className="subtitle">
+                Black History 365. Powered by <span className="mufasa">Maat</span>.
+              </p>
 
-          {/* ✅ Languages */}
-          <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <button
-              type="button"
-              onClick={openSwahili}
-              className="send-btn"
-              style={{
-                padding: "10px 14px",
-                borderRadius: 14,
-                border: "1px solid rgba(214,178,94,.55)",
-                background: "rgba(0,0,0,.35)",
-                color: "#f5e6b3",
-                cursor: "pointer",
-              }}
-            >
-              🌍 Swahili Lessons
-            </button>
+              {/* ✅ Languages */}
+              <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  onClick={openSwahili}
+                  className="send-btn"
+                  style={{
+                    padding: "10px 14px",
+                    borderRadius: 14,
+                    border: "1px solid rgba(214,178,94,.55)",
+                    background: "rgba(0,0,0,.35)",
+                    color: "#f5e6b3",
+                    cursor: "pointer",
+                  }}
+                >
+                  🌍 Swahili Lessons
+                </button>
 
-            <button
-              type="button"
-              onClick={openYoruba}
-              className="send-btn"
-              style={{
-                padding: "10px 14px",
-                borderRadius: 14,
-                border: "1px solid rgba(214,178,94,.55)",
-                background: "rgba(0,0,0,.35)",
-                color: "#f5e6b3",
-                cursor: "pointer",
-              }}
-            >
-              🌍 Yoruba Lessons
-            </button>
+                <button
+                  type="button"
+                  onClick={openYoruba}
+                  className="send-btn"
+                  style={{
+                    padding: "10px 14px",
+                    borderRadius: 14,
+                    border: "1px solid rgba(214,178,94,.55)",
+                    background: "rgba(0,0,0,.35)",
+                    color: "#f5e6b3",
+                    cursor: "pointer",
+                  }}
+                >
+                  🌍 Yoruba Lessons
+                </button>
+              </div>
+            </div>
+
+            {/* Right header block: Calendar */}
+            <div>
+              <CalendarPanel />
+            </div>
           </div>
         </div>
 
@@ -200,11 +197,7 @@ export default function Home() {
             </div>
           ))}
 
-          {loading && (
-            <div className="chat-bubble assistant thinking">
-              🦁 Mufasa is thinking...
-            </div>
-          )}
+          {loading && <div className="chat-bubble assistant thinking">🦁 Mufasa is thinking...</div>}
           <div ref={chatEndRef} />
         </div>
 
