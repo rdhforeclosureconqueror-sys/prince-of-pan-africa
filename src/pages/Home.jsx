@@ -5,6 +5,7 @@ import CalendarPanel from "../components/CalendarPanel";
 import "../styles/theme.css";
 import { sendChatMessage, sendVoiceMessage } from "../api/mufasaClient";
 import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 
 export default function Home() {
   const [messages, setMessages] = useState([]);
@@ -156,6 +157,26 @@ export default function Home() {
                     cursor: "pointer",
                   }}
                 >
+                  <Link
+  to="/timeline"
+  className="send-btn"
+  style={{
+    padding: "10px 14px",
+    borderRadius: 14,
+    border: "1px solid rgba(214,178,94,.55)",
+    background: "rgba(0,0,0,.35)",
+    color: "#f5e6b3",
+    cursor: "pointer",
+    textDecoration: "none",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 8,
+    fontWeight: 700,
+  }}
+>
+  🕰️ Memory Restoration Timeline
+</Link>
+
                   🌍 Swahili Lessons
                 </button>
 
@@ -172,6 +193,7 @@ export default function Home() {
                     cursor: "pointer",
                   }}
                 >
+                 
                   🌍 Yoruba Lessons
                 </button>
               </div>
@@ -183,25 +205,7 @@ export default function Home() {
             </div>
           </div>
         </div>
-<div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
-  {/* existing language buttons... */}
 
-  <button
-    type="button"
-    onClick={openTimeline}
-    className="send-btn"
-    style={{
-      padding: "10px 14px",
-      borderRadius: 14,
-      border: "1px solid rgba(214,178,94,.55)",
-      background: "rgba(0,0,0,.35)",
-      color: "#f5e6b3",
-      cursor: "pointer",
-    }}
-  >
-    🕰️ Memory Restoration Timeline
-  </button>
-</div>
 
         {/* Chat Window */}
         <div className="chat-window" id="chat-output">
