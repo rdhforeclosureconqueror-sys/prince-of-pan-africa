@@ -1,6 +1,8 @@
 // src/App.jsx
 import React from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import LibraryDecolonize from "./pages/LibraryDecolonize";
+import MembershipPlan from "./pages/MembershipPlan";
 
 import MufasaShell from "./layouts/MufasaShell";
 import Home from "./pages/Home";
