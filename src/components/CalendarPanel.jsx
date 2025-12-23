@@ -1,5 +1,5 @@
-// ✅ src/components/CalendarPanel.jsx
-import { useEffect, useMemo } from "react";
+// src/components/CalendarPanel.jsx
+import React, { useEffect, useMemo } from "react";
 import useLocalMemory from "../hooks/useLocalMemory";
 import { getMonthlyHighlights } from "../data/blackHistoryFacts";
 
@@ -14,35 +14,36 @@ export default function CalendarPanel() {
     highlights: getMonthlyHighlights(monthNow),
   });
 
-  // ✅ Sync when month changes (or if storage is empty/corrupt)
+  // Update if real month changed OR data is missing/bad
   useEffect(() => {
-    const current = new Date().toLocaleString("default", { month: "long" });
+    const realMonth = new Date().toLocaleString("default", { month: "long" });
 
-    const needsRefresh =
-      historyData?.month !== current ||
-      !Array.isArray(historyData?.highlights) ||
+    const invalid =
+      !historyData ||
+      historyData.month !== realMonth ||
+      !Array.isArray(historyData.highlights) ||
       historyData.highlights.length === 0;
 
-    if (needsRefresh) {
+    if (invalid) {
       setHistoryData({
-        month: current,
-        highlights: getMonthlyHighlights(current),
+        month: realMonth,
+        highlights: getMonthlyHighlights(realMonth),
       });
     }
-    // we intentionally do NOT depend on historyData to avoid loops
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [setHistoryData]);
+  }, []);
 
   const safeMonth = historyData?.month || monthNow;
-  const safeHighlights = Array.isArray(historyData?.highlights) && historyData.highlights.length
-    ? historyData.highlights
-    : getMonthlyHighlights(safeMonth);
+
+  const safeHighlights =
+    Array.isArray(historyData?.highlights) && historyData.highlights.length
+      ? historyData.highlights
+      : getMonthlyHighlights(safeMonth);
 
   const handleRefresh = () => {
-    const current = new Date().toLocaleString("default", { month: "long" });
     setHistoryData({
-      month: current,
-      highlights: getMonthlyHighlights(current),
+      month: safeMonth,
+      highlights: getMonthlyHighlights(safeMonth),
     });
   };
 
@@ -54,11 +55,9 @@ export default function CalendarPanel() {
         borderRadius: 18,
         padding: 16,
         background: "rgba(0,0,0,.28)",
-        maxWidth: 900,
-        margin: "0 auto",
       }}
     >
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
         <h2 style={{ margin: 0, color: "#f5e6b3", fontSize: 16 }}>
           {safeMonth} in Black History
         </h2>
@@ -73,7 +72,7 @@ export default function CalendarPanel() {
             background: "rgba(0,0,0,.25)",
             color: "#f5e6b3",
             cursor: "pointer",
-            fontWeight: 600,
+            fontWeight: 700,
             fontSize: 12,
           }}
           title="Refresh from facts file"
@@ -84,7 +83,14 @@ export default function CalendarPanel() {
 
       <ul style={{ margin: "12px 0 0", paddingLeft: 18 }}>
         {safeHighlights.map((item, i) => (
-          <li key={i} style={{ color: "rgba(244,241,232,.92)", marginBottom: 8, lineHeight: 1.45 }}>
+          <li
+            key={i}
+            style={{
+              color: "rgba(244,241,232,.92)",
+              marginBottom: 10,
+              lineHeight: 1.35,
+            }}
+          >
             {item}
           </li>
         ))}
