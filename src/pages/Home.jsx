@@ -141,11 +141,11 @@ export default function Home() {
       <main className="chat-area">
         {/* Header */}
         <div className="chat-header">
-          <h1 className="title">Prince of Pan-Africa</h1>
+          <h1 className="title">Mufasa The Decolonizer</h1>
 
           <p className="subtitle">
-            Every month is Black History. Powered by{" "}
-            <span className="mufasa">Mufasa</span>.
+            Black History 365. Powered by{" "}
+            <span className="mufasa">Maat</span>.
           </p>
 
           {/* ✅ Languages */}
