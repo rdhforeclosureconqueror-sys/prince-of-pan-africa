@@ -15,11 +15,9 @@
       --green:#10b981;
       --text:#f4f1e8;
       --muted:#c9c2b3;
-      --stroke: rgba(214,178,94,.55);
       --shadow: 0 20px 60px rgba(0,0,0,.55);
       --radius: 18px;
     }
-
     *{box-sizing:border-box}
     body{
       margin:0;
@@ -32,7 +30,6 @@
       color: var(--text);
       min-height:100vh;
     }
-
     .topbar{
       position:sticky; top:0; z-index:50;
       backdrop-filter: blur(10px);
@@ -43,10 +40,7 @@
       max-width:1100px; margin:0 auto; padding:14px 18px;
       display:flex; align-items:center; justify-content:space-between; gap:12px;
     }
-
-    .brand{
-      display:flex; align-items:center; gap:12px; min-width: 0;
-    }
+    .brand{ display:flex; align-items:center; gap:12px; min-width:0; }
     .mark{
       width:42px; height:42px; border-radius: 12px;
       background: linear-gradient(135deg, rgba(214,178,94,.35), rgba(214,178,94,.06));
@@ -56,9 +50,7 @@
       position:relative;
     }
     .mark:before{
-      content:"";
-      position:absolute; inset:6px;
-      border-radius: 10px;
+      content:""; position:absolute; inset:6px; border-radius: 10px;
       border: 1px solid rgba(214,178,94,.28);
     }
     .mark span{
@@ -68,22 +60,14 @@
       color: transparent;
       text-shadow: 0 1px 0 rgba(0,0,0,.35);
     }
-
     .brand h1{
       margin:0; font-size:14px; letter-spacing:.16em; text-transform:uppercase;
       white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
       background: linear-gradient(180deg, var(--gold2), var(--gold));
-      -webkit-background-clip:text; background-clip:text;
-      color:transparent;
+      -webkit-background-clip:text; background-clip:text; color:transparent;
     }
-    .brand p{
-      margin:2px 0 0; color: var(--muted); font-size:12px;
-      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-    }
-
-    .nav{
-      display:flex; gap:10px; align-items:center; flex-wrap:wrap; justify-content:flex-end;
-    }
+    .brand p{ margin:2px 0 0; color: var(--muted); font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .nav{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; justify-content:flex-end; }
     .btn{
       border-radius: 999px;
       padding:10px 14px;
@@ -105,7 +89,6 @@
     .btn.gold{ border-color: rgba(214,178,94,.65); }
 
     .wrap{ max-width:1100px; margin:0 auto; padding:22px 18px 60px; }
-
     .hero{
       border-radius: var(--radius);
       border: 1px solid rgba(214,178,94,.28);
@@ -113,14 +96,8 @@
       box-shadow: var(--shadow);
       padding: 18px;
     }
-    .hero-grid{
-      display:grid;
-      grid-template-columns: 1.2fr .8fr;
-      gap:16px;
-    }
-    @media (max-width: 900px){
-      .hero-grid{ grid-template-columns:1fr; }
-    }
+    .hero-grid{ display:grid; grid-template-columns: 1.2fr .8fr; gap:16px; }
+    @media (max-width: 900px){ .hero-grid{ grid-template-columns:1fr; } }
 
     .title{
       margin:0;
@@ -130,12 +107,7 @@
       background: linear-gradient(180deg, var(--gold2), var(--gold));
       -webkit-background-clip:text; background-clip:text; color:transparent;
     }
-    .subtitle{
-      margin: 8px 0 0;
-      color: var(--muted);
-      line-height:1.5;
-      font-size: 13.5px;
-    }
+    .subtitle{ margin: 8px 0 0; color: var(--muted); line-height:1.5; font-size: 13.5px; }
 
     .panel{
       border-radius: var(--radius);
@@ -144,11 +116,7 @@
       padding: 16px;
       box-shadow: 0 14px 40px rgba(0,0,0,.35);
     }
-
-    .kicker{
-      display:flex; gap:10px; align-items:center; flex-wrap:wrap;
-      margin-top:14px;
-    }
+    .kicker{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:14px; }
     .pill{
       padding:8px 12px;
       border-radius:999px;
@@ -158,24 +126,9 @@
       font-size: 12px;
     }
     .pill b{ color: var(--text); font-weight:700; }
-
-    .row{
-      display:grid;
-      grid-template-columns: 1fr 1fr;
-      gap:16px;
-      margin-top: 16px;
-    }
-    @media (max-width: 900px){
-      .row{ grid-template-columns:1fr; }
-    }
-
-    .section-title{
-      margin:0 0 10px;
-      font-size: 12px;
-      letter-spacing:.18em;
-      text-transform:uppercase;
-      color: var(--muted);
-    }
+    .row{ display:grid; grid-template-columns: 1fr 1fr; gap:16px; margin-top: 16px; }
+    @media (max-width: 900px){ .row{ grid-template-columns:1fr; } }
+    .section-title{ margin:0 0 10px; font-size: 12px; letter-spacing:.18em; text-transform:uppercase; color: var(--muted); }
 
     .word{
       border-radius: 14px;
@@ -184,10 +137,8 @@
       padding: 12px;
       display:flex; flex-direction:column; gap:8px;
     }
-    .word-top{
-      display:flex; justify-content:space-between; gap:10px; align-items:baseline; flex-wrap:wrap;
-    }
-    .sw{
+    .word-top{ display:flex; justify-content:space-between; gap:10px; align-items:baseline; flex-wrap:wrap; }
+    .yo{
       font-weight:900;
       font-size: 18px;
       letter-spacing:.03em;
@@ -195,24 +146,10 @@
       -webkit-background-clip:text; background-clip:text; color:transparent;
     }
     .en{ color: var(--muted); font-size: 13px; }
-    .mini{
-      color: var(--muted);
-      font-size: 12px;
-      line-height: 1.45;
-    }
+    .mini{ color: var(--muted); font-size: 12px; line-height: 1.45; }
 
-    .controls{
-      display:flex; gap:10px; flex-wrap:wrap;
-      margin-top: 12px;
-    }
-
-    .status{
-      margin-top: 10px;
-      font-size: 12px;
-      color: var(--muted);
-      white-space:pre-wrap;
-    }
-
+    .controls{ display:flex; gap:10px; flex-wrap:wrap; margin-top: 12px; }
+    .status{ margin-top: 10px; font-size: 12px; color: var(--muted); }
     .footer{
       margin-top: 18px;
       color: rgba(201,194,179,.85);
@@ -221,7 +158,6 @@
       border-top: 1px solid rgba(214,178,94,.16);
       padding-top: 14px;
     }
-
     .note{
       border-left: 3px solid rgba(214,178,94,.7);
       padding: 10px 12px;
@@ -231,12 +167,22 @@
       font-size: 12.5px;
       line-height: 1.55;
     }
-
-    .danger{
-      border-left-color: rgba(225,29,46,.7);
-    }
-
+    .danger{ border-left-color: rgba(225,29,46,.7); }
     code{ color: #fff3c4; }
+    .small{ font-size:12px; color: var(--muted); margin-top:8px; }
+    .divider{ height:10px; }
+    .debug{
+      margin-top:12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 11px;
+      color: rgba(201,194,179,.9);
+      background: rgba(0,0,0,.35);
+      border: 1px dashed rgba(214,178,94,.25);
+      border-radius: 12px;
+      padding: 10px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
   </style>
 </head>
 
@@ -252,7 +198,7 @@
       </div>
 
       <div class="nav">
-        <a class="btn gold" href="../index.html">← Back to Black History</a>
+        <a class="btn gold" href="/">← Back to Black History</a>
         <button class="btn green" id="btnSpeakAll" type="button">🔊 Speak Lesson</button>
         <button class="btn red" id="btnStop" type="button">⏹ Stop</button>
       </div>
@@ -263,9 +209,9 @@
     <div class="hero">
       <div class="hero-grid">
         <div class="panel">
-          <h2 class="title" id="lessonTitle">Yoruba Lesson of the Day</h2>
-          <p class="subtitle" id="lessonSubtitle">
-            Three words + examples, one daily tip, one culture note. Practice out loud (TTS + mic practice when supported).
+          <h2 class="title" id="lessonTitle">Yorùbá Lesson of the Day</h2>
+          <p class="subtitle">
+            Three words + examples + 1 daily tip + 1 culture note. Practice out loud (TTS + mic practice when supported).
           </p>
 
           <div class="kicker">
@@ -274,7 +220,7 @@
             <div class="pill">Mode: <b id="mode">Text + AI Audio</b></div>
           </div>
 
-          <div class="row" style="margin-top:16px">
+          <div class="row">
             <div class="panel">
               <div class="section-title">Words</div>
               <div id="words"></div>
@@ -286,23 +232,25 @@
               </div>
 
               <div class="status" id="status">Loading lesson data…</div>
+              <div class="small" id="dataHint"></div>
+              <div class="debug" id="debugBox" style="display:none"></div>
             </div>
 
             <div class="panel">
               <div class="section-title">Daily Tip</div>
               <div class="note" id="tip">—</div>
 
-              <div style="height:12px"></div>
+              <div class="divider"></div>
 
               <div class="section-title">Culture Note</div>
               <div class="note" id="culture">—</div>
 
               <div class="footer">
-                <div><b style="color:#fff3c4">How it works:</b> Tap <code>Speak Lesson</code> to hear it. Tap <code>Practice (Mic)</code> to repeat words. If your browser blocks mic/voice, you still get the full lesson by text.</div>
+                <div><b style="color:#fff3c4">How it works:</b> Tap <code>Speak Lesson</code> for voice. Tap <code>Practice (Mic)</code> to speak back.</div>
               </div>
 
               <div id="compat" class="note danger" style="display:none;margin-top:12px">
-                Your browser doesn’t support Speech Recognition here. Use Chrome on Android for best results.
+                Your browser doesn’t support Speech Recognition here. Use Chrome for best results.
               </div>
             </div>
           </div>
@@ -317,7 +265,7 @@
             <b>Goal:</b> consistency + confidence — every day.
           </div>
 
-          <div style="height:12px"></div>
+          <div class="divider"></div>
 
           <div class="section-title">Today’s Sentence</div>
           <div class="note" id="sentenceBox">—</div>
@@ -331,234 +279,93 @@
   </div>
 
 <script>
-  // ==========================================================
-  // Yoruba Lesson Loader (STATIC-SITE SAFE)
+  // IMPORTANT: yoruba.html and yoruba_30days.json must be in the SAME folder:
+  // /public/languages/yoruba.html
+  // /public/languages/yoruba_30days.json
   //
-  // IMPORTANT:
-  // If URL is .../languages/yoruba.html
-  // then yoruba_30days.json must be in the SAME folder:
-  // .../languages/yoruba_30days.json
-  // ==========================================================
+  // This loader also tries a couple fallback paths automatically.
 
-  const JSON_FILENAME = "yoruba_30days.json";
+  const CANDIDATE_URLS = [
+    "./yoruba_30days.json",
+    "/languages/yoruba_30days.json"
+  ];
 
   let PACK = null;
   let idx = 0;
-  let lastTriedUrl = "";
 
-  // ---------- helpers ----------
-  const $ = (id) => document.getElementById(id);
-
-  function setStatus(msg){
-    $("status").textContent = msg;
+  function setStatus(msg){ document.getElementById("status").textContent = msg; }
+  function showDebug(text){
+    const box = document.getElementById("debugBox");
+    box.style.display = "block";
+    box.textContent = text;
   }
 
-  function safeText(v, fallback="—"){
-    if (v === null || v === undefined) return fallback;
-    const s = String(v).trim();
-    return s ? s : fallback;
-  }
-
-  function pick(obj, keys, fallback=null){
-    for (const k of keys){
-      if (obj && obj[k] !== undefined && obj[k] !== null && String(obj[k]).trim() !== "") return obj[k];
-    }
-    return fallback;
-  }
-
-  function resolveJsonUrl(){
-    // Best option on subpaths: resolve relative to current page URL.
-    // Example: https://site.com/languages/yoruba.html
-    // -> https://site.com/languages/yoruba_30days.json
-    try{
-      const u = new URL(JSON_FILENAME, window.location.href);
-      return u.href;
-    }catch(e){
-      return JSON_FILENAME; // fallback
-    }
-  }
-
-  // ---------- TTS ----------
-  function speak(text){
-    try{
-      window.speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(text);
-      u.rate = 0.95;
-      u.pitch = 1.0;
-      window.speechSynthesis.speak(u);
-    }catch(e){
-      console.warn("TTS error", e);
-    }
-  }
-
-  // ---------- Speech Recognition (STT) ----------
+  // Mic / Recognition
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   let rec = null;
 
   function initRec(){
     if(!SpeechRecognition){
-      $("compat").style.display = "block";
-      $("mode").textContent = "Text only";
+      document.getElementById("compat").style.display = "block";
+      document.getElementById("mode").textContent = "Text + Voice (no mic)";
       return;
     }
     rec = new SpeechRecognition();
-
-    // NOTE: Yoruba speech recognition support varies by device/browser.
-    // If yo-NG fails, we fall back to en-US.
-    try { rec.lang = "yo-NG"; } catch(e) { rec.lang = "en-US"; }
-
+    rec.lang = "en-US";
     rec.interimResults = false;
     rec.maxAlternatives = 1;
 
     rec.onresult = (e) => {
       const said = e.results?.[0]?.[0]?.transcript || "";
-      setStatus(`Heard: “${said}”`);
+      setStatus("Heard: “" + said + "”");
     };
     rec.onerror = (e) => setStatus("Mic error: " + (e.error || "unknown"));
     rec.onend = () => setStatus("Mic ready.");
   }
 
-  // ---------- normalize data shape ----------
-  function normalizePack(raw){
-    // Supports:
-    // A) { days:[ { day, theme, tip, culture, words:[{swahili,...}] } ] }
-    // B) { language, duration_days, format, days:[ { day, fact, words:[{yoruba,...}], practice } ] }
-    const out = { days: [] };
-
-    const days = raw?.days || [];
-    for (const d of days){
-      const dayNum = Number(d.day || d.day_number || d.index || 0) || 0;
-
-      // THEME
-      const theme = safeText(
-        pick(d, ["theme", "topic", "unit"], null) || `Day ${dayNum} Practice`
-      );
-
-      // DAILY TIP
-      // Prefer explicit d.tip, otherwise reuse d.fact as a tip (since your JSON uses "fact")
-      const tip = safeText(
-        pick(d, ["tip", "daily_tip", "fact"], null) ||
-        "Focus on tone + clarity today. Slow down and exaggerate the tone marks."
-      );
-
-      // CULTURE NOTE
-      // If not provided, generate a lightweight culture note based on greetings/respect markers
-      const culture =
-        safeText(
-          pick(d, ["culture", "culture_note", "note"], null) ||
-          "Respect is built into everyday Yoruba speech. Using greetings and tone marks is part of honoring community."
-        );
-
-      // WORDS normalize
-      const words = (d.words || []).map((w) => {
-        const yor = safeText(pick(w, ["yoruba", "swahili", "term", "word"], ""), "");
-        const eng = safeText(pick(w, ["english", "meaning", "translation"], ""), "");
-
-        const pron = safeText(pick(w, ["pronunciation_hint", "pronunciation", "pronounce"], ""), "—");
-
-        const exYo = safeText(pick(w, ["example_yoruba", "example_sw", "example"], ""), "");
-        const exEn = safeText(pick(w, ["example_english", "example_en"], ""), "");
-
-        const say3 = safeText(pick(w, ["say_it_3x_prompt", "prompt"], ""), "");
-
-        return {
-          yoruba: yor,
-          english: eng,
-          pronunciation: pron,
-          example_yoruba: exYo,
-          example_english: exEn,
-          say_it_3x_prompt: say3
-        };
-      });
-
-      // PRACTICE FLOW (optional)
-      const practice = d.practice || {};
-      const repeatRule = safeText(practice.repeat_rule, "Say each word 3x, then say the example sentence 2x.");
-      const callResp = Array.isArray(practice.call_and_response) ? practice.call_and_response : [];
-
-      out.days.push({
-        day: dayNum,
-        theme,
-        tip,
-        culture,
-        words,
-        practice: { repeatRule, callResp }
-      });
-    }
-
-    // sort just in case
-    out.days.sort((a,b)=>a.day-b.day);
-
-    return out;
+  // TTS
+  function speak(text){
+    try{
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.rate = 0.95;
+      window.speechSynthesis.speak(u);
+    }catch(e){}
   }
 
-  // ---------- render ----------
+  function buildSentence(d){
+    const w3 = d.words?.[2];
+    const w2 = d.words?.[1];
+    const w1 = d.words?.[0];
+    return (w3 && w3.example_yoruba) || (w2 && w2.example_yoruba) || (w1 && w1.example_yoruba) || "";
+  }
+
   function render(){
     const d = PACK.days[idx];
+    document.getElementById("todayLabel").textContent = `Day ${d.day} • ${d.theme || "—"}`;
+    document.getElementById("lessonTitle").textContent = `Yorùbá Lesson • Day ${d.day}`;
+    document.getElementById("dayNum").textContent = `Day ${d.day}/${PACK.duration_days || PACK.days.length}`;
+    document.getElementById("theme").textContent = d.theme || "—";
 
-    $("todayLabel").textContent = `Day ${d.day} • ${d.theme}`;
-    $("lessonTitle").textContent = `Yoruba Lesson • Day ${d.day}`;
-    $("dayNum").textContent = `Day ${d.day}/30`;
-    $("theme").textContent = d.theme;
+    document.getElementById("tip").textContent = d.daily_tip || "—";
+    document.getElementById("culture").textContent = d.culture_note || "—";
 
-    $("tip").textContent = d.tip;
-    $("culture").textContent = d.culture;
+    const sentence = buildSentence(d);
+    document.getElementById("sentenceBox").innerHTML = sentence ? `<b style="color:#fff3c4">${sentence}</b>` : "—";
 
-    // practice flow box
-    const flowLines = [];
-    flowLines.push(`1) Listen to each word (🔊).`);
-    flowLines.push(`2) Repeat it 3 times (🎙).`);
-    flowLines.push(`3) Say the example sentence 2 times.`);
-    flowLines.push("");
-    flowLines.push(`Rule: ${d.practice.repeatRule}`);
-    if (d.practice.callResp.length){
-      flowLines.push("");
-      flowLines.push("Call + Response:");
-      d.practice.callResp.slice(0,3).forEach((x)=>flowLines.push("• " + x));
-    }
-    $("practiceFlow").innerHTML = flowLines.map(x => x ? x.replace(/</g,"&lt;") : "<br/>").join("<br/>");
-
-    // Sentence box: pick first non-empty example sentence
-    let sentenceYo = "";
-    let sentenceEn = "";
-    for (const w of d.words){
-      if (w.example_yoruba && w.example_english){
-        sentenceYo = w.example_yoruba;
-        sentenceEn = w.example_english;
-        break;
-      }
-    }
-    $("sentenceBox").innerHTML = (sentenceYo && sentenceEn)
-      ? `<b style="color:#fff3c4">${sentenceYo}</b><br/><span style="color:rgba(201,194,179,.9)">${sentenceEn}</span>`
-      : "—";
-
-    // Words
-    const wordsWrap = $("words");
+    const wordsWrap = document.getElementById("words");
     wordsWrap.innerHTML = "";
 
-    d.words.forEach((w, i) => {
+    (d.words || []).forEach((w, i) => {
       const el = document.createElement("div");
       el.className = "word";
-
-      const exBlock = (w.example_yoruba || w.example_english)
-        ? `
-          <div class="mini"><b style="color:#fff3c4">Example:</b><br/>
-            <span style="color:#fff3c4">${safeText(w.example_yoruba,"")}</span><br/>
-            <span>${safeText(w.example_english,"")}</span>
-          </div>
-        `
-        : "";
-
-      const say3 = w.say_it_3x_prompt ? `<div class="mini"><b style="color:#fff3c4">Practice:</b> ${w.say_it_3x_prompt}</div>` : "";
-
       el.innerHTML = `
         <div class="word-top">
-          <div class="sw">${safeText(w.yoruba,"—")}</div>
-          <div class="en">${safeText(w.english,"—")}</div>
+          <div class="yo">${w.yoruba || ""}</div>
+          <div class="en">${w.english || ""}</div>
         </div>
-        <div class="mini">Pronunciation: <b style="color:#fff3c4">${safeText(w.pronunciation,"—")}</b></div>
-        ${exBlock}
-        ${say3}
+        <div class="mini">Pronunciation: <b style="color:#fff3c4">${w.pronunciation_hint || "—"}</b></div>
+        ${w.example_yoruba ? `<div class="mini">Example: <b style="color:#fff3c4">${w.example_yoruba}</b>${w.example_english ? ` — ${w.example_english}` : ""}</div>` : ""}
         <div class="controls" style="margin:0">
           <button class="btn green" type="button" data-speak="${i}">🔊 Speak</button>
           <button class="btn red" type="button" data-practice="${i}">🎙 Practice</button>
@@ -567,153 +374,97 @@
       wordsWrap.appendChild(el);
     });
 
-    // wire buttons
     wordsWrap.querySelectorAll("[data-speak]").forEach(btn => {
       btn.addEventListener("click", () => {
         const w = d.words[Number(btn.getAttribute("data-speak"))];
-        const t = [
-          `Yoruba word: ${w.yoruba}.`,
-          `Meaning: ${w.english}.`,
-          w.pronunciation ? `Pronunciation: ${w.pronunciation}.` : "",
-          w.example_yoruba ? `Example: ${w.example_yoruba}.` : ""
-        ].filter(Boolean).join(" ");
-        speak(t);
+        speak(`${w.yoruba}. ${w.english}. ${w.pronunciation_hint ? "Pronunciation: " + w.pronunciation_hint + "." : ""} ${w.example_yoruba ? "Example: " + w.example_yoruba + "." : ""} ${w.example_english || ""}`);
       });
     });
 
     wordsWrap.querySelectorAll("[data-practice]").forEach(btn => {
       btn.addEventListener("click", () => {
         if(!rec){ initRec(); }
-        if(!rec){ return; }
-        setStatus("Listening… say the word 3 times.");
-        rec.start();
+        if(!rec) return;
+        const w = d.words[Number(btn.getAttribute("data-practice"))];
+        setStatus(`Listening… say "${w.yoruba}"`);
+        try{ rec.start(); }catch(e){}
       });
     });
 
-    setStatus(`Lesson loaded ✅\nJSON: ${lastTriedUrl}`);
+    setStatus("Lesson loaded ✅");
   }
 
   function speakAll(){
     const d = PACK.days[idx];
     const parts = [];
-    parts.push(`Yoruba lesson, day ${d.day}. Theme: ${d.theme}.`);
-    d.words.forEach(w => {
-      parts.push(`${w.yoruba}. ${w.english}. Pronunciation: ${w.pronunciation}.`);
-      if (w.example_yoruba) parts.push(`Example: ${w.example_yoruba}.`);
+    parts.push(`Yoruba lesson, day ${d.day}. Theme: ${d.theme || ""}.`);
+    (d.words || []).forEach(w => {
+      parts.push(`${w.yoruba}. ${w.english}.`);
+      if(w.pronunciation_hint) parts.push(`Pronunciation: ${w.pronunciation_hint}.`);
+      if(w.example_yoruba) parts.push(`Example: ${w.example_yoruba}.`);
+      if(w.example_english) parts.push(w.example_english);
     });
-    parts.push(`Daily tip: ${d.tip}`);
-    parts.push(`Culture note: ${d.culture}`);
+    if(d.daily_tip) parts.push(`Daily tip: ${d.daily_tip}.`);
+    if(d.culture_note) parts.push(`Culture note: ${d.culture_note}.`);
     speak(parts.join(" "));
   }
 
-  // ---------- load ----------
-  async function tryFetch(url){
-    lastTriedUrl = url;
+  async function fetchJsonWithDebug(url){
     const res = await fetch(url, { cache: "no-store" });
-    if(!res.ok) throw new Error(`HTTP ${res.status} on ${url}`);
-    return await res.json();
+    const contentType = res.headers.get("content-type") || "";
+    const text = await res.text();
+
+    // Try parse JSON
+    try{
+      const data = JSON.parse(text);
+      return { ok:true, data, debug:`OK: ${url}\nHTTP: ${res.status}\nContent-Type: ${contentType}` };
+    }catch(e){
+      const head = text.slice(0, 120).replace(/\s+/g," ").trim();
+      return {
+        ok:false,
+        debug:
+          `FAILED: ${url}\nHTTP: ${res.status}\nContent-Type: ${contentType}\n` +
+          `First chars: ${head}\n\n` +
+          `This usually means the .json file contains HTML (or you got a 404 page).\n`
+      };
+    }
   }
 
   async function load(){
     setStatus("Loading lesson data…");
+    document.getElementById("dataHint").textContent = `Looking for: yoruba_30days.json`;
 
-    // Try a few safe candidates (subfolder-proof)
-    const candidates = [];
-    const resolved = resolveJsonUrl();
-    candidates.push(resolved);
+    const debugs = [];
 
-    // Also try replacing current filename with JSON (works even if renamed)
-    try{
-      const alt = window.location.href.replace(/yoruba\.html(\?.*)?$/i, JSON_FILENAME);
-      if (alt && alt !== resolved) candidates.push(alt);
-    }catch(e){}
-
-    // Also try simple relative names
-    candidates.push(JSON_FILENAME);
-    candidates.push("./" + JSON_FILENAME);
-
-    let raw = null;
-    let lastErr = null;
-
-    for (const url of candidates){
-      try{
-        setStatus(`Trying JSON...\n${url}`);
-        raw = await tryFetch(url);
-        break;
-      }catch(e){
-        lastErr = e;
+    for(const url of CANDIDATE_URLS){
+      const r = await fetchJsonWithDebug(url);
+      debugs.push(r.debug);
+      if(r.ok){
+        PACK = r.data;
+        const total = PACK.days?.length || 30;
+        const day = new Date().getDate();
+        idx = Math.min((day - 1) % total, total - 1);
+        render();
+        initRec();
+        showDebug(debugs.join("\n------------------------\n"));
+        return;
       }
     }
 
-    if(!raw){
-      console.error(lastErr);
-      setStatus(
-        `Could not load ${JSON_FILENAME}.\n` +
-        `Make sure BOTH files are in: /public/languages/\n\n` +
-        `Expected URL:\n.../languages/${JSON_FILENAME}\n\n` +
-        `Last tried:\n${lastTriedUrl}\n\n` +
-        `Error:\n${(lastErr && lastErr.message) ? lastErr.message : "Unknown"}`
-      );
-      $("tip").textContent = "Fix: Put yoruba_30days.json in the SAME folder as yoruba.html (public/languages/).";
-      $("culture").textContent = "Fix: Confirm the JSON URL opens in the browser (no 404).";
-      return;
-    }
-
-    PACK = normalizePack(raw);
-
-    // daily rotation by day-of-month
-    const day = new Date().getDate(); // 1..31
-    idx = Math.min((day - 1) % 30, PACK.days.length - 1);
-
-    render();
-    initRec();
+    setStatus("Could not load JSON ❌ (see debug box)");
+    showDebug(debugs.join("\n------------------------\n"));
   }
 
-  // ---------- top controls ----------
-  $("btnSpeakAll").addEventListener("click", speakAll);
-
-  $("btnStop").addEventListener("click", () => {
+  document.getElementById("btnSpeakAll").addEventListener("click", () => PACK && speakAll());
+  document.getElementById("btnStop").addEventListener("click", () => {
     try{ window.speechSynthesis.cancel(); }catch(e){}
     if(rec){ try{ rec.abort(); }catch(e){} }
     setStatus("Stopped.");
   });
-
-  $("btnPrev").addEventListener("click", () => {
-    if(!PACK) return;
-    idx = (idx - 1 + PACK.days.length) % PACK.days.length;
-    render();
-  });
-
-  $("btnNext").addEventListener("click", () => {
-    if(!PACK) return;
-    idx = (idx + 1) % PACK.days.length;
-    render();
-  });
-
-  $("btnMic").addEventListener("click", () => {
-    if(!rec){ initRec(); }
-    if(!rec){ return; }
-    setStatus("Listening… say today’s sentence once.");
-    rec.start();
-  });
-
-  $("btnSpeakSentence").addEventListener("click", () => {
-    if(!PACK) return;
-    const d = PACK.days[idx];
-
-    let sentenceYo = "";
-    let sentenceEn = "";
-    for (const w of d.words){
-      if (w.example_yoruba){
-        sentenceYo = w.example_yoruba;
-        sentenceEn = w.example_english || "";
-        break;
-      }
-    }
-    if(sentenceYo){
-      speak(sentenceEn ? `${sentenceYo}. ${sentenceEn}.` : sentenceYo);
-    }
-  });
+  document.getElementById("btnPrev").addEventListener("click", () => { if(!PACK) return; idx=(idx-1+PACK.days.length)%PACK.days.length; render(); });
+  document.getElementById("btnNext").addEventListener("click", () => { if(!PACK) return; idx=(idx+1)%PACK.days.length; render(); });
+  document.getElementById("btnMic").addEventListener("click", () => { if(!rec){ initRec(); } if(!rec) return; setStatus("Listening… say today’s sentence."); try{ rec.start(); }catch(e){} });
+  document.getElementById("btnSpeakSentence").addEventListener("click", () => { if(!PACK) return; const s=buildSentence(PACK.days[idx]); if(s) speak(s); });
 
   load();
 </script>
