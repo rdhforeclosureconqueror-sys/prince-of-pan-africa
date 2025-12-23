@@ -177,11 +177,12 @@
       color: var(--muted);
       font-size: 12.5px;
       line-height: 1.55;
+      white-space: pre-wrap;
     }
     .danger{ border-left-color: rgba(225,29,46,.7); }
 
     code{ color: #fff3c4; }
-    .small{ font-size:12px; color: var(--muted); margin-top:8px; }
+    .small{ font-size:12px; color: var(--muted); margin-top:8px; white-space:pre-wrap; }
     .divider{ height:10px; }
   </style>
 </head>
@@ -198,8 +199,8 @@
       </div>
 
       <div class="nav">
-        <!-- Use "/" if your site root is correct; use "../index.html" if yoruba.html lives inside /languages/ -->
-        <a class="btn gold" href="/">← Back to Black History</a>
+        <!-- This is safer than "/" if you are deployed under a subpath -->
+        <a class="btn gold" id="backLink" href="../index.html">← Back</a>
         <button class="btn green" id="btnSpeakAll" type="button">🔊 Speak Lesson</button>
         <button class="btn red" id="btnStop" type="button">⏹ Stop</button>
       </div>
@@ -252,6 +253,8 @@
               <div id="compat" class="note danger" style="display:none;margin-top:12px">
                 Your browser doesn’t support Speech Recognition here. Use Chrome for best results.
               </div>
+
+              <div id="loadError" class="note danger" style="display:none;margin-top:12px"></div>
             </div>
           </div>
         </div>
@@ -280,27 +283,39 @@
 
 <script>
   // ==========================================================
-  // ✅ Yoruba Lesson Page (Static JSON + AI Voice Ready)
-  //
-  // IMPORTANT:
-  // Put yoruba_30days.json in the SAME folder as yoruba.html
-  // Example:
-  // /languages/yoruba.html
-  // /languages/yoruba_30days.json
-  //
-  // This page loads JSON via:
-  //    fetch("./yoruba_30days.json")
-  // which works on Render + GitHub Pages.
+  // ✅ BULLETPROOF Yoruba loader
+  // - Tries multiple paths (fixes “loading forever”)
+  // - Shows exact URL + error on screen
+  // - Validates PACK.days
   // ==========================================================
 
-  const DATA_URL = "./yoruba_30days.json";
+  const JSON_FILENAME = "yoruba_30days.json";
+
+  const $ = (id) => document.getElementById(id);
 
   let PACK = null;
   let idx = 0;
+  let lastTried = "";
 
-  // ---------- Status ----------
-  function setStatus(msg){
-    document.getElementById("status").textContent = msg;
+  function setStatus(msg){ $("status").textContent = msg; }
+  function setHint(msg){ $("dataHint").textContent = msg; }
+  function showError(msg){
+    const el = $("loadError");
+    el.style.display = "block";
+    el.textContent = msg;
+  }
+
+  // ---------- TTS ----------
+  function speak(text){
+    try{
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.rate = 0.95;
+      u.pitch = 1.0;
+      window.speechSynthesis.speak(u);
+    }catch(e){
+      console.warn("TTS error", e);
+    }
   }
 
   // ---------- Mic / Recognition ----------
@@ -309,13 +324,11 @@
 
   function initRec(){
     if(!SpeechRecognition){
-      document.getElementById("compat").style.display = "block";
-      document.getElementById("mode").textContent = "Text + AI Audio (no mic)";
+      $("compat").style.display = "block";
+      $("mode").textContent = "Text + AI Audio (no mic)";
       return;
     }
     rec = new SpeechRecognition();
-    // Recognition for Yoruba is inconsistent across browsers; en-US often performs better for short phrases.
-    // We keep Yoruba-ish, but fallback is okay.
     rec.lang = "en-US";
     rec.interimResults = false;
     rec.maxAlternatives = 1;
@@ -328,101 +341,23 @@
     rec.onend = () => setStatus("Mic ready.");
   }
 
-  // ---------- AI Voice (TTS) ----------
-  // Uses browser speechSynthesis but selects the best available voice automatically.
-  // If you later want your REAL AI voice (elevenlabs/openai/your server),
-  // wire speakAI() to fetch audio and play it through aiTtsPlayer.
-  function pickBestVoice(preferredLangs = ["yo", "en-US", "en"]){
-    const voices = window.speechSynthesis?.getVoices?.() || [];
-    if(!voices.length) return null;
+  // ---------- Flexible JSON keys ----------
+  function getWordText(w){ return w?.yoruba || w?.word || w?.swahili || ""; }
+  function getPron(w){ return w?.pronunciation_hint || w?.pronunciation || w?.pron || "—"; }
+  function getEnglish(w){ return w?.english || w?.translation || "—"; }
+  function getExampleYo(w){ return w?.example_yoruba || w?.example || w?.sentence_yoruba || ""; }
+  function getExampleEn(w){ return w?.example_english || w?.example_translation || ""; }
 
-    // Try Yoruba-ish
-    for(const tag of preferredLangs){
-      const v = voices.find(v => (v.lang || "").toLowerCase().startsWith(tag.toLowerCase()));
-      if(v) return v;
-    }
-
-    // Otherwise, pick the first English-ish voice
-    return voices.find(v => (v.lang || "").toLowerCase().startsWith("en")) || voices[0] || null;
-  }
-
-  let cachedVoice = null;
-  function ensureVoice(){
-    // voices can load async
-    if(cachedVoice) return cachedVoice;
-    cachedVoice = pickBestVoice();
-    return cachedVoice;
-  }
-
-  function speakBrowser(text){
-    try{
-      window.speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(text);
-      u.rate = 0.95;
-      u.pitch = 1.0;
-      const v = ensureVoice();
-      if(v) u.voice = v;
-      window.speechSynthesis.speak(u);
-    }catch(e){
-      console.warn("TTS error", e);
-    }
-  }
-
-  // Placeholder for future "real AI voice" endpoint.
-  // If you build an endpoint that returns mp3 for text, switch speak() to call speakAI().
-  async function speakAI(text){
-    // Example (future):
-    // const res = await fetch("/api/tts", { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify({ text, voice:"nani" })});
-    // const blob = await res.blob();
-    // const url = URL.createObjectURL(blob);
-    // const p = document.getElementById("aiTtsPlayer");
-    // p.src = url;
-    // await p.play();
-    speakBrowser(text);
-  }
-
-  function speak(text){
-    speakAI(text);
-  }
-
-  // ---------- Helpers to support multiple JSON formats ----------
-  // Your JSON may use keys like:
-  // - "yoruba" vs "swahili"
-  // - "pronunciation_hint" vs "pronunciation"
-  // - "fact" vs "daily_tip"
-  // - may not have "culture"
-  function getWordText(w){
-    return w.yoruba || w.word || w.swahili || "";
-  }
-  function getPron(w){
-    return w.pronunciation_hint || w.pronunciation || w.pron || "—";
-  }
-  function getEnglish(w){
-    return w.english || w.translation || "—";
-  }
-  function getExampleYo(w){
-    return w.example_yoruba || w.example || w.sentence_yoruba || "";
-  }
-  function getExampleEn(w){
-    return w.example_english || w.example_translation || "";
-  }
-
-  function getTip(d){
-    return d.daily_tip || d.tip || d.fact || "—";
-  }
-  function getCulture(d){
-    return d.culture || d.culture_note || d.note || "—";
-  }
-  function getTheme(d){
-    return d.theme || d.topic || "Basics";
-  }
+  // Daily Tip should exist in JSON. If not, it falls back to fact.
+  function getTip(d){ return d?.daily_tip || d?.tip || d?.fact || "—"; }
+  function getCulture(d){ return d?.culture || d?.culture_note || d?.note || "—"; }
+  function getTheme(d){ return d?.theme || d?.topic || "Basics"; }
 
   function buildSentence(d){
-    // Prefer an explicit sentence field if you add it later; else use examples from word 1 or 2.
-    const w2 = d.words?.[1];
-    const w3 = d.words?.[2];
-    const ex = getExampleYo(w3) || getExampleYo(w2) || getExampleYo(d.words?.[0] || {});
-    return ex || "";
+    const w3 = d?.words?.[2];
+    const w2 = d?.words?.[1];
+    const w1 = d?.words?.[0];
+    return getExampleYo(w3) || getExampleYo(w2) || getExampleYo(w1) || "";
   }
 
   function render(){
@@ -431,29 +366,24 @@
     const theme = getTheme(d);
     const dayLabel = `Day ${d.day} • ${theme}`;
 
-    document.getElementById("todayLabel").textContent = dayLabel;
-    document.getElementById("lessonTitle").textContent = `Yorùbá Lesson • Day ${d.day}`;
-    document.getElementById("dayNum").textContent = `Day ${d.day}/${PACK.duration_days || 30}`;
-    document.getElementById("theme").textContent = theme;
+    $("todayLabel").textContent = dayLabel;
+    $("lessonTitle").textContent = `Yorùbá Lesson • Day ${d.day}`;
+    $("dayNum").textContent = `Day ${d.day}/${PACK.duration_days || PACK.days.length || 30}`;
+    $("theme").textContent = theme;
 
-    // Daily Tip + Culture Note
-    document.getElementById("tip").textContent = getTip(d);
-    document.getElementById("culture").textContent = getCulture(d);
+    $("tip").textContent = getTip(d);
+    $("culture").textContent = getCulture(d);
 
-    // Sentence
     const sentence = buildSentence(d);
-    document.getElementById("sentenceBox").innerHTML = sentence
-      ? `<b style="color:#fff3c4">${sentence}</b>`
-      : "—";
+    $("sentenceBox").innerHTML = sentence ? `<b style="color:#fff3c4">${sentence}</b>` : "—";
 
-    // Practice Flow (optional from JSON)
-    if(d.practice?.repeat_rule){
+    if(d?.practice?.repeat_rule){
       const pr = d.practice.repeat_rule;
-      document.getElementById("practiceFlow").innerHTML =
+      $("practiceFlow").innerHTML =
         `1) Listen to each word (🔊).<br/>2) Repeat it 3 times (🎙).<br/>3) ${pr}<br/><br/><b>Goal:</b> consistency + confidence — every day.`;
     }
 
-    const wordsWrap = document.getElementById("words");
+    const wordsWrap = $("words");
     wordsWrap.innerHTML = "";
 
     (d.words || []).forEach((w, i) => {
@@ -465,11 +395,10 @@
 
       const el = document.createElement("div");
       el.className = "word";
-
       el.innerHTML = `
         <div class="word-top">
-          <div class="yo">${yo}</div>
-          <div class="en">${en}</div>
+          <div class="yo">${yo || "—"}</div>
+          <div class="en">${en || "—"}</div>
         </div>
         <div class="mini">Pronunciation: <b style="color:#fff3c4">${pron}</b></div>
         ${exYo ? `<div class="mini">Example: <b style="color:#fff3c4">${exYo}</b> ${exEn ? `— ${exEn}` : ""}</div>` : ""}
@@ -478,34 +407,33 @@
           <button class="btn red" type="button" data-practice="${i}">🎙 Practice</button>
         </div>
       `;
-
       wordsWrap.appendChild(el);
     });
 
-    // Wire buttons inside word cards
     wordsWrap.querySelectorAll("[data-speak]").forEach(btn => {
       btn.addEventListener("click", () => {
         const w = d.words[Number(btn.getAttribute("data-speak"))];
+        const parts = [];
         const yo = getWordText(w);
         const en = getEnglish(w);
         const pron = getPron(w);
         const exYo = getExampleYo(w);
         const exEn = getExampleEn(w);
 
-        const parts = [];
         if(yo) parts.push(`${yo}.`);
         if(en) parts.push(`${en}.`);
         if(pron && pron !== "—") parts.push(`Pronunciation: ${pron}.`);
         if(exYo) parts.push(`Example: ${exYo}.`);
         if(exEn) parts.push(exEn);
+
         speak(parts.join(" "));
       });
     });
 
     wordsWrap.querySelectorAll("[data-practice]").forEach(btn => {
       btn.addEventListener("click", () => {
-        if(!rec){ initRec(); }
-        if(!rec){ return; }
+        if(!rec) initRec();
+        if(!rec) return;
         const w = d.words[Number(btn.getAttribute("data-practice"))];
         const yo = getWordText(w);
         setStatus(`Listening… say "${yo}" three times.`);
@@ -527,11 +455,12 @@
       const yo = getWordText(w);
       const en = getEnglish(w);
       const pron = getPron(w);
+      const exYo = getExampleYo(w);
+      const exEn = getExampleEn(w);
+
       if(yo) parts.push(`${yo}.`);
       if(en) parts.push(`${en}.`);
       if(pron && pron !== "—") parts.push(`Pronunciation: ${pron}.`);
-      const exYo = getExampleYo(w);
-      const exEn = getExampleEn(w);
       if(exYo) parts.push(`Example: ${exYo}.`);
       if(exEn) parts.push(exEn);
     });
@@ -548,81 +477,157 @@
     speak(parts.join(" "));
   }
 
+  // ---------- Robust JSON loader (tries multiple paths) ----------
+  function buildCandidateUrls(){
+    const here = new URL(window.location.href);
+
+    // If you're on .../languages/yoruba.html, then ./yoruba_30days.json is best.
+    const relSameFolder = new URL("./" + JSON_FILENAME, here).toString();
+
+    // Sometimes deploy setups need absolute from site root
+    const siteRootAbs = new URL("/languages/" + JSON_FILENAME, here.origin).toString();
+
+    // Another safe fallback: /public/languages/... (some people deploy that way)
+    const publicAbs = new URL("/public/languages/" + JSON_FILENAME, here.origin).toString();
+
+    // If you ever move html into /public/languages/ but it’s served as /languages/,
+    // this still covers both.
+    return [...new Set([relSameFolder, siteRootAbs, publicAbs])];
+  }
+
+  async function tryFetch(url){
+    lastTried = url;
+    setHint(`Trying: ${url}`);
+    const res = await fetch(url, { cache: "no-store" });
+    if(!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+    return await res.json();
+  }
+
+  function validatePack(p){
+    if(!p || !Array.isArray(p.days)) return "JSON loaded but missing: pack.days (must be an array).";
+    if(p.days.length < 1) return "JSON loaded but pack.days is empty.";
+    return null;
+  }
+
   async function load(){
     try{
-      document.getElementById("dataHint").textContent = `Loading: ${DATA_URL}`;
-      const res = await fetch(DATA_URL, { cache: "no-store" });
-      if(!res.ok) throw new Error("HTTP " + res.status);
+      setStatus("Loading lesson data…");
+      $("loadError").style.display = "none";
 
-      PACK = await res.json();
+      const candidates = buildCandidateUrls();
 
-      // Decide today’s index:
-      // - Uses day-of-month so it changes daily without needing storage.
-      // - Still allows Prev/Next for navigation.
-      const total = PACK.days?.length || 30;
-      const day = new Date().getDate(); // 1..31
-      idx = Math.min((day - 1) % total, total - 1);
+      let loaded = null;
+      let lastErr = null;
 
-      render();
-
-      // Voice list loads async on some browsers
-      if("speechSynthesis" in window){
-        window.speechSynthesis.onvoiceschanged = () => { cachedVoice = null; ensureVoice(); };
-        ensureVoice();
+      for(const url of candidates){
+        try{
+          loaded = await tryFetch(url);
+          const bad = validatePack(loaded);
+          if(bad) throw new Error(bad + " (Fix yoruba_30days.json structure.)");
+          break;
+        }catch(e){
+          lastErr = e;
+        }
       }
 
+      if(!loaded){
+        throw lastErr || new Error("Could not load JSON from any candidate URL.");
+      }
+
+      PACK = loaded;
+
+      // Auto-pick today, but still allow Prev/Next
+      const total = PACK.days.length;
+      const dayOfMonth = new Date().getDate();
+      idx = (dayOfMonth - 1) % total;
+
+      render();
       initRec();
+
+      setHint(
+`✅ Loaded OK
+Last tried: ${lastTried}
+
+FILES MUST BE HERE:
+- /public/languages/yoruba.html
+- /public/languages/yoruba_30days.json
+
+URL SHOULD LOOK LIKE:
+.../languages/yoruba.html`
+      );
+
     }catch(e){
       console.error(e);
-      setStatus("Could not load yoruba_30days.json. Put it in the SAME folder as yoruba.html.");
-      document.getElementById("dataHint").textContent =
-        `Expected file at: ${new URL(DATA_URL, window.location.href).toString()}`;
+      setStatus("❌ Could not load Yoruba lessons.");
+      showError(
+`Could not load ${JSON_FILENAME}.
+
+Most common causes:
+1) File name mismatch (must be exactly: ${JSON_FILENAME})
+2) JSON is not valid JSON (missing commas/quotes)
+3) JSON does not contain: { "days": [ ... ] }
+
+Last tried:
+${lastTried || "(none yet)"}
+
+Error:
+${e?.message || e}`
+      );
+
+      setHint(
+`Expected SAME folder:
+- /languages/yoruba.html
+- /languages/${JSON_FILENAME}
+
+Repo path should be:
+public/languages/yoruba.html
+public/languages/${JSON_FILENAME}`
+      );
     }
   }
 
-  // ---------- Top controls ----------
-  document.getElementById("btnSpeakAll").addEventListener("click", speakAll);
+  // ---------- UI controls ----------
+  $("btnSpeakAll").addEventListener("click", () => { if(PACK) speakAll(); });
 
-  document.getElementById("btnStop").addEventListener("click", () => {
+  $("btnStop").addEventListener("click", () => {
     try{ window.speechSynthesis.cancel(); }catch(e){}
     if(rec){ try{ rec.abort(); }catch(e){} }
     setStatus("Stopped.");
   });
 
-  document.getElementById("btnPrev").addEventListener("click", () => {
+  $("btnPrev").addEventListener("click", () => {
     if(!PACK) return;
     idx = (idx - 1 + PACK.days.length) % PACK.days.length;
     render();
   });
 
-  document.getElementById("btnNext").addEventListener("click", () => {
+  $("btnNext").addEventListener("click", () => {
     if(!PACK) return;
     idx = (idx + 1) % PACK.days.length;
     render();
   });
 
-  document.getElementById("btnMic").addEventListener("click", () => {
-    if(!rec){ initRec(); }
-    if(!rec){ return; }
-    const d = PACK.days[idx];
-    const sentence = buildSentence(d);
+  $("btnMic").addEventListener("click", () => {
+    if(!rec) initRec();
+    if(!rec || !PACK) return;
+    const sentence = buildSentence(PACK.days[idx]);
     setStatus("Listening… say today’s sentence once.");
     try{ rec.start(); } catch(e){}
-    // (Optional) You could compare what they said to the sentence; keeping it simple for now.
   });
 
-  document.getElementById("btnSpeakSentence").addEventListener("click", () => {
+  $("btnSpeakSentence").addEventListener("click", () => {
     if(!PACK) return;
-    const d = PACK.days[idx];
-    const sentence = buildSentence(d);
+    const sentence = buildSentence(PACK.days[idx]);
     if(sentence) speak(sentence);
   });
+
+  // Optional: make back link smart (if you want it to go to root index when available)
+  // If your site root has /index.html, keep ../index.html. If root is correct, set it to "/".
+  // $("backLink").href = "/";
 
   load();
 </script>
 
-<!-- AI Voice Player (keep this for when you switch to real AI TTS mp3) -->
 <audio id="aiTtsPlayer" preload="auto"></audio>
-
 </body>
 </html>
