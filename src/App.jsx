@@ -21,6 +21,8 @@ function App() {
           <Route path="timeline" element={<TimelinePage />} />
           <Route path="calendar" element={<CalendarPage />} />
           <Route path="journal" element={<JournalPage />} />
+          <Route path="library" element={<LibraryDecolonize />} />
+          <Route path="membership" element={<MembershipPlan />} />
           <Route path="portal/decolonize" element={<PortalDecolonize />} />
         </Route>
       </Routes>
