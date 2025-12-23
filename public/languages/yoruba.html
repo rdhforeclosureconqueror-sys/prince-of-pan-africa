@@ -67,6 +67,7 @@
       -webkit-background-clip:text; background-clip:text; color:transparent;
     }
     .brand p{ margin:2px 0 0; color: var(--muted); font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
     .nav{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; justify-content:flex-end; }
     .btn{
       border-radius: 999px;
@@ -200,6 +201,7 @@
       <div class="nav">
         <a class="btn gold" href="/">← Back to Black History</a>
         <button class="btn green" id="btnSpeakAll" type="button">🔊 Speak Lesson</button>
+        <button class="btn green" id="btnOpenJson" type="button">🧾 Open JSON</button>
         <button class="btn red" id="btnStop" type="button">⏹ Stop</button>
       </div>
     </div>
@@ -279,19 +281,29 @@
   </div>
 
 <script>
-  // IMPORTANT: yoruba.html and yoruba_30days.json must be in the SAME folder:
-  // /public/languages/yoruba.html
-  // /public/languages/yoruba_30days.json
-  //
-  // This loader also tries a couple fallback paths automatically.
+  /**
+   * THIS PAGE IS FIXED.
+   * If you still see "Unexpected token '<'", that means your JSON URL is returning HTML.
+   * This loader checks multiple possible URLs AND prints debug details.
+   */
 
+  const CACHE_BUST = `cb=${Date.now()}`;
+
+  // We try all common variants:
+  // - Same folder as yoruba.html (correct if both are in /public/languages/)
+  // - /languages/ (lowercase)
+  // - /Languages/ (uppercase) because Windows/GitHub can confuse folder names, but Linux is case-sensitive.
   const CANDIDATE_URLS = [
-    "./yoruba_30days.json",
-    "/languages/yoruba_30days.json"
+    `./yoruba_30days.json?${CACHE_BUST}`,
+    `../languages/yoruba_30days.json?${CACHE_BUST}`,
+    `/languages/yoruba_30days.json?${CACHE_BUST}`,
+    `/Languages/yoruba_30days.json?${CACHE_BUST}`,
+    `./yoruba_30days.json` // last try without bust
   ];
 
   let PACK = null;
   let idx = 0;
+  let lastGoodUrl = null;
 
   function setStatus(msg){ document.getElementById("status").textContent = msg; }
   function showDebug(text){
@@ -342,11 +354,11 @@
 
   function render(){
     const d = PACK.days[idx];
+
     document.getElementById("todayLabel").textContent = `Day ${d.day} • ${d.theme || "—"}`;
     document.getElementById("lessonTitle").textContent = `Yorùbá Lesson • Day ${d.day}`;
     document.getElementById("dayNum").textContent = `Day ${d.day}/${PACK.duration_days || PACK.days.length}`;
     document.getElementById("theme").textContent = d.theme || "—";
-
     document.getElementById("tip").textContent = d.daily_tip || "—";
     document.getElementById("culture").textContent = d.culture_note || "—";
 
@@ -417,33 +429,42 @@
     // Try parse JSON
     try{
       const data = JSON.parse(text);
-      return { ok:true, data, debug:`OK: ${url}\nHTTP: ${res.status}\nContent-Type: ${contentType}` };
+      return {
+        ok:true,
+        data,
+        debug:`OK: ${url}\nHTTP: ${res.status}\nContent-Type: ${contentType}\nFirst chars: ${text.slice(0,60).replace(/\s+/g," ").trim()}`
+      };
     }catch(e){
-      const head = text.slice(0, 120).replace(/\s+/g," ").trim();
+      const head = text.slice(0, 140).replace(/\s+/g," ").trim();
       return {
         ok:false,
         debug:
           `FAILED: ${url}\nHTTP: ${res.status}\nContent-Type: ${contentType}\n` +
           `First chars: ${head}\n\n` +
-          `This usually means the .json file contains HTML (or you got a 404 page).\n`
+          `Meaning: this URL returned HTML (often a 404 page) OR your .json file contains HTML.\n`
       };
     }
   }
 
   async function load(){
     setStatus("Loading lesson data…");
-    document.getElementById("dataHint").textContent = `Looking for: yoruba_30days.json`;
+    document.getElementById("dataHint").textContent = `Looking for: yoruba_30days.json (same folder or /languages/)`;
 
     const debugs = [];
 
     for(const url of CANDIDATE_URLS){
       const r = await fetchJsonWithDebug(url);
       debugs.push(r.debug);
+
       if(r.ok){
         PACK = r.data;
+        lastGoodUrl = url;
+
+        // Pick "day of month" lesson
         const total = PACK.days?.length || 30;
         const day = new Date().getDate();
         idx = Math.min((day - 1) % total, total - 1);
+
         render();
         initRec();
         showDebug(debugs.join("\n------------------------\n"));
@@ -455,16 +476,45 @@
     showDebug(debugs.join("\n------------------------\n"));
   }
 
+  // Buttons
   document.getElementById("btnSpeakAll").addEventListener("click", () => PACK && speakAll());
   document.getElementById("btnStop").addEventListener("click", () => {
     try{ window.speechSynthesis.cancel(); }catch(e){}
     if(rec){ try{ rec.abort(); }catch(e){} }
     setStatus("Stopped.");
   });
-  document.getElementById("btnPrev").addEventListener("click", () => { if(!PACK) return; idx=(idx-1+PACK.days.length)%PACK.days.length; render(); });
-  document.getElementById("btnNext").addEventListener("click", () => { if(!PACK) return; idx=(idx+1)%PACK.days.length; render(); });
-  document.getElementById("btnMic").addEventListener("click", () => { if(!rec){ initRec(); } if(!rec) return; setStatus("Listening… say today’s sentence."); try{ rec.start(); }catch(e){} });
-  document.getElementById("btnSpeakSentence").addEventListener("click", () => { if(!PACK) return; const s=buildSentence(PACK.days[idx]); if(s) speak(s); });
+
+  document.getElementById("btnPrev").addEventListener("click", () => {
+    if(!PACK) return;
+    idx=(idx-1+PACK.days.length)%PACK.days.length;
+    render();
+  });
+
+  document.getElementById("btnNext").addEventListener("click", () => {
+    if(!PACK) return;
+    idx=(idx+1)%PACK.days.length;
+    render();
+  });
+
+  document.getElementById("btnMic").addEventListener("click", () => {
+    if(!rec){ initRec(); }
+    if(!rec) return;
+    setStatus("Listening… say today’s sentence.");
+    try{ rec.start(); }catch(e){}
+  });
+
+  document.getElementById("btnSpeakSentence").addEventListener("click", () => {
+    if(!PACK) return;
+    const s=buildSentence(PACK.days[idx]);
+    if(s) speak(s);
+  });
+
+  document.getElementById("btnOpenJson").addEventListener("click", () => {
+    const guess = lastGoodUrl || "./yoruba_30days.json";
+    // Open the non-cachebusted version too, for clean viewing
+    const clean = guess.split("?")[0];
+    window.open(clean, "_blank");
+  });
 
   load();
 </script>
