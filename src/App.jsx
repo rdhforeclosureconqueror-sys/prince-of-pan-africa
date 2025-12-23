@@ -16,9 +16,9 @@ function App() {
         {/* Shell wraps all “main” pages */}
         <Route element={<MufasaShell />}>
           <Route index element={<Home />} />
+          <Route path="timeline" element={<TimelinePage />} />
           <Route path="calendar" element={<CalendarPage />} />
           <Route path="journal" element={<JournalPage />} />
-           <Route path="/timeline" element={<TimelinePage />} />
           <Route path="portal/decolonize" element={<PortalDecolonize />} />
         </Route>
       </Routes>
