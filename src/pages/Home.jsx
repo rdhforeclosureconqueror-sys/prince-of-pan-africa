@@ -156,8 +156,7 @@ export default function Home() {
                     color: "#f5e6b3",
                     cursor: "pointer",
                   }}
-                >
-                  <Link
+                <Link
   to="/timeline"
   className="send-btn"
   style={{
@@ -176,8 +175,8 @@ export default function Home() {
 >
   🕰️ Memory Restoration Timeline
 </Link>
-
-                  🌍 Swahili Lessons
+                  >
+                🌍 Swahili Lessons
                 </button>
 
                 <button
