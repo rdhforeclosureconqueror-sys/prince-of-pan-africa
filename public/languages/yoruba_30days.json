@@ -1,633 +1,361 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Mufasa • Yoruba Lesson of the Day</title>
+{
+  "language": "Yorùbá",
+  "duration_days": 30,
+  "days": [
+    {
+      "day": 1,
+      "theme": "Greetings",
+      "daily_tip": "Say it slowly first, then speed up once you’re confident.",
+      "culture_note": "Greetings matter in Yorùbá culture—acknowledging people is respect.",
+      "words": [
+        { "yoruba": "Báwo", "english": "Hello", "pronunciation_hint": "BAH-woh", "example_yoruba": "Báwo ni?", "example_english": "Hello, how are you?" },
+        { "yoruba": "Mo wà dáadáa", "english": "I’m fine", "pronunciation_hint": "moh wah DAH-dah-ah", "example_yoruba": "Mo wà dáadáa, ẹ ṣé.", "example_english": "I’m fine, thank you." },
+        { "yoruba": "Ẹ ṣé", "english": "Thank you", "pronunciation_hint": "eh SHEH", "example_yoruba": "Ẹ ṣé púpọ̀.", "example_english": "Thank you very much." }
+      ]
+    },
+    {
+      "day": 2,
+      "theme": "Yes / No",
+      "daily_tip": "Don’t rush “Bẹ́ẹ̀ni”—hit the two beats.",
+      "culture_note": "Tone marks can change meaning; focus on clarity over speed.",
+      "words": [
+        { "yoruba": "Bẹ́ẹ̀ni", "english": "Yes", "pronunciation_hint": "beh-eh-nee", "example_yoruba": "Bẹ́ẹ̀ni, mo gbọ́.", "example_english": "Yes, I understand." },
+        { "yoruba": "Rárá", "english": "No", "pronunciation_hint": "RAH-rah", "example_yoruba": "Rárá, kì í ṣe bẹ́ẹ̀.", "example_english": "No, it’s not like that." },
+        { "yoruba": "Ó dáa", "english": "Okay / Alright", "pronunciation_hint": "oh DAH", "example_yoruba": "Ó dáa, ẹ jẹ́ ká lọ.", "example_english": "Okay, let’s go." }
+      ]
+    },
+    {
+      "day": 3,
+      "theme": "Polite Words",
+      "daily_tip": "Politeness phrases make you sound fluent fast.",
+      "culture_note": "Respect language is powerful—use it even with friends.",
+      "words": [
+        { "yoruba": "Jọ̀ọ́", "english": "Please", "pronunciation_hint": "jaw-oh", "example_yoruba": "Jọ̀ọ́, ràn mí lọ́wọ́.", "example_english": "Please, help me." },
+        { "yoruba": "Ẹ jọ̀ọ́", "english": "Please (respectful)", "pronunciation_hint": "eh jaw-oh", "example_yoruba": "Ẹ jọ̀ọ́, ẹ tún sọ.", "example_english": "Please, say it again." },
+        { "yoruba": "Ẹ káàbọ̀", "english": "Welcome", "pronunciation_hint": "eh kah-ah-baw", "example_yoruba": "Ẹ káàbọ̀ sí ilé wa.", "example_english": "Welcome to our home." }
+      ]
+    },
+    {
+      "day": 4,
+      "theme": "Family",
+      "daily_tip": "Say kinship words with warmth—tone carries emotion too.",
+      "culture_note": "Family is central; people often greet elders first.",
+      "words": [
+        { "yoruba": "Ìyá", "english": "Mother", "pronunciation_hint": "ee-YAH", "example_yoruba": "Ìyá mi wà ní ilé.", "example_english": "My mother is at home." },
+        { "yoruba": "Bàbá", "english": "Father", "pronunciation_hint": "BAH-bah", "example_yoruba": "Bàbá mi ṣiṣẹ́.", "example_english": "My father is working." },
+        { "yoruba": "Ọmọ", "english": "Child", "pronunciation_hint": "aw-MAW", "example_yoruba": "Ọmọ náà ń rẹ́rìn-ín.", "example_english": "That child is smiling." }
+      ]
+    },
+    {
+      "day": 5,
+      "theme": "Home",
+      "daily_tip": "Repeat the nouns 3 times before adding full sentences.",
+      "culture_note": "“Ilé” can mean home, house, or family household.",
+      "words": [
+        { "yoruba": "Ilé", "english": "Home/House", "pronunciation_hint": "ee-LEH", "example_yoruba": "Mo wà ní ilé.", "example_english": "I’m at home." },
+        { "yoruba": "Ọ̀nà", "english": "Road/Way", "pronunciation_hint": "aw-NAH", "example_yoruba": "Ọ̀nà yìí dára.", "example_english": "This road is good." },
+        { "yoruba": "Yàrá", "english": "Room", "pronunciation_hint": "YAH-rah", "example_yoruba": "Yàrá mi mọ́.", "example_english": "My room is clean." }
+      ]
+    },
 
-  <style>
-    :root{
-      --bg:#070707;
-      --panel: rgba(10,10,10,.72);
-      --gold:#d6b25e;
-      --gold2:#f0d489;
-      --red:#e11d2e;
-      --green:#10b981;
-      --text:#f4f1e8;
-      --muted:#c9c2b3;
-      --shadow: 0 20px 60px rgba(0,0,0,.55);
-      --radius: 18px;
+    {
+      "day": 6,
+      "theme": "Food & Water",
+      "daily_tip": "Practice like a rhythm: word → meaning → example.",
+      "culture_note": "Sharing food is hospitality—common in many homes.",
+      "words": [
+        { "yoruba": "Omi", "english": "Water", "pronunciation_hint": "oh-MEE", "example_yoruba": "Mo fẹ́ omi.", "example_english": "I want water." },
+        { "yoruba": "Oúnjẹ", "english": "Food", "pronunciation_hint": "oh-oon-JEH", "example_yoruba": "Oúnjẹ náà dùn.", "example_english": "The food is sweet/tasty." },
+        { "yoruba": "Ebi ń pami", "english": "I’m hungry", "pronunciation_hint": "eh-bee ny paw-mee", "example_yoruba": "Ebi ń pami, ẹ jọ̀ọ́.", "example_english": "I’m hungry, please." }
+      ]
+    },
+
+    {
+      "day": 7,
+      "theme": "Numbers (1–3)",
+      "daily_tip": "Say numbers with steady tempo, like counting steps.",
+      "culture_note": "Counting shows up in songs, claps, and children’s games.",
+      "words": [
+        { "yoruba": "Ọ̀kan", "english": "One", "pronunciation_hint": "aw-KAHN", "example_yoruba": "Ọ̀kan náà ni.", "example_english": "It’s one." },
+        { "yoruba": "Èjì", "english": "Two", "pronunciation_hint": "eh-JEE", "example_yoruba": "Mo ní èjì.", "example_english": "I have two." },
+        { "yoruba": "Ẹ̀ta", "english": "Three", "pronunciation_hint": "eh-TAH", "example_yoruba": "Ẹ̀ta ló wà.", "example_english": "There are three." }
+      ]
+    },
+
+    {
+      "day": 8,
+      "theme": "Time",
+      "daily_tip": "Time phrases are perfect for daily repetition.",
+      "culture_note": "People may greet based on time of day.",
+      "words": [
+        { "yoruba": "Òní", "english": "Today", "pronunciation_hint": "aw-NEE", "example_yoruba": "Òní dára.", "example_english": "Today is good." },
+        { "yoruba": "Ọ̀la", "english": "Tomorrow", "pronunciation_hint": "aw-LAH", "example_yoruba": "Ọ̀la ni a ó rí.", "example_english": "We’ll see tomorrow." },
+        { "yoruba": "Lónìí", "english": "Today (variant)", "pronunciation_hint": "loh-NEE", "example_yoruba": "Lónìí mo ní iṣẹ́.", "example_english": "Today I have work." }
+      ]
+    },
+
+    {
+      "day": 9,
+      "theme": "Simple Questions",
+      "daily_tip": "Questions rise in energy—sound curious.",
+      "culture_note": "Asking well is respectful; don’t demand—invite.",
+      "words": [
+        { "yoruba": "Kí ni?", "english": "What?", "pronunciation_hint": "kee nee", "example_yoruba": "Kí ni yìí?", "example_english": "What is this?" },
+        { "yoruba": "Ta ni?", "english": "Who?", "pronunciation_hint": "tah nee", "example_yoruba": "Ta ni wọ́n?", "example_english": "Who are they?" },
+        { "yoruba": "Nibo?", "english": "Where?", "pronunciation_hint": "nee-baw", "example_yoruba": "Nibo ni ilé rẹ?", "example_english": "Where is your house?" }
+      ]
+    },
+
+    {
+      "day": 10,
+      "theme": "Respect",
+      "daily_tip": "Respect phrases unlock better conversations.",
+      "culture_note": "Respect for elders is a strong cultural value.",
+      "words": [
+        { "yoruba": "Ẹ kú", "english": "Greeting prefix (respectful)", "pronunciation_hint": "eh koo", "example_yoruba": "Ẹ kú àárọ̀.", "example_english": "Good morning (respectful)." },
+        { "yoruba": "Ẹ kú àárọ̀", "english": "Good morning", "pronunciation_hint": "eh koo ah-ah-raw", "example_yoruba": "Ẹ kú àárọ̀, báwo ni?", "example_english": "Good morning, how are you?" },
+        { "yoruba": "Ẹ kú alẹ́", "english": "Good evening", "pronunciation_hint": "eh koo ah-leh", "example_yoruba": "Ẹ kú alẹ́ o.", "example_english": "Good evening." }
+      ]
+    },
+
+    {
+      "day": 11,
+      "theme": "Feelings",
+      "daily_tip": "Say feeling words like you mean them—emotion helps memory.",
+      "culture_note": "People may ask your wellbeing before business.",
+      "words": [
+        { "yoruba": "Inú mi dùn", "english": "I’m happy", "pronunciation_hint": "ee-noo mee doon", "example_yoruba": "Inú mi dùn lónìí.", "example_english": "I’m happy today." },
+        { "yoruba": "Mo rẹ́", "english": "I’m tired", "pronunciation_hint": "moh reh", "example_yoruba": "Mo rẹ́ gan.", "example_english": "I’m very tired." },
+        { "yoruba": "Ó ṣe", "english": "It’s okay / alright", "pronunciation_hint": "aw sheh", "example_yoruba": "Ó ṣe, má ṣe yọ̀.", "example_english": "It’s okay, don’t worry." }
+      ]
+    },
+
+    {
+      "day": 12,
+      "theme": "Common Verbs",
+      "daily_tip": "Verbs power sentences—practice them daily.",
+      "culture_note": "Short verbs help you start speaking quickly.",
+      "words": [
+        { "yoruba": "Lọ", "english": "Go", "pronunciation_hint": "law", "example_yoruba": "Jẹ́ ká lọ.", "example_english": "Let’s go." },
+        { "yoruba": "Wá", "english": "Come", "pronunciation_hint": "wah", "example_yoruba": "Wá síbí.", "example_english": "Come here." },
+        { "yoruba": "Jẹ", "english": "Eat", "pronunciation_hint": "jeh", "example_yoruba": "Mo fẹ́ jẹ.", "example_english": "I want to eat." }
+      ]
+    },
+
+    {
+      "day": 13,
+      "theme": "Money",
+      "daily_tip": "Say the noun clearly, then add ‘Mo fẹ́…’",
+      "culture_note": "Markets and trade are major parts of Yoruba social life.",
+      "words": [
+        { "yoruba": "Owó", "english": "Money", "pronunciation_hint": "aw-WAW", "example_yoruba": "Mo ní owó díẹ̀.", "example_english": "I have a little money." },
+        { "yoruba": "Ọjà", "english": "Market", "pronunciation_hint": "aw-JAH", "example_yoruba": "Mo ń lọ sí ọjà.", "example_english": "I’m going to the market." },
+        { "yoruba": "Ra", "english": "Buy", "pronunciation_hint": "rah", "example_yoruba": "Mo fẹ́ ra omi.", "example_english": "I want to buy water." }
+      ]
+    },
+
+    {
+      "day": 14,
+      "theme": "Directions",
+      "daily_tip": "Point while you speak—it boosts memory.",
+      "culture_note": "Directions are often given with landmarks.",
+      "words": [
+        { "yoruba": "Sí", "english": "To / toward", "pronunciation_hint": "see", "example_yoruba": "Lọ sí ilé.", "example_english": "Go to the house." },
+        { "yoruba": "Nítòsí", "english": "Near", "pronunciation_hint": "nee-toh-see", "example_yoruba": "Ó wà nítòsí.", "example_english": "It is nearby." },
+        { "yoruba": "Jìn", "english": "Far", "pronunciation_hint": "jeen", "example_yoruba": "Ó jìn díẹ̀.", "example_english": "It’s a bit far." }
+      ]
+    },
+
+    {
+      "day": 15,
+      "theme": "Body",
+      "daily_tip": "Tap the body part as you say it.",
+      "culture_note": "Body language plus words = faster learning.",
+      "words": [
+        { "yoruba": "Orí", "english": "Head", "pronunciation_hint": "aw-REE", "example_yoruba": "Orí mi ń dùn.", "example_english": "My head hurts." },
+        { "yoruba": "Ọwọ́", "english": "Hand", "pronunciation_hint": "aw-WAW", "example_yoruba": "Fún mi ní ọwọ́.", "example_english": "Give me your hand." },
+        { "yoruba": "Ẹsẹ̀", "english": "Leg/foot", "pronunciation_hint": "eh-SEH", "example_yoruba": "Ẹsẹ̀ mi ń rẹ́.", "example_english": "My legs are tired." }
+      ]
+    },
+
+    {
+      "day": 16,
+      "theme": "Weather",
+      "daily_tip": "Describe the day you’re living in—real context sticks.",
+      "culture_note": "Weather talk is a common opener.",
+      "words": [
+        { "yoruba": "Òjò", "english": "Rain", "pronunciation_hint": "aw-JAW", "example_yoruba": "Òjò ń rọ̀.", "example_english": "It’s raining." },
+        { "yoruba": "Òrùn", "english": "Sun", "pronunciation_hint": "aw-ROON", "example_yoruba": "Òrùn ń ràn.", "example_english": "The sun is shining." },
+        { "yoruba": "Tútù", "english": "Cold", "pronunciation_hint": "too-too", "example_yoruba": "Ó tútù lónìí.", "example_english": "It’s cold today." }
+      ]
+    },
+
+    {
+      "day": 17,
+      "theme": "Talking",
+      "daily_tip": "Repeat the phrase exactly—don’t translate mid-sentence.",
+      "culture_note": "Conversation builds relationships—take your time.",
+      "words": [
+        { "yoruba": "Sọ", "english": "Say / speak", "pronunciation_hint": "shaw", "example_yoruba": "Sọ fún mi.", "example_english": "Tell me." },
+        { "yoruba": "Gbọ́", "english": "Hear/listen", "pronunciation_hint": "gbaw", "example_yoruba": "Mo gbọ́ ọ.", "example_english": "I hear you." },
+        { "yoruba": "Mo mọ̀", "english": "I know", "pronunciation_hint": "moh maw", "example_yoruba": "Mo mọ̀ yẹn.", "example_english": "I know that." }
+      ]
+    },
+
+    {
+      "day": 18,
+      "theme": "Needs",
+      "daily_tip": "Use ‘Mo fẹ́…’ to build many sentences.",
+      "culture_note": "Clear needs + respect = smooth communication.",
+      "words": [
+        { "yoruba": "Mo fẹ́", "english": "I want", "pronunciation_hint": "moh feh", "example_yoruba": "Mo fẹ́ oúnjẹ.", "example_english": "I want food." },
+        { "yoruba": "Mo nílò", "english": "I need", "pronunciation_hint": "moh nee-law", "example_yoruba": "Mo nílò omi.", "example_english": "I need water." },
+        { "yoruba": "Fún mi", "english": "Give me", "pronunciation_hint": "foon mee", "example_yoruba": "Fún mi ní omi.", "example_english": "Give me water." }
+      ]
+    },
+
+    {
+      "day": 19,
+      "theme": "Simple Descriptions",
+      "daily_tip": "One adjective a day is enough—master it.",
+      "culture_note": "Describing people/things kindly is valued.",
+      "words": [
+        { "yoruba": "Dára", "english": "Good", "pronunciation_hint": "DAH-rah", "example_yoruba": "Ó dára.", "example_english": "It’s good." },
+        { "yoruba": "Búburú", "english": "Bad", "pronunciation_hint": "boo-boo-roo", "example_yoruba": "Kò dára, ó búburú.", "example_english": "It’s not good, it’s bad." },
+        { "yoruba": "Ńlá", "english": "Big", "pronunciation_hint": "n-lah", "example_yoruba": "Ilé ńlá ni.", "example_english": "It’s a big house." }
+      ]
+    },
+
+    {
+      "day": 20,
+      "theme": "Small Talk",
+      "daily_tip": "Ask one question and listen fully.",
+      "culture_note": "Listening is respect.",
+      "words": [
+        { "yoruba": "Báwo ni?", "english": "How are you?", "pronunciation_hint": "BAH-woh nee", "example_yoruba": "Báwo ni lónìí?", "example_english": "How are you today?" },
+        { "yoruba": "Dáadáa ni", "english": "I’m fine", "pronunciation_hint": "DAH-dah-ah nee", "example_yoruba": "Dáadáa ni, ẹ ṣé.", "example_english": "I’m fine, thanks." },
+        { "yoruba": "Kò burú", "english": "Not bad", "pronunciation_hint": "kaw boo-roo", "example_yoruba": "Kò burú rárá.", "example_english": "Not bad at all." }
+      ]
+    },
+
+    {
+      "day": 21,
+      "theme": "Friends",
+      "daily_tip": "Say it like a greeting: ‘Ọ̀rẹ́ mi!’",
+      "culture_note": "Friendship is often expressed with warmth and praise-names.",
+      "words": [
+        { "yoruba": "Ọ̀rẹ́", "english": "Friend", "pronunciation_hint": "aw-reh", "example_yoruba": "Ọ̀rẹ́ mi ni yẹn.", "example_english": "That is my friend." },
+        { "yoruba": "Ẹgbẹ́", "english": "Group/community", "pronunciation_hint": "eh-gbeh", "example_yoruba": "Ẹgbẹ́ wa lágbára.", "example_english": "Our community is strong." },
+        { "yoruba": "Pàdé", "english": "Meet", "pronunciation_hint": "pah-deh", "example_yoruba": "A ó pàdé lọ́la.", "example_english": "We will meet tomorrow." }
+      ]
+    },
+
+    {
+      "day": 22,
+      "theme": "Work",
+      "daily_tip": "Say the noun, then add where/when.",
+      "culture_note": "Work talk is often paired with wellbeing check-ins.",
+      "words": [
+        { "yoruba": "Iṣẹ́", "english": "Work", "pronunciation_hint": "ee-sheh", "example_yoruba": "Mo ní iṣẹ́ lónìí.", "example_english": "I have work today." },
+        { "yoruba": "Ṣiṣẹ́", "english": "Working", "pronunciation_hint": "shee-sheh", "example_yoruba": "Mo ń ṣiṣẹ́.", "example_english": "I am working." },
+        { "yoruba": "Sinmi", "english": "Rest", "pronunciation_hint": "seen-mee", "example_yoruba": "Jẹ́ ká sinmi díẹ̀.", "example_english": "Let’s rest a bit." }
+      ]
+    },
+
+    {
+      "day": 23,
+      "theme": "Health",
+      "daily_tip": "Speak softly and clearly when describing pain.",
+      "culture_note": "People may offer support quickly if you share your state.",
+      "words": [
+        { "yoruba": "Àìsàn", "english": "Sickness", "pronunciation_hint": "eye-sahn", "example_yoruba": "Àìsàn kò dáa.", "example_english": "Sickness is not good." },
+        { "yoruba": "Ìlera", "english": "Health", "pronunciation_hint": "ee-leh-rah", "example_yoruba": "Mo fẹ́ ìlera.", "example_english": "I want health." },
+        { "yoruba": "Dókítà", "english": "Doctor", "pronunciation_hint": "daw-kee-tah", "example_yoruba": "Mo fẹ́ rí dókítà.", "example_english": "I want to see a doctor." }
+      ]
+    },
+
+    {
+      "day": 24,
+      "theme": "Learning",
+      "daily_tip": "Say: word → meaning → example, every time.",
+      "culture_note": "Learning is respected—humility makes doors open.",
+      "words": [
+        { "yoruba": "Kọ́", "english": "Learn", "pronunciation_hint": "kaw", "example_yoruba": "Mo ń kọ́ Yorùbá.", "example_english": "I’m learning Yoruba." },
+        { "yoruba": "Kíkọ́", "english": "Learning (noun)", "pronunciation_hint": "kee-kaw", "example_yoruba": "Kíkọ́ dára.", "example_english": "Learning is good." },
+        { "yoruba": "Ọ̀rọ̀", "english": "Word/speech", "pronunciation_hint": "aw-raw", "example_yoruba": "Ọ̀rọ̀ rẹ dára.", "example_english": "Your words are good." }
+      ]
+    },
+
+    {
+      "day": 25,
+      "theme": "Movement",
+      "daily_tip": "Act it out. Your body is your memory.",
+      "culture_note": "Dance and rhythm are learning tools, not just entertainment.",
+      "words": [
+        { "yoruba": "Dúró", "english": "Stand", "pronunciation_hint": "doo-raw", "example_yoruba": "Dúró níbí.", "example_english": "Stand here." },
+        { "yoruba": "Jòkó", "english": "Sit", "pronunciation_hint": "jaw-kaw", "example_yoruba": "Jòkó, ẹ jọ̀ọ́.", "example_english": "Sit down, please." },
+        { "yoruba": "Rìn", "english": "Walk", "pronunciation_hint": "reen", "example_yoruba": "Jẹ́ ká rìn.", "example_english": "Let’s walk." }
+      ]
+    },
+
+    {
+      "day": 26,
+      "theme": "School",
+      "daily_tip": "Use one sentence daily to build confidence.",
+      "culture_note": "Education is often paired with character and responsibility.",
+      "words": [
+        { "yoruba": "Ilé-ẹ̀kọ́", "english": "School", "pronunciation_hint": "ee-leh eh-kaw", "example_yoruba": "Ọmọ lọ sí ilé-ẹ̀kọ́.", "example_english": "The child went to school." },
+        { "yoruba": "Olùkọ́", "english": "Teacher", "pronunciation_hint": "oh-loo-kaw", "example_yoruba": "Olùkọ́ wà ní yàrá.", "example_english": "The teacher is in the room." },
+        { "yoruba": "Kíláàsì", "english": "Classroom", "pronunciation_hint": "kee-lah-see", "example_yoruba": "Mo wà ní kíláàsì.", "example_english": "I’m in class." }
+      ]
+    },
+
+    {
+      "day": 27,
+      "theme": "Respectful Responses",
+      "daily_tip": "Use these to sound natural in conversations.",
+      "culture_note": "Respect responses smooth social flow.",
+      "words": [
+        { "yoruba": "Bẹ́ẹ̀ni, ẹ ṣé", "english": "Yes, thank you", "pronunciation_hint": "beh-eh-nee eh sheh", "example_yoruba": "Bẹ́ẹ̀ni, ẹ ṣé púpọ̀.", "example_english": "Yes, thank you very much." },
+        { "yoruba": "Ó yá", "english": "Alright / Let’s do it", "pronunciation_hint": "aw yah", "example_yoruba": "Ó yá, ẹ jẹ́ ká bẹ̀rẹ̀.", "example_english": "Alright, let’s begin." },
+        { "yoruba": "Má bínú", "english": "Sorry / Don’t be upset", "pronunciation_hint": "mah bee-noo", "example_yoruba": "Má bínú, ẹ jọ̀ọ́.", "example_english": "Sorry, please." }
+      ]
+    },
+
+    {
+      "day": 28,
+      "theme": "Community",
+      "daily_tip": "Say the key noun clearly: people/community/household.",
+      "culture_note": "Community is protection—relationships are wealth.",
+      "words": [
+        { "yoruba": "Àwọn ènìyàn", "english": "People", "pronunciation_hint": "ah-wawn eh-nee-yawn", "example_yoruba": "Àwọn ènìyàn dára.", "example_english": "People are good." },
+        { "yoruba": "Agbègbè", "english": "Neighborhood", "pronunciation_hint": "ah-gbeh-gbeh", "example_yoruba": "Agbègbè yìí balẹ̀.", "example_english": "This neighborhood is calm." },
+        { "yoruba": "Àjọ", "english": "Gathering/association", "pronunciation_hint": "ah-jaw", "example_yoruba": "A ní àjọ lónìí.", "example_english": "We have a gathering today." }
+      ]
+    },
+
+    {
+      "day": 29,
+      "theme": "Confidence",
+      "daily_tip": "Speak even if you’re not perfect—confidence grows by use.",
+      "culture_note": "Language lives through speaking, not just studying.",
+      "words": [
+        { "yoruba": "Mo lè", "english": "I can", "pronunciation_hint": "moh leh", "example_yoruba": "Mo lè ṣe e.", "example_english": "I can do it." },
+        { "yoruba": "Kò ṣeé ṣe", "english": "It’s not possible", "pronunciation_hint": "kaw sheh-eh sheh", "example_yoruba": "Kò ṣeé ṣe lónìí.", "example_english": "It’s not possible today." },
+        { "yoruba": "Mo ń gbìyànjú", "english": "I’m trying", "pronunciation_hint": "moh ny gbee-yan-joo", "example_yoruba": "Mo ń gbìyànjú gidigidi.", "example_english": "I’m trying very hard." }
+      ]
+    },
+
+    {
+      "day": 30,
+      "theme": "Review",
+      "daily_tip": "Review beats new content. Replay Day 1–7 again.",
+      "culture_note": "Repetition is tradition—songs, chants, and practice build mastery.",
+      "words": [
+        { "yoruba": "Ẹ ṣé", "english": "Thank you", "pronunciation_hint": "eh SHEH", "example_yoruba": "Ẹ ṣé fún ìrànlọ́wọ́.", "example_english": "Thank you for the help." },
+        { "yoruba": "Ó dáa", "english": "Okay", "pronunciation_hint": "oh DAH", "example_yoruba": "Ó dáa, a ó tún ṣe.", "example_english": "Okay, we will do it again." },
+        { "yoruba": "Ẹ kú iṣẹ́", "english": "Well done (work)", "pronunciation_hint": "eh koo ee-sheh", "example_yoruba": "Ẹ kú iṣẹ́ o!", "example_english": "Well done!" }
+      ]
     }
-
-    *{box-sizing:border-box}
-    body{
-      margin:0;
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
-      background:
-        radial-gradient(1100px 500px at 50% 0%, rgba(214,178,94,.14), transparent 65%),
-        radial-gradient(900px 420px at 20% 20%, rgba(225,29,46,.12), transparent 65%),
-        radial-gradient(900px 420px at 80% 25%, rgba(16,185,129,.10), transparent 65%),
-        linear-gradient(180deg, #0a0a0a, #040404);
-      color: var(--text);
-      min-height:100vh;
-    }
-
-    .topbar{
-      position:sticky; top:0; z-index:50;
-      backdrop-filter: blur(10px);
-      background: linear-gradient(180deg, rgba(0,0,0,.78), rgba(0,0,0,.35));
-      border-bottom: 1px solid rgba(214,178,94,.18);
-    }
-    .topbar-inner{
-      max-width:1100px; margin:0 auto; padding:14px 18px;
-      display:flex; align-items:center; justify-content:space-between; gap:12px;
-    }
-
-    .brand{ display:flex; align-items:center; gap:12px; min-width: 0; }
-    .mark{
-      width:42px; height:42px; border-radius: 12px;
-      background: linear-gradient(135deg, rgba(214,178,94,.35), rgba(214,178,94,.06));
-      border: 1px solid rgba(214,178,94,.45);
-      box-shadow: 0 10px 28px rgba(214,178,94,.10);
-      display:grid; place-items:center;
-      position:relative;
-    }
-    .mark:before{
-      content:""; position:absolute; inset:6px; border-radius: 10px;
-      border: 1px solid rgba(214,178,94,.28);
-    }
-    .mark span{
-      font-weight:900; letter-spacing:.5px;
-      background: linear-gradient(180deg, var(--gold2), var(--gold));
-      -webkit-background-clip:text; background-clip:text;
-      color: transparent;
-      text-shadow: 0 1px 0 rgba(0,0,0,.35);
-    }
-
-    .brand h1{
-      margin:0; font-size:14px; letter-spacing:.16em; text-transform:uppercase;
-      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-      background: linear-gradient(180deg, var(--gold2), var(--gold));
-      -webkit-background-clip:text; background-clip:text; color:transparent;
-    }
-    .brand p{ margin:2px 0 0; color: var(--muted); font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-
-    .nav{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; justify-content:flex-end; }
-    .btn{
-      border-radius: 999px;
-      padding:10px 14px;
-      border: 1px solid rgba(214,178,94,.45);
-      background: rgba(0,0,0,.25);
-      color: var(--text);
-      cursor:pointer;
-      box-shadow: 0 10px 30px rgba(0,0,0,.25);
-      transition: transform .08s ease, background .15s ease;
-      text-decoration:none;
-      font-weight:600;
-      font-size:13px;
-      display:inline-flex; align-items:center; gap:8px;
-      user-select:none;
-    }
-    .btn:hover{ transform: translateY(-1px); background: rgba(214,178,94,.08); }
-    .btn.red{ border-color: rgba(225,29,46,.55); }
-    .btn.green{ border-color: rgba(16,185,129,.55); }
-    .btn.gold{ border-color: rgba(214,178,94,.65); }
-
-    .wrap{ max-width:1100px; margin:0 auto; padding:22px 18px 60px; }
-
-    .hero{
-      border-radius: var(--radius);
-      border: 1px solid rgba(214,178,94,.28);
-      background: linear-gradient(135deg, rgba(225,29,46,.09), rgba(0,0,0,.35) 35%, rgba(16,185,129,.08));
-      box-shadow: var(--shadow);
-      padding: 18px;
-    }
-    .hero-grid{ display:grid; grid-template-columns: 1.2fr .8fr; gap:16px; }
-    @media (max-width: 900px){ .hero-grid{ grid-template-columns:1fr; } }
-
-    .title{
-      margin:0;
-      font-size: 22px;
-      letter-spacing:.08em;
-      text-transform:uppercase;
-      background: linear-gradient(180deg, var(--gold2), var(--gold));
-      -webkit-background-clip:text; background-clip:text; color:transparent;
-    }
-    .subtitle{ margin: 8px 0 0; color: var(--muted); line-height:1.5; font-size: 13.5px; }
-
-    .panel{
-      border-radius: var(--radius);
-      border: 1px solid rgba(214,178,94,.20);
-      background: var(--panel);
-      padding: 16px;
-      box-shadow: 0 14px 40px rgba(0,0,0,.35);
-    }
-
-    .kicker{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:14px; }
-    .pill{
-      padding:8px 12px;
-      border-radius:999px;
-      border: 1px solid rgba(214,178,94,.22);
-      background: rgba(0,0,0,.25);
-      color: var(--muted);
-      font-size: 12px;
-    }
-    .pill b{ color: var(--text); font-weight:700; }
-
-    .row{ display:grid; grid-template-columns: 1fr 1fr; gap:16px; margin-top: 16px; }
-    @media (max-width: 900px){ .row{ grid-template-columns:1fr; } }
-
-    .section-title{ margin:0 0 10px; font-size: 12px; letter-spacing:.18em; text-transform:uppercase; color: var(--muted); }
-
-    .word{
-      border-radius: 14px;
-      border: 1px solid rgba(214,178,94,.18);
-      background: rgba(0,0,0,.30);
-      padding: 12px;
-      display:flex; flex-direction:column; gap:8px;
-    }
-    .word-top{ display:flex; justify-content:space-between; gap:10px; align-items:baseline; flex-wrap:wrap; }
-    .yo{
-      font-weight:900;
-      font-size: 18px;
-      letter-spacing:.03em;
-      background: linear-gradient(180deg, #fff3c4, var(--gold));
-      -webkit-background-clip:text; background-clip:text; color:transparent;
-    }
-    .en{ color: var(--muted); font-size: 13px; }
-    .mini{ color: var(--muted); font-size: 12px; line-height: 1.45; }
-
-    .controls{ display:flex; gap:10px; flex-wrap:wrap; margin-top: 12px; }
-    .status{ margin-top: 10px; font-size: 12px; color: var(--muted); }
-
-    .footer{
-      margin-top: 18px;
-      color: rgba(201,194,179,.85);
-      font-size: 12px;
-      line-height: 1.5;
-      border-top: 1px solid rgba(214,178,94,.16);
-      padding-top: 14px;
-    }
-
-    .note{
-      border-left: 3px solid rgba(214,178,94,.7);
-      padding: 10px 12px;
-      background: rgba(0,0,0,.25);
-      border-radius: 12px;
-      color: var(--muted);
-      font-size: 12.5px;
-      line-height: 1.55;
-      white-space: pre-wrap;
-    }
-    .danger{ border-left-color: rgba(225,29,46,.7); }
-
-    code{ color: #fff3c4; }
-    .small{ font-size:12px; color: var(--muted); margin-top:8px; white-space:pre-wrap; }
-    .divider{ height:10px; }
-  </style>
-</head>
-
-<body>
-  <div class="topbar">
-    <div class="topbar-inner">
-      <div class="brand">
-        <div class="mark"><span>M</span></div>
-        <div style="min-width:0">
-          <h1>Mufasa • Yoruba Lesson</h1>
-          <p id="todayLabel">Lesson of the Day • Loading…</p>
-        </div>
-      </div>
-
-      <div class="nav">
-        <!-- This is safer than "/" if you are deployed under a subpath -->
-        <a class="btn gold" id="backLink" href="../index.html">← Back</a>
-        <button class="btn green" id="btnSpeakAll" type="button">🔊 Speak Lesson</button>
-        <button class="btn red" id="btnStop" type="button">⏹ Stop</button>
-      </div>
-    </div>
-  </div>
-
-  <div class="wrap">
-    <div class="hero">
-      <div class="hero-grid">
-        <div class="panel">
-          <h2 class="title" id="lessonTitle">Yorùbá Lesson of the Day</h2>
-          <p class="subtitle" id="lessonSubtitle">
-            Three words + 1 daily tip + 1 culture note. Practice out loud (AI voice + mic practice when supported).
-          </p>
-
-          <div class="kicker">
-            <div class="pill"><b id="dayNum">Day</b></div>
-            <div class="pill">Theme: <b id="theme">—</b></div>
-            <div class="pill">Mode: <b id="mode">Text + AI Audio</b></div>
-          </div>
-
-          <div class="row" style="margin-top:16px">
-            <div class="panel">
-              <div class="section-title">Words</div>
-              <div id="words"></div>
-
-              <div class="controls">
-                <button class="btn gold" id="btnPrev" type="button">← Prev</button>
-                <button class="btn gold" id="btnNext" type="button">Next →</button>
-                <button class="btn green" id="btnMic" type="button">🎙 Practice (Mic)</button>
-              </div>
-
-              <div class="status" id="status">Loading lesson data…</div>
-              <div class="small" id="dataHint"></div>
-            </div>
-
-            <div class="panel">
-              <div class="section-title">Daily Tip</div>
-              <div class="note" id="tip">—</div>
-
-              <div class="divider"></div>
-
-              <div class="section-title">Culture Note</div>
-              <div class="note" id="culture">—</div>
-
-              <div class="footer">
-                <div><b style="color:#fff3c4">How it works:</b> Tap <code>Speak Lesson</code> for AI voice. Tap <code>Practice (Mic)</code> to speak back. If your browser blocks mic/voice, you still get the full lesson by text.</div>
-              </div>
-
-              <div id="compat" class="note danger" style="display:none;margin-top:12px">
-                Your browser doesn’t support Speech Recognition here. Use Chrome for best results.
-              </div>
-
-              <div id="loadError" class="note danger" style="display:none;margin-top:12px"></div>
-            </div>
-          </div>
-        </div>
-
-        <div class="panel">
-          <div class="section-title">Quick Practice Flow</div>
-          <div class="note" id="practiceFlow">
-            1) Listen to each word (🔊).<br/>
-            2) Repeat it 3 times (🎙).<br/>
-            3) Say the example sentences once.<br/><br/>
-            <b>Goal:</b> consistency + confidence — every day.
-          </div>
-
-          <div class="divider"></div>
-
-          <div class="section-title">Today’s Sentence</div>
-          <div class="note" id="sentenceBox">—</div>
-
-          <div class="controls" style="margin-top:12px">
-            <button class="btn green" id="btnSpeakSentence" type="button">🔊 Speak Sentence</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-<script>
-  // ==========================================================
-  // ✅ BULLETPROOF Yoruba loader
-  // - Tries multiple paths (fixes “loading forever”)
-  // - Shows exact URL + error on screen
-  // - Validates PACK.days
-  // ==========================================================
-
-  const JSON_FILENAME = "yoruba_30days.json";
-
-  const $ = (id) => document.getElementById(id);
-
-  let PACK = null;
-  let idx = 0;
-  let lastTried = "";
-
-  function setStatus(msg){ $("status").textContent = msg; }
-  function setHint(msg){ $("dataHint").textContent = msg; }
-  function showError(msg){
-    const el = $("loadError");
-    el.style.display = "block";
-    el.textContent = msg;
-  }
-
-  // ---------- TTS ----------
-  function speak(text){
-    try{
-      window.speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(text);
-      u.rate = 0.95;
-      u.pitch = 1.0;
-      window.speechSynthesis.speak(u);
-    }catch(e){
-      console.warn("TTS error", e);
-    }
-  }
-
-  // ---------- Mic / Recognition ----------
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  let rec = null;
-
-  function initRec(){
-    if(!SpeechRecognition){
-      $("compat").style.display = "block";
-      $("mode").textContent = "Text + AI Audio (no mic)";
-      return;
-    }
-    rec = new SpeechRecognition();
-    rec.lang = "en-US";
-    rec.interimResults = false;
-    rec.maxAlternatives = 1;
-
-    rec.onresult = (e) => {
-      const said = e.results?.[0]?.[0]?.transcript || "";
-      setStatus("Heard: “" + said + "”");
-    };
-    rec.onerror = (e) => setStatus("Mic error: " + (e.error || "unknown"));
-    rec.onend = () => setStatus("Mic ready.");
-  }
-
-  // ---------- Flexible JSON keys ----------
-  function getWordText(w){ return w?.yoruba || w?.word || w?.swahili || ""; }
-  function getPron(w){ return w?.pronunciation_hint || w?.pronunciation || w?.pron || "—"; }
-  function getEnglish(w){ return w?.english || w?.translation || "—"; }
-  function getExampleYo(w){ return w?.example_yoruba || w?.example || w?.sentence_yoruba || ""; }
-  function getExampleEn(w){ return w?.example_english || w?.example_translation || ""; }
-
-  // Daily Tip should exist in JSON. If not, it falls back to fact.
-  function getTip(d){ return d?.daily_tip || d?.tip || d?.fact || "—"; }
-  function getCulture(d){ return d?.culture || d?.culture_note || d?.note || "—"; }
-  function getTheme(d){ return d?.theme || d?.topic || "Basics"; }
-
-  function buildSentence(d){
-    const w3 = d?.words?.[2];
-    const w2 = d?.words?.[1];
-    const w1 = d?.words?.[0];
-    return getExampleYo(w3) || getExampleYo(w2) || getExampleYo(w1) || "";
-  }
-
-  function render(){
-    const d = PACK.days[idx];
-
-    const theme = getTheme(d);
-    const dayLabel = `Day ${d.day} • ${theme}`;
-
-    $("todayLabel").textContent = dayLabel;
-    $("lessonTitle").textContent = `Yorùbá Lesson • Day ${d.day}`;
-    $("dayNum").textContent = `Day ${d.day}/${PACK.duration_days || PACK.days.length || 30}`;
-    $("theme").textContent = theme;
-
-    $("tip").textContent = getTip(d);
-    $("culture").textContent = getCulture(d);
-
-    const sentence = buildSentence(d);
-    $("sentenceBox").innerHTML = sentence ? `<b style="color:#fff3c4">${sentence}</b>` : "—";
-
-    if(d?.practice?.repeat_rule){
-      const pr = d.practice.repeat_rule;
-      $("practiceFlow").innerHTML =
-        `1) Listen to each word (🔊).<br/>2) Repeat it 3 times (🎙).<br/>3) ${pr}<br/><br/><b>Goal:</b> consistency + confidence — every day.`;
-    }
-
-    const wordsWrap = $("words");
-    wordsWrap.innerHTML = "";
-
-    (d.words || []).forEach((w, i) => {
-      const yo = getWordText(w);
-      const en = getEnglish(w);
-      const pron = getPron(w);
-      const exYo = getExampleYo(w);
-      const exEn = getExampleEn(w);
-
-      const el = document.createElement("div");
-      el.className = "word";
-      el.innerHTML = `
-        <div class="word-top">
-          <div class="yo">${yo || "—"}</div>
-          <div class="en">${en || "—"}</div>
-        </div>
-        <div class="mini">Pronunciation: <b style="color:#fff3c4">${pron}</b></div>
-        ${exYo ? `<div class="mini">Example: <b style="color:#fff3c4">${exYo}</b> ${exEn ? `— ${exEn}` : ""}</div>` : ""}
-        <div class="controls" style="margin:0">
-          <button class="btn green" type="button" data-speak="${i}">🔊 Speak</button>
-          <button class="btn red" type="button" data-practice="${i}">🎙 Practice</button>
-        </div>
-      `;
-      wordsWrap.appendChild(el);
-    });
-
-    wordsWrap.querySelectorAll("[data-speak]").forEach(btn => {
-      btn.addEventListener("click", () => {
-        const w = d.words[Number(btn.getAttribute("data-speak"))];
-        const parts = [];
-        const yo = getWordText(w);
-        const en = getEnglish(w);
-        const pron = getPron(w);
-        const exYo = getExampleYo(w);
-        const exEn = getExampleEn(w);
-
-        if(yo) parts.push(`${yo}.`);
-        if(en) parts.push(`${en}.`);
-        if(pron && pron !== "—") parts.push(`Pronunciation: ${pron}.`);
-        if(exYo) parts.push(`Example: ${exYo}.`);
-        if(exEn) parts.push(exEn);
-
-        speak(parts.join(" "));
-      });
-    });
-
-    wordsWrap.querySelectorAll("[data-practice]").forEach(btn => {
-      btn.addEventListener("click", () => {
-        if(!rec) initRec();
-        if(!rec) return;
-        const w = d.words[Number(btn.getAttribute("data-practice"))];
-        const yo = getWordText(w);
-        setStatus(`Listening… say "${yo}" three times.`);
-        try{ rec.start(); } catch(e){}
-      });
-    });
-
-    setStatus("Lesson loaded. Tap Speak Lesson or Practice (Mic).");
-  }
-
-  function speakAll(){
-    const d = PACK.days[idx];
-    const theme = getTheme(d);
-
-    const parts = [];
-    parts.push(`Yorùbá lesson, day ${d.day}. Theme: ${theme}.`);
-
-    (d.words || []).forEach(w => {
-      const yo = getWordText(w);
-      const en = getEnglish(w);
-      const pron = getPron(w);
-      const exYo = getExampleYo(w);
-      const exEn = getExampleEn(w);
-
-      if(yo) parts.push(`${yo}.`);
-      if(en) parts.push(`${en}.`);
-      if(pron && pron !== "—") parts.push(`Pronunciation: ${pron}.`);
-      if(exYo) parts.push(`Example: ${exYo}.`);
-      if(exEn) parts.push(exEn);
-    });
-
-    const sentence = buildSentence(d);
-    if(sentence) parts.push(`Sentence: ${sentence}.`);
-
-    const tip = getTip(d);
-    if(tip && tip !== "—") parts.push(`Daily tip: ${tip}.`);
-
-    const culture = getCulture(d);
-    if(culture && culture !== "—") parts.push(`Culture note: ${culture}.`);
-
-    speak(parts.join(" "));
-  }
-
-  // ---------- Robust JSON loader (tries multiple paths) ----------
-  function buildCandidateUrls(){
-    const here = new URL(window.location.href);
-
-    // If you're on .../languages/yoruba.html, then ./yoruba_30days.json is best.
-    const relSameFolder = new URL("./" + JSON_FILENAME, here).toString();
-
-    // Sometimes deploy setups need absolute from site root
-    const siteRootAbs = new URL("/languages/" + JSON_FILENAME, here.origin).toString();
-
-    // Another safe fallback: /public/languages/... (some people deploy that way)
-    const publicAbs = new URL("/public/languages/" + JSON_FILENAME, here.origin).toString();
-
-    // If you ever move html into /public/languages/ but it’s served as /languages/,
-    // this still covers both.
-    return [...new Set([relSameFolder, siteRootAbs, publicAbs])];
-  }
-
-  async function tryFetch(url){
-    lastTried = url;
-    setHint(`Trying: ${url}`);
-    const res = await fetch(url, { cache: "no-store" });
-    if(!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
-    return await res.json();
-  }
-
-  function validatePack(p){
-    if(!p || !Array.isArray(p.days)) return "JSON loaded but missing: pack.days (must be an array).";
-    if(p.days.length < 1) return "JSON loaded but pack.days is empty.";
-    return null;
-  }
-
-  async function load(){
-    try{
-      setStatus("Loading lesson data…");
-      $("loadError").style.display = "none";
-
-      const candidates = buildCandidateUrls();
-
-      let loaded = null;
-      let lastErr = null;
-
-      for(const url of candidates){
-        try{
-          loaded = await tryFetch(url);
-          const bad = validatePack(loaded);
-          if(bad) throw new Error(bad + " (Fix yoruba_30days.json structure.)");
-          break;
-        }catch(e){
-          lastErr = e;
-        }
-      }
-
-      if(!loaded){
-        throw lastErr || new Error("Could not load JSON from any candidate URL.");
-      }
-
-      PACK = loaded;
-
-      // Auto-pick today, but still allow Prev/Next
-      const total = PACK.days.length;
-      const dayOfMonth = new Date().getDate();
-      idx = (dayOfMonth - 1) % total;
-
-      render();
-      initRec();
-
-      setHint(
-`✅ Loaded OK
-Last tried: ${lastTried}
-
-FILES MUST BE HERE:
-- /public/languages/yoruba.html
-- /public/languages/yoruba_30days.json
-
-URL SHOULD LOOK LIKE:
-.../languages/yoruba.html`
-      );
-
-    }catch(e){
-      console.error(e);
-      setStatus("❌ Could not load Yoruba lessons.");
-      showError(
-`Could not load ${JSON_FILENAME}.
-
-Most common causes:
-1) File name mismatch (must be exactly: ${JSON_FILENAME})
-2) JSON is not valid JSON (missing commas/quotes)
-3) JSON does not contain: { "days": [ ... ] }
-
-Last tried:
-${lastTried || "(none yet)"}
-
-Error:
-${e?.message || e}`
-      );
-
-      setHint(
-`Expected SAME folder:
-- /languages/yoruba.html
-- /languages/${JSON_FILENAME}
-
-Repo path should be:
-public/languages/yoruba.html
-public/languages/${JSON_FILENAME}`
-      );
-    }
-  }
-
-  // ---------- UI controls ----------
-  $("btnSpeakAll").addEventListener("click", () => { if(PACK) speakAll(); });
-
-  $("btnStop").addEventListener("click", () => {
-    try{ window.speechSynthesis.cancel(); }catch(e){}
-    if(rec){ try{ rec.abort(); }catch(e){} }
-    setStatus("Stopped.");
-  });
-
-  $("btnPrev").addEventListener("click", () => {
-    if(!PACK) return;
-    idx = (idx - 1 + PACK.days.length) % PACK.days.length;
-    render();
-  });
-
-  $("btnNext").addEventListener("click", () => {
-    if(!PACK) return;
-    idx = (idx + 1) % PACK.days.length;
-    render();
-  });
-
-  $("btnMic").addEventListener("click", () => {
-    if(!rec) initRec();
-    if(!rec || !PACK) return;
-    const sentence = buildSentence(PACK.days[idx]);
-    setStatus("Listening… say today’s sentence once.");
-    try{ rec.start(); } catch(e){}
-  });
-
-  $("btnSpeakSentence").addEventListener("click", () => {
-    if(!PACK) return;
-    const sentence = buildSentence(PACK.days[idx]);
-    if(sentence) speak(sentence);
-  });
-
-  // Optional: make back link smart (if you want it to go to root index when available)
-  // If your site root has /index.html, keep ../index.html. If root is correct, set it to "/".
-  // $("backLink").href = "/";
-
-  load();
-</script>
-
-<audio id="aiTtsPlayer" preload="auto"></audio>
-</body>
-</html>
+  ]
+}
