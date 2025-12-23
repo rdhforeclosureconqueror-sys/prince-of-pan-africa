@@ -18,10 +18,10 @@ export default function MufasaShell() {
         <nav className="nav-bar">
           <NavLink to="/" className="nav-item">Ask</NavLink>
           <NavLink to="/timeline" className="nav-item">Timeline</NavLink>
-          <NavLink to="/library" className="nav-item">Library</NavLink>
+         <NavLink to="/library" className="nav-item">Decolonization</NavLink>
           <NavLink to="/calendar" className="nav-item">Calendar</NavLink>
           <NavLink to="/journal" className="nav-item">Journal</NavLink>
-          <NavLink to="/membership" className="nav-item">Membership</NavLink>
+          <NavLink to="/membership" className="nav-item">30-Day Plan</NavLink>
         </nav>
       </header>
 
