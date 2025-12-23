@@ -5,7 +5,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import MufasaShell from "./layouts/MufasaShell";
 import Home from "./pages/Home";
 import PortalDecolonize from "./pages/PortalDecolonize";
-
+import TimelinePage from "./pages/TimelinePage";
 import CalendarPage from "./pages/CalendarPage";
 import JournalPage from "./pages/JournalPage";
 
@@ -18,6 +18,7 @@ function App() {
           <Route index element={<Home />} />
           <Route path="calendar" element={<CalendarPage />} />
           <Route path="journal" element={<JournalPage />} />
+           <Route path="/timeline" element={<TimelinePage />} />
           <Route path="portal/decolonize" element={<PortalDecolonize />} />
         </Route>
       </Routes>
