@@ -5,11 +5,13 @@
   --red: #b22222;
   --font-display: "Cinzel", serif;
   --font-body: "Poppins", sans-serif;
+
+  --panel: rgba(0, 0, 0, 0.35);
+  --panel-2: rgba(0, 0, 0, 0.55);
+  --border: rgba(212, 175, 55, 0.35);
 }
 
-/* =========================
-   GLOBAL SAFETY
-   ========================= */
+/* ✅ Global reset + predictable sizing */
 *,
 *::before,
 *::after {
@@ -18,200 +20,150 @@
 
 html,
 body {
-  width: 100%;
-  max-width: 100%;
-  margin: 0;
-  padding: 0;
-  overflow-x: hidden;
+  height: 100%;
 }
 
 body {
-  background-color: var(--black);
+  margin: 0;
+  padding: 0;
+  background: var(--black);
   color: var(--gold);
   font-family: var(--font-body);
 
-  /* ✅ DO NOT center the entire app on the body (breaks mobile scroll) */
+  /* ✅ DO NOT center the app (this causes mobile clipping) */
   display: block;
-  min-height: 100vh;
+  min-height: 100%;
+  overflow-x: hidden;
 }
 
-@supports (height: 100dvh) {
-  body {
-    min-height: 100dvh;
-  }
-}
-
-img {
-  max-width: 100%;
-  height: auto;
-  display: block;
-}
-
-/* =========================
-   APP LAYOUT
-   ========================= */
+/* ✅ App wrapper should be full width */
 .app-container {
-  display: flex;
   width: 100%;
-  max-width: 1200px; /* keeps it nice on desktop */
-  margin: 0 auto;
-
-  /* ✅ DO NOT force full viewport height everywhere */
   min-height: 100vh;
+  display: flex;
 }
 
-@supports (height: 100dvh) {
-  .app-container {
-    min-height: 100dvh;
-  }
+/* If you have a sidebar, keep it from shrinking weirdly */
+.app-container > * {
+  min-width: 0;
 }
 
-/* =========================
-   CHAT AREA
-   ========================= */
+/* Main chat area */
 .chat-area {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
 
-  padding: 1.25rem;
+  padding: 16px;
   background: linear-gradient(180deg, #0a0a0a 0%, #1b1b1b 100%);
-
-  min-width: 0; /* critical for flex overflow issues */
 }
 
-/* =========================
-   HEADER
-   ========================= */
+/* Header */
 .chat-header {
-  text-align: center;
-  padding-bottom: 0.75rem;
-  border-bottom: 1px solid rgba(212, 175, 55, 0.65);
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
 }
 
-.chat-header .title {
+/* Headings */
+.title {
   font-family: var(--font-display);
-  font-size: 2rem;
-  color: var(--gold);
   margin: 0;
+  font-size: 32px;
+  color: var(--gold);
 }
 
-.chat-header .subtitle {
-  font-size: 1rem;
+.subtitle {
+  margin: 8px 0 0;
   color: #e5c97b;
-  margin: 0.4rem 0 0;
+  font-size: 14px;
 }
 
-.chat-header .mufasa {
+.mufasa {
   color: var(--gold);
   font-weight: 800;
 }
 
-/* =========================
-   CHAT WINDOW
-   ========================= */
+/* ✅ Chat window must be scrollable + never horizontally overflow */
 .chat-window {
   flex: 1;
-  min-height: 0; /* allows proper scrolling inside flex */
+  min-height: 0;           /* key for flex scroll containers */
   overflow-y: auto;
   overflow-x: hidden;
 
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 12px;
 
-  padding: 0.75rem;
-  border-radius: 14px;
-
-  background: rgba(0, 0, 0, 0.25);
-  border: 1px solid rgba(212, 175, 55, 0.18);
+  padding: 12px 4px;
+  margin: 12px 0;
 }
 
-/* =========================
-   CHAT BUBBLES
-   ========================= */
+/* ✅ Chat bubbles must wrap long words/links */
 .chat-bubble {
-  padding: 0.75rem 1rem;
+  padding: 12px 14px;
   border-radius: 14px;
-  max-width: 78%;
+  max-width: 92%;
   line-height: 1.5;
-  font-size: 1rem;
+  font-size: 15px;
 
-  /* ✅ This is the key: never let text force sideways overflow */
-  max-width: min(78%, 720px);
+  white-space: pre-wrap;
   overflow-wrap: anywhere;
   word-break: break-word;
-
-  /* Some browsers need this to avoid flex overflow */
-  min-width: 0;
 }
 
 .chat-bubble.user {
   background: var(--red);
-  color: white;
+  color: #fff;
   align-self: flex-end;
 }
 
 .chat-bubble.assistant {
   background: var(--green);
-  color: white;
+  color: #fff;
   align-self: flex-start;
 }
 
 .chat-bubble.thinking {
-  opacity: 0.7;
+  opacity: 0.75;
   font-style: italic;
 }
 
-/* If assistant message contains code/preformatted text */
-.chat-bubble pre,
-.chat-bubble code {
-  white-space: pre-wrap;
-  word-break: break-word;
-  overflow-x: auto;
-  max-width: 100%;
-}
-
-/* =========================
-   INPUT AREA
-   ========================= */
+/* Input area */
 .chat-input-area {
   display: flex;
-  gap: 0.75rem;
-  border-top: 1px solid rgba(212, 175, 55, 0.55);
-  padding-top: 0.75rem;
+  gap: 10px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+
+  /* ✅ keep it visible and not crushed */
+  flex-wrap: wrap;
 }
 
 .chat-input {
   flex: 1;
-  min-width: 0;
+  min-width: 220px;
 
-  padding: 0.75rem;
-  background: #111;
-  border: 1px solid rgba(212, 175, 55, 0.75);
-  color: white;
-  border-radius: 10px;
+  padding: 12px;
+  background: rgba(17, 17, 17, 0.9);
+  border: 1px solid var(--border);
+  color: #fff;
+  border-radius: 12px;
   resize: none;
   min-height: 54px;
 
   outline: none;
 }
 
-.chat-input:focus {
-  border-color: #ffd700;
-  box-shadow: 0 0 0 2px rgba(255, 215, 0, 0.18);
-}
-
 .send-btn {
   background: var(--gold);
-  color: black;
-  padding: 0.75rem 1.1rem;
+  color: #000;
+  padding: 12px 16px;
   border: none;
-  border-radius: 10px;
+  border-radius: 12px;
   cursor: pointer;
-  font-weight: 900;
-  transition: transform 0.05s ease, background 0.2s ease;
+  font-weight: 800;
+  transition: transform 0.08s ease, background 0.2s ease;
   white-space: nowrap;
 }
 
@@ -228,54 +180,35 @@ img {
   cursor: not-allowed;
 }
 
-/* =========================
-   VOICE REPLY AUDIO
-   ========================= */
 .voice-reply {
-  margin-top: 0.5rem;
-  border: 1px solid rgba(212, 175, 55, 0.55);
-  border-radius: 10px;
+  margin-top: 8px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
   width: 100%;
   background: rgba(212, 175, 55, 0.05);
 }
 
-/* =========================
-   MOBILE
-   ========================= */
+/* ✅ MOBILE: stack things cleanly */
 @media (max-width: 768px) {
-  .app-container {
-    flex-direction: column;
-    max-width: 100%;
-    margin: 0;
-    min-height: 100vh;
-  }
-
-  @supports (height: 100dvh) {
-    .app-container {
-      min-height: 100dvh;
-    }
-  }
-
   .chat-area {
-    padding: 0.9rem;
+    padding: 12px;
   }
 
-  .chat-header .title {
-    font-size: 1.35rem;
+  .title {
+    font-size: 22px;
   }
 
   .chat-window {
-    padding: 0.6rem;
-  }
-
-  .chat-bubble {
-    max-width: 92%;
-    font-size: 0.98rem;
+    padding: 10px 2px;
   }
 
   .chat-input-area {
     flex-direction: column;
-    gap: 0.55rem;
+  }
+
+  .chat-input {
+    width: 100%;
+    min-width: 0;
   }
 
   .send-btn {
