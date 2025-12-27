@@ -19,7 +19,7 @@ export const DECLO30 = [
   miniQ:
     "As we continue, would you like future lessons to lean more heavily into historical case studies, body-based/somatic practices, media analysis, or balanced integration of all three?",
   resume: "DECLO30_D02"
-}
+},
 
   {
     day: 2,
