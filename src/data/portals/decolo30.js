@@ -654,7 +654,11 @@ export const DECLO30 = [
   miniQ:
     "Which next track do you want to enter: deeper ancestral study, community institution-building, healing facilitation, or teaching this framework to others?",
   resume: "DECLO30_COMPLETE"
-},
+}
+];
+
+export default DECLO30;
+
 
 
 
