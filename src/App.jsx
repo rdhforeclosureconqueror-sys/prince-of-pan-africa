@@ -1,7 +1,8 @@
 // src/App.jsx
 import React from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-
+import LedgerPage from "./pages/LedgerPage";
+import PagtPage from "./pages/PagtPage";
 import LoginGate from "./components/LoginGate";
 
 import MufasaShell from "./layouts/MufasaShell";
@@ -28,7 +29,8 @@ function App() {
             <Route path="library" element={<LibraryDecolonize />} />
             <Route path="membership" element={<MembershipPlan />} />
             <Route path="portal/decolonize" element={<PortalDecolonize />} />
-
+            <Route path="/ledger" element={<LedgerPage />} />
+            <Route path="/pagt" element={<PagtPage />} />
             {/* Safety: if someone hits a bad URL, send them home */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
