@@ -29,8 +29,8 @@ function App() {
             <Route path="library" element={<LibraryDecolonize />} />
             <Route path="membership" element={<MembershipPlan />} />
             <Route path="portal/decolonize" element={<PortalDecolonize />} />
-            <Route path="/ledger" element={<LedgerPage />} />
-            <Route path="/pagt" element={<PagtPage />} />
+            <Route path="ledger" element={<LedgerPage />} />
+            <Route path="pagt" element={<PagtPage />} />
             {/* Safety: if someone hits a bad URL, send them home */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
