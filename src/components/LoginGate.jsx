@@ -8,7 +8,7 @@ export default function LoginGate({ children }) {
 
   async function fetchMe() {
     try {
-      const res = await fetch(`${API_BASE}/me`, { credentials: "include" });
+      const res = await fetch(`${API_BASE}/auth/me`, { credentials: "include" });
       if (!res.ok) throw new Error("not authed");
       const data = await res.json();
       setMe(data.user);
