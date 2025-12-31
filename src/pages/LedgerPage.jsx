@@ -6,41 +6,50 @@ export default function LedgerPage() {
   const [log, setLog] = useState([]);
   const [data, setData] = useState(null);
 
-  function add(line) {
-    setLog((prev) => [...prev, line]);
-  }
+  const add = (line) => setLog((prev) => [...prev, line]);
 
   useEffect(() => {
+    let cancelled = false;
+
     (async () => {
       try {
         add(`API_BASE = ${API_BASE}`);
 
         add("Calling /auth/me ...");
         const me = await api("/auth/me");
-        add(`✅ /auth/me OK: ${JSON.stringify(me)}`);
+        add(`✅ /auth/me OK`);
 
-        // ✅ Use the actual primary identifier your backend/db expects
-        // Prefer me.user.id if you expose it; else fall back to googleId; else email.
-        const id =
-          me?.user?.id ||
-          me?.user?.googleId ||
-          me?.user?.email;
+        // ✅ Your server creates the session user like:
+        // { provider:"google", googleId, displayName, email, photo }
+        // So the canonical ID in DB should be googleId.
+        const id = me?.user?.googleId || me?.user?.email;
 
-        add(`id = ${id}`);
+        add(`Resolved id = ${id || "(missing)"}`);
 
         if (!id) {
-          throw new Error("No user id found (expected me.user.id or googleId or email).");
+          throw new Error("No id found. Expected me.user.googleId (or fallback to email).");
         }
 
-        add("Calling /ledger/balance/:id ...");
+        add(`Calling /ledger/balance/${encodeURIComponent(id)} ...`);
         const bal = await api(`/ledger/balance/${encodeURIComponent(id)}`);
-        add(`✅ Ledger OK: ${JSON.stringify(bal)}`);
+        add(`✅ /ledger/balance OK`);
 
-        setData({ me, bal });
+        if (!cancelled) setData({ me, bal });
       } catch (e) {
-        add(`❌ ERROR: ${e?.message || String(e)}`);
+        const msg = e?.message || String(e);
+
+        // Helpful special-case so you know if it's auth/cookie vs code/db
+        if (msg.includes("LOGIN_REQUIRED") || msg.includes("401")) {
+          add("❌ Not logged in (LOGIN_REQUIRED / 401). Try logging in again.");
+        } else {
+          add(`❌ ERROR: ${msg}`);
+        }
       }
     })();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return (
