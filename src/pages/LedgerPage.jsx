@@ -1,80 +1,54 @@
-import { Outlet, NavLink } from "react-router-dom";
-import "../styles/MufasaShell.css";
+import { useEffect, useState } from "react";
+import { api } from "../api/api";
+import { API_BASE } from "../config";
 
-export default function MufasaShell() {
-  // ✅ Active-state styling without changing your CSS setup
-  const linkClass = ({ isActive }) => `nav-item${isActive ? " active" : ""}`;
+export default function LedgerPage() {
+  const [log, setLog] = useState([]);
+  const [data, setData] = useState(null);
+
+  function add(line) {
+    setLog((prev) => [...prev, line]);
+  }
+
+  useEffect(() => {
+    (async () => {
+      try {
+        add(`API_BASE = ${API_BASE}`);
+
+        add("Calling /auth/me ...");
+        const me = await api("/auth/me");
+        add(`✅ /auth/me OK: ${JSON.stringify(me)}`);
+
+        const memberId = me?.user?.googleId || me?.user?.email;
+        add(`memberId = ${memberId}`);
+
+        add("Calling /ledger/balance/:memberId ...");
+        const bal = await api(`/ledger/balance/${encodeURIComponent(memberId)}`);
+        add(`✅ Ledger OK: ${JSON.stringify(bal)}`);
+        setData({ me, bal });
+      } catch (e) {
+        add(`❌ ERROR: ${e.message}`);
+      }
+    })();
+  }, []);
 
   return (
-    <div className="mufasa-shell">
-      {/* Header */}
-      <header className="mufasa-header">
-        <div className="brand">
-          <img
-            src="/assets/lion-logo.png"
-            alt="Mufasa Logo"
-            className="lion-logo"
-          />
-          <div>
-            <h1 className="brand-title">Prince of Pan-Africa</h1>
-            <p className="brand-subtitle">
-              Black History • Year-Round • Powered by MufasaBrain
-            </p>
-          </div>
+    <div style={{ padding: 20 }}>
+      <h2>Black Dollar Ledger</h2>
+
+      <div style={{ marginTop: 12, padding: 12, border: "1px solid #333" }}>
+        <strong>Debug Log</strong>
+        <pre style={{ whiteSpace: "pre-wrap" }}>{log.join("\n")}</pre>
+      </div>
+
+      {data && (
+        <div style={{ marginTop: 12 }}>
+          <strong>Data</strong>
+          <pre style={{ whiteSpace: "pre-wrap" }}>
+            {JSON.stringify(data, null, 2)}
+          </pre>
         </div>
-
-        {/* Navigation */}
-        <nav className="nav-bar">
-          {/* ✅ These paths assume your App.jsx routes under MufasaShell are:
-              timeline, library, calendar, journal, membership, ledger, pagt
-              (no leading slash in App.jsx, BUT in NavLink we can safely use absolute) */}
-
-          <NavLink to="/" className={linkClass} end>
-            Ask
-          </NavLink>
-
-          <NavLink to="/timeline" className={linkClass}>
-            Timeline
-          </NavLink>
-
-          <NavLink to="/library" className={linkClass}>
-            Decolonization
-          </NavLink>
-
-          <NavLink to="/calendar" className={linkClass}>
-            Calendar
-          </NavLink>
-
-          <NavLink to="/journal" className={linkClass}>
-            Journal
-          </NavLink>
-
-          <NavLink to="/membership" className={linkClass}>
-            30-Day Plan
-          </NavLink>
-
-          {/* ✅ NEW: Ledger + Pan-Africa Got Talent */}
-          <NavLink to="/ledger" className={linkClass}>
-            Ledger
-          </NavLink>
-
-          <NavLink to="/pagt" className={linkClass}>
-            Pan-Africa Got Talent
-          </NavLink>
-        </nav>
-      </header>
-
-      {/* Main Content */}
-      <main className="mufasa-content">
-        <Outlet />
-      </main>
-
-      {/* Footer */}
-      <footer className="mufasa-footer">
-        <p>
-          Every Month Is Black History · <strong>Powered by MufasaBrain</strong>
-        </p>
-      </footer>
+      )}
     </div>
   );
 }
