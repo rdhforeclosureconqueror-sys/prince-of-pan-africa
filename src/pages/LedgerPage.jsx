@@ -19,15 +19,26 @@ export default function LedgerPage() {
         const me = await api("/auth/me");
         add(`✅ /auth/me OK: ${JSON.stringify(me)}`);
 
-        const memberId = me?.user?.googleId || me?.user?.email;
-        add(`memberId = ${memberId}`);
+        // ✅ Use the actual primary identifier your backend/db expects
+        // Prefer me.user.id if you expose it; else fall back to googleId; else email.
+        const id =
+          me?.user?.id ||
+          me?.user?.googleId ||
+          me?.user?.email;
 
-        add("Calling /ledger/balance/:memberId ...");
-        const bal = await api(`/ledger/balance/${encodeURIComponent(memberId)}`);
+        add(`id = ${id}`);
+
+        if (!id) {
+          throw new Error("No user id found (expected me.user.id or googleId or email).");
+        }
+
+        add("Calling /ledger/balance/:id ...");
+        const bal = await api(`/ledger/balance/${encodeURIComponent(id)}`);
         add(`✅ Ledger OK: ${JSON.stringify(bal)}`);
+
         setData({ me, bal });
       } catch (e) {
-        add(`❌ ERROR: ${e.message}`);
+        add(`❌ ERROR: ${e?.message || String(e)}`);
       }
     })();
   }, []);
