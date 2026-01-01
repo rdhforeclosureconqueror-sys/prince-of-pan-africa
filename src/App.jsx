@@ -1,11 +1,11 @@
 // src/App.jsx
 import React from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import LedgerPage from "./pages/LedgerPage";
-import PagtPage from "./pages/PagtPage";
-import LoginGate from "./components/LoginGate";
 
+import LoginGate from "./components/LoginGate";
 import MufasaShell from "./layouts/MufasaShell";
+
+// Pages
 import Home from "./pages/Home";
 import TimelinePage from "./pages/TimelinePage";
 import CalendarPage from "./pages/CalendarPage";
@@ -14,25 +14,35 @@ import LibraryDecolonize from "./pages/LibraryDecolonize";
 import MembershipPlan from "./pages/MembershipPlan";
 import PortalDecolonize from "./pages/PortalDecolonize";
 
-function App() {
+import LedgerPage from "./pages/LedgerPage";
+import LedgerV2Page from "./v2-ledger/LedgerV2Page";
+import PagtPage from "./pages/PagtPage";
+
+export default function App() {
   return (
     <BrowserRouter>
       {/* Everything is protected behind the human gate */}
       <LoginGate>
         <Routes>
-          {/* Shell wraps all “main” pages */}
+          {/* Shell wraps all main pages */}
           <Route element={<MufasaShell />}>
+            {/* Home */}
             <Route index element={<Home />} />
+
+            {/* Main Nav Pages */}
             <Route path="timeline" element={<TimelinePage />} />
             <Route path="calendar" element={<CalendarPage />} />
             <Route path="journal" element={<JournalPage />} />
             <Route path="library" element={<LibraryDecolonize />} />
             <Route path="membership" element={<MembershipPlan />} />
             <Route path="portal/decolonize" element={<PortalDecolonize />} />
+
+            {/* Apps */}
             <Route path="ledger" element={<LedgerPage />} />
             <Route path="ledger-v2" element={<LedgerV2Page />} />
             <Route path="pagt" element={<PagtPage />} />
-            {/* Safety: if someone hits a bad URL, send them home */}
+
+            {/* Safety fallback */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>
@@ -40,5 +50,3 @@ function App() {
     </BrowserRouter>
   );
 }
-
-export default App;
