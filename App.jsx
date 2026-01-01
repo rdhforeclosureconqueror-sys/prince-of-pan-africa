@@ -3,6 +3,7 @@ import MufasaShell from "./layouts/MufasaShell";
 import Home from "./pages/Home";
 import CalendarPanel from "./components/CalendarPanel";
 import JournalPanel from "./components/JournalPanel";
+import LedgerV2Page from "./v2-ledger/LedgerV2Page";
 
 export default function App() {
   return (
