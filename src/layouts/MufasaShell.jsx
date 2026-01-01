@@ -58,6 +58,9 @@ export default function MufasaShell() {
             Ledger
           </NavLink>
 
+          <NavLink to="/ledger-v2" className="nav-item">Ledger</NavLink>
+
+          
           <NavLink to="/pagt" className={linkClass}>
             Pan-Africa Got Talent
           </NavLink>
