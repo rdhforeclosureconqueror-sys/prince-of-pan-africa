@@ -1,55 +1,165 @@
+/* ================================
+   🦁 SIMBA ADMIN DASHBOARD STYLES
+   ================================ */
+
 .admin-dashboard {
   font-family: "Poppins", sans-serif;
   color: #fff;
-  background: #0a0a0a;
+  background: radial-gradient(circle at top left, #0a0a0a, #000);
   min-height: 100vh;
-  padding: 20px;
+  padding: 30px;
+  box-sizing: border-box;
 }
 
-h1 {
+.admin-dashboard h1 {
   color: var(--gold, #f2c94c);
-  margin-bottom: 20px;
+  font-size: 2.2rem;
+  margin-bottom: 30px;
+  letter-spacing: 0.5px;
+  text-shadow: 0 0 8px rgba(242, 201, 76, 0.3);
 }
 
+/* ================================
+   🧮 STAT CARDS
+   ================================ */
 .admin-stats {
   display: flex;
-  gap: 15px;
   flex-wrap: wrap;
+  gap: 20px;
+  justify-content: flex-start;
 }
 
 .stat-card {
-  background: #111;
+  background: linear-gradient(145deg, #101010, #0d0d0d);
   border: 1px solid var(--gold, #f2c94c);
   border-radius: 10px;
-  padding: 20px;
-  flex: 1;
+  padding: 25px 20px;
+  flex: 1 1 220px;
   text-align: center;
-  min-width: 200px;
+  box-shadow: 0 0 15px rgba(242, 201, 76, 0.1);
+  transition: all 0.2s ease-in-out;
+}
+
+.stat-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 0 20px rgba(242, 201, 76, 0.2);
 }
 
 .stat-card h2 {
-  font-size: 2em;
+  font-size: 2.4em;
+  margin: 0;
   color: var(--gold, #f2c94c);
 }
 
-.platform-section, .activity-feed {
-  margin-top: 30px;
+.stat-card p {
+  font-size: 0.9em;
+  margin-top: 6px;
+  color: #bbb;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* ================================
+   📊 PLATFORM SECTION
+   ================================ */
+.platform-section {
+  margin-top: 40px;
   background: #141414;
   border-radius: 10px;
-  padding: 15px;
+  padding: 20px;
+  border: 1px solid #222;
+}
+
+.platform-section h3 {
+  color: var(--gold, #f2c94c);
+  font-size: 1.3rem;
+  margin-bottom: 15px;
+}
+
+.platform-section ul {
+  list-style: none;
+  padding-left: 0;
+  margin: 0;
+}
+
+.platform-section li {
+  padding: 8px 0;
+  border-bottom: 1px solid #222;
+  color: #ddd;
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.95rem;
+}
+
+.platform-section li:last-child {
+  border-bottom: none;
+}
+
+/* ================================
+   🧾 ACTIVITY FEED
+   ================================ */
+.activity-feed {
+  margin-top: 40px;
+  background: #141414;
+  border-radius: 10px;
+  padding: 20px;
+  border: 1px solid #222;
+}
+
+.activity-feed h3 {
+  color: var(--gold, #f2c94c);
+  font-size: 1.3rem;
+  margin-bottom: 15px;
 }
 
 .activity-item {
   border-bottom: 1px solid #222;
-  padding: 10px 0;
+  padding: 12px 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.activity-item strong {
+  color: #fff;
+  font-weight: 600;
+}
+
+.activity-item em {
+  color: #f2c94c;
+  font-style: normal;
+  margin-left: 4px;
 }
 
 .activity-time {
   font-size: 0.8em;
   color: #888;
+  margin-top: 2px;
 }
 
-ul {
-  list-style: none;
-  padding-left: 0;
+/* ================================
+   📱 RESPONSIVE DESIGN
+   ================================ */
+@media (max-width: 768px) {
+  .admin-stats {
+    flex-direction: column;
+  }
+
+  .stat-card {
+    flex: 1 1 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .admin-dashboard {
+    padding: 20px;
+  }
+
+  .admin-dashboard h1 {
+    font-size: 1.8rem;
+  }
+
+  .platform-section,
+  .activity-feed {
+    padding: 15px;
+  }
 }
