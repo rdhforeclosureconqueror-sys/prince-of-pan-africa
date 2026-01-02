@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getActivity } from '../api/ledgerV2Api';
+import { api } from '../../api/api';
 
 export default function ActivityStream() {
   const [items, setItems] = useState([]);
@@ -7,17 +7,35 @@ export default function ActivityStream() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    (async () => {
+    let cancelled = false;
+
+    async function fetchActivity() {
       try {
         setLoading(true);
-        const res = await getActivity();
-        setItems(res || []);
+        const res = await api('/ledger/activity');
+
+        if (!cancelled) {
+          if (res?.ok && Array.isArray(res.items)) {
+            setItems(res.items);
+            setError(null);
+          } else {
+            throw new Error('Unexpected response format');
+          }
+        }
       } catch (e) {
-        setError('Unable to load activity');
+        console.error('Error loading activity stream:', e);
+        if (!cancelled) {
+          setError('Unable to load recent activity');
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
-    })();
+    }
+
+    fetchActivity();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return (
@@ -34,11 +52,17 @@ export default function ActivityStream() {
       )}
 
       <ul>
-        {items.map((i) => (
-          <li key={i.id || i.created_at}>
-            <span className={`tag ${i.type}`}>{i.type}</span>
-            {i.desc || i.description || 'Transaction'} —{' '}
-            <span className="status">{i.status || 'PENDING'}</span>
+        {items.map((tx) => (
+          <li key={tx.id}>
+            <span className={`tag ${tx.type}`}>{tx.type}</span>{' '}
+            <strong>{tx.delta > 0 ? `+${tx.delta}` : tx.delta}</strong>{' '}
+            {tx.desc} —{' '}
+            <span className={`status ${tx.status.toLowerCase()}`}>
+              {tx.status}
+            </span>
+            <span className="timestamp">
+              {new Date(tx.created_at).toLocaleString()}
+            </span>
           </li>
         ))}
       </ul>
