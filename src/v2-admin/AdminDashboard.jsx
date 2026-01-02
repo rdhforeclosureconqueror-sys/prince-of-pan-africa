@@ -1,5 +1,5 @@
-// src/v2-admin/AdminDashboard.jsx
 import React, { useEffect, useState } from "react";
+import { API_BASE_URL } from "../config"; // ✅ use centralized API base
 import "./adminDashboard.css";
 
 export default function AdminDashboard() {
@@ -10,7 +10,15 @@ export default function AdminDashboard() {
   useEffect(() => {
     async function loadAdminData() {
       try {
-        const res = await fetch("/admin/overview", { credentials: "include" });
+        const res = await fetch(`${API_BASE_URL}/admin/overview`, {
+          credentials: "include",
+        });
+
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(`HTTP ${res.status}: ${text.slice(0, 100)}`);
+        }
+
         const json = await res.json();
         if (json.ok) setData(json);
         else throw new Error(json.error || "Failed to load");
@@ -56,9 +64,9 @@ export default function AdminDashboard() {
       <section className="platform-section">
         <h3>Platform Breakdown</h3>
         <ul>
-          {platformBreakdown.length > 0 ? (
-            platformBreakdown.map((p) => (
-              <li key={p.platform}>
+          {platformBreakdown?.length > 0 ? (
+            platformBreakdown.map((p, i) => (
+              <li key={i}>
                 {p.platform || "Unknown"} — {p.count}
               </li>
             ))
@@ -70,7 +78,7 @@ export default function AdminDashboard() {
 
       <section className="activity-feed">
         <h3>Recent Activity</h3>
-        {recentActivity.length > 0 ? (
+        {recentActivity?.length > 0 ? (
           recentActivity.map((a, i) => (
             <div key={i} className="activity-item">
               <strong>{a.display_name}</strong> — <em>{a.category}</em>
