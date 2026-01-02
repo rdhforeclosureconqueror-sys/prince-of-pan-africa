@@ -5,7 +5,7 @@ export default function IdentityPanel() {
   const [user, setUser] = useState(null);
 
   useEffect(() => {
-    api('/auth/me').then(res => {
+    api('/auth/me').then((res) => {
       if (res?.ok && res.user) setUser(res.user);
     });
   }, []);
@@ -17,7 +17,11 @@ export default function IdentityPanel() {
 
   return (
     <div className="identity-panel">
-      <img src={avatar} alt="avatar" className="identity-avatar" />
+      <img
+        src={avatar}
+        alt={`${user.displayName}'s profile photo`}
+        className="identity-avatar"
+      />
       <div>
         <h3 className="identity-name">{user.displayName}</h3>
         <p className="identity-id">ID: {displayId.slice(0, 10)}…</p>
