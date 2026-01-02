@@ -1,11 +1,12 @@
-// src/layouts/MufasaShell.jsx (FRONTEND)
-import { Outlet, NavLink } from "react-router-dom";
+// src/layouts/MufasaShell.jsx
+import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import LogoutButton from "../components/LogoutButton";
 import "../styles/MufasaShell.css";
 
 export default function MufasaShell() {
   const [user, setUser] = useState(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     async function fetchUser() {
@@ -26,10 +27,14 @@ export default function MufasaShell() {
 
   return (
     <div className="mufasa-shell">
-      {/* Header */}
+      {/* 🦁 HEADER */}
       <header className="mufasa-header">
         <div className="brand">
-          <img src="/assets/lion-logo.png" alt="Mufasa Logo" className="lion-logo" />
+          <img
+            src="/assets/lion-logo.png"
+            alt="Mufasa Logo"
+            className="lion-logo"
+          />
           <div>
             <h1 className="brand-title">Prince of Pan-Africa</h1>
             <p className="brand-subtitle">
@@ -38,7 +43,7 @@ export default function MufasaShell() {
           </div>
         </div>
 
-        {/* Navigation */}
+        {/* 🧭 NAVIGATION */}
         <nav className="nav-bar">
           <NavLink to="/" className={linkClass} end>
             Ask
@@ -68,19 +73,29 @@ export default function MufasaShell() {
             Pan-Africa Got Talent
           </NavLink>
 
-          {/* 🧠 Show Admin tab if role = admin */}
+          {/* 🦁 ADMIN ACCESS (Only visible for admins) */}
           {user?.role === "admin" && (
-            <NavLink to="/admin" className={linkClass}>
-              Admin
-            </NavLink>
+            <div className="admin-nav-group">
+              <NavLink to="/admin" className={linkClass}>
+                🦁 Admin
+              </NavLink>
+              <button
+                className="admin-subbutton"
+                onClick={() => navigate("/admin/overview")}
+              >
+                ⚙ Dashboard
+              </button>
+            </div>
           )}
         </nav>
 
-        {/* 🧍 User Info + Logout */}
+        {/* 🧍 USER INFO + LOGOUT */}
         {user && (
           <div className="user-info">
             <div className="user-meta">
-              <span className="user-name">{user.displayName || "User"}</span>
+              <span className="user-name">
+                {user.displayName || "User"}
+              </span>
               <span className={`user-role ${user.role}`}>
                 {user.role === "admin" ? "🦁 Admin" : "👤 Member"}
               </span>
@@ -90,15 +105,16 @@ export default function MufasaShell() {
         )}
       </header>
 
-      {/* Main Content */}
+      {/* 🧾 MAIN CONTENT */}
       <main className="mufasa-content">
         <Outlet />
       </main>
 
-      {/* Footer */}
+      {/* 🌍 FOOTER */}
       <footer className="mufasa-footer">
         <p>
-          Every Month Is Black History · <strong>Powered by MufasaBrain</strong>
+          Every Month Is Black History •{" "}
+          <strong>Powered by MufasaBrain</strong>
         </p>
       </footer>
     </div>
