@@ -268,3 +268,34 @@
   padding-bottom: 0.5rem;
   border-bottom: 1px solid rgba(229,196,110,0.1);
 }
+/* 🦁 SimbaBot Toast Notifications */
+.simba-toast-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 1000;
+}
+
+.simba-toast {
+  background: rgba(24, 24, 24, 0.9);
+  border: 1px solid var(--gold, #d4af37);
+  color: #fff;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-weight: 500;
+  font-size: 0.95rem;
+  box-shadow: 0 0 12px rgba(212, 175, 55, 0.3);
+  animation: toastFade 0.3s ease, toastOut 0.3s ease 5.7s forwards;
+}
+
+@keyframes toastFade {
+  from { transform: translateY(15px); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes toastOut {
+  to { transform: translateY(15px); opacity: 0; }
+}
