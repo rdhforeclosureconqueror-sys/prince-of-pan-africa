@@ -244,3 +244,27 @@
   .balance-block h1 { font-size: 2rem; }
   .identity-avatar { width: 56px; height: 56px; }
 }
+
+.status {
+  font-weight: 600;
+}
+
+.status.earned {
+  color: #4caf50;
+}
+
+.status.spent {
+  color: #f44336;
+}
+
+.timestamp {
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin-left: 0.5rem;
+}
+
+.activity-stream li {
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid rgba(229,196,110,0.1);
+}
