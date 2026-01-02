@@ -7,7 +7,7 @@ export default function BalanceCore({ balance, loading }) {
   return (
     <div className="balance-core">
       <div className="balance-block">
-        <h1>⭐ {loading ? '…' : stars}</h1>
+        <h1 aria-live="polite">⭐ {loading ? '…' : stars}</h1>
         <p>Participation Credits</p>
       </div>
       <div className="balance-block">
