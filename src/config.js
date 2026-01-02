@@ -1,22 +1,65 @@
 // ✅ src/config.js
 // Centralized configuration for all frontend API + WebSocket connections
+// Ensures consistent behavior across local dev, staging, and production environments
 
-// Primary API Base
+// -----------------------------
+// 🌍 ENVIRONMENT + MODE DETECTION
+// -----------------------------
+const isDev = import.meta.env.DEV;
+const hostname = window?.location?.hostname || "production";
+
+// -----------------------------
+// 🔗 API BASE (Backend URL)
+// -----------------------------
+const PROD_API = "https://api.simbawaujamaa.com";
+const DEV_API = "http://localhost:3000";
+
 export const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "https://api.simbawaujamaa.com";
+  import.meta.env.VITE_API_BASE_URL ||
+  (hostname === "localhost" ? DEV_API : PROD_API);
 
-// Alias (some older files may import API_BASE instead)
+// Legacy alias (for backward compatibility)
 export const API_BASE = API_BASE_URL;
 
-// Frontend base URL
+// -----------------------------
+// 🦁 FRONTEND BASE (App URL)
+// -----------------------------
+const PROD_APP = "https://simbawaujamaa.com";
+const DEV_APP = "http://localhost:5173";
+
 export const APP_BASE_URL =
-  import.meta.env.VITE_APP_BASE_URL || "https://simbawaujamaa.com";
+  import.meta.env.VITE_APP_BASE_URL ||
+  (hostname === "localhost" ? DEV_APP : PROD_APP);
 
-// WebSocket URL (for live updates)
+// -----------------------------
+// 🔌 WEBSOCKET BASE (Realtime)
+// -----------------------------
+const PROD_WS = "wss://api.simbawaujamaa.com";
+const DEV_WS = "ws://localhost:3000";
+
 export const WS_BASE_URL =
-  import.meta.env.VITE_WS_BASE_URL || "wss://api.simbawaujamaa.com";
+  import.meta.env.VITE_WS_BASE_URL ||
+  (hostname === "localhost" ? DEV_WS : PROD_WS);
 
-// You can log it in dev mode to confirm
-if (import.meta.env.DEV) {
-  console.log("✅ Config loaded:", { API_BASE_URL, APP_BASE_URL, WS_BASE_URL });
+// -----------------------------
+// 🧩 UTILITY FLAGS
+// -----------------------------
+export const ENV = {
+  mode: isDev ? "development" : "production",
+  isDev,
+  isProd: !isDev,
+};
+
+// -----------------------------
+// ✅ LOG CONFIG SUMMARY (Dev only)
+// -----------------------------
+if (isDev) {
+  console.groupCollapsed("✅ Mufasa Config Loaded");
+  console.table({
+    API_BASE_URL,
+    APP_BASE_URL,
+    WS_BASE_URL,
+    Mode: ENV.mode,
+  });
+  console.groupEnd();
 }
