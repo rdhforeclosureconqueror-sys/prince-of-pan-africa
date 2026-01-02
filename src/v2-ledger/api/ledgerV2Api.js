@@ -11,6 +11,30 @@ export const postShare = ({ share_platform, share_url, proof_url }) =>
     body: { share_platform, share_url, proof_url },
   });
 
+// GET activity feed
+export const getActivity = async () => {
+  try {
+    const data = await api('/ledger/activity');
+    if (data?.ok && Array.isArray(data.items)) return data.items;
+  } catch (err) {
+    try {
+      // fallback: merge STAR + BD
+      const [stars, bd] = await Promise.all([
+        api('/ledger/star-transactions'),
+        api('/ledger/bd-transactions'),
+      ]);
+      const merged = [
+        ...(stars?.items || []),
+        ...(bd?.items || []),
+      ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      return merged;
+    } catch {
+      return [];
+    }
+  }
+  return [];
+};
+
 // POST review video
 export const postReviewVideo = ({
   business_name,
