@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import LoginGate from "./components/LoginGate";
 import MufasaShell from "./layouts/MufasaShell";
 
+// 🧭 Main Pages
 import Home from "./pages/Home";
 import TimelinePage from "./pages/TimelinePage";
 import CalendarPage from "./pages/CalendarPage";
@@ -14,14 +15,19 @@ import PortalDecolonize from "./pages/PortalDecolonize";
 import LedgerPage from "./pages/LedgerPage";
 import LedgerV2Page from "./v2-ledger/LedgerV2Page";
 import PagtPage from "./pages/PagtPage";
-import AdminDashboard from "./v2-admin/AdminDashboard";
+
+// 🦁 Admin Panels
+import AdminPage from "./admin/AdminPage";            // Full command center
+import AdminDashboard from "./v2-admin/AdminDashboard"; // Optional lightweight dashboard
 
 export default function App() {
   return (
     <BrowserRouter>
       <LoginGate>
         <Routes>
+          {/* 🧱 Core Layout (Shell wraps all main pages) */}
           <Route element={<MufasaShell />}>
+            {/* 🌍 Public / Member Routes */}
             <Route index element={<Home />} />
             <Route path="timeline" element={<TimelinePage />} />
             <Route path="calendar" element={<CalendarPage />} />
@@ -32,7 +38,13 @@ export default function App() {
             <Route path="ledger" element={<LedgerPage />} />
             <Route path="ledger-v2" element={<LedgerV2Page />} />
             <Route path="pagt" element={<PagtPage />} />
-            <Route path="admin" element={<AdminDashboard />} />
+
+            {/* 🦁 Admin Routes */}
+            <Route path="admin" element={<AdminPage />} />
+            {/* Optional secondary route for a smaller overview */}
+            <Route path="admin/overview" element={<AdminDashboard />} />
+
+            {/* 🚧 Fallback */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>
