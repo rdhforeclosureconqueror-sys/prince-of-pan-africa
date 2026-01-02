@@ -11,7 +11,7 @@ export default function SystemMessages() {
   const [index, setIndex] = useState(0);
 
   useEffect(() => {
-    const timer = setInterval(() => setIndex(i => (i + 1) % messages.length), 5000);
+    const timer = setInterval(() => setIndex((i) => (i + 1) % messages.length), 5000);
     return () => clearInterval(timer);
   }, []);
 
