@@ -1,0 +1,55 @@
+.admin-dashboard {
+  font-family: "Poppins", sans-serif;
+  color: #fff;
+  background: #0a0a0a;
+  min-height: 100vh;
+  padding: 20px;
+}
+
+h1 {
+  color: var(--gold, #f2c94c);
+  margin-bottom: 20px;
+}
+
+.admin-stats {
+  display: flex;
+  gap: 15px;
+  flex-wrap: wrap;
+}
+
+.stat-card {
+  background: #111;
+  border: 1px solid var(--gold, #f2c94c);
+  border-radius: 10px;
+  padding: 20px;
+  flex: 1;
+  text-align: center;
+  min-width: 200px;
+}
+
+.stat-card h2 {
+  font-size: 2em;
+  color: var(--gold, #f2c94c);
+}
+
+.platform-section, .activity-feed {
+  margin-top: 30px;
+  background: #141414;
+  border-radius: 10px;
+  padding: 15px;
+}
+
+.activity-item {
+  border-bottom: 1px solid #222;
+  padding: 10px 0;
+}
+
+.activity-time {
+  font-size: 0.8em;
+  color: #888;
+}
+
+ul {
+  list-style: none;
+  padding-left: 0;
+}
