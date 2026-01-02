@@ -5,7 +5,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import LoginGate from "./components/LoginGate";
 import MufasaShell from "./layouts/MufasaShell";
 
-// Pages
+// Main Pages
 import Home from "./pages/Home";
 import TimelinePage from "./pages/TimelinePage";
 import CalendarPage from "./pages/CalendarPage";
@@ -14,22 +14,24 @@ import LibraryDecolonize from "./pages/LibraryDecolonize";
 import MembershipPlan from "./pages/MembershipPlan";
 import PortalDecolonize from "./pages/PortalDecolonize";
 
+// Ledger + Apps
 import LedgerPage from "./pages/LedgerPage";
 import LedgerV2Page from "./v2-ledger/LedgerV2Page";
 import PagtPage from "./pages/PagtPage";
 
+// Admin
+import AdminDashboard from "./v2-admin/AdminDashboard";
+
 export default function App() {
   return (
     <BrowserRouter>
-      {/* Everything is protected behind the human gate */}
+      {/* 🔒 Protect everything behind the LoginGate */}
       <LoginGate>
         <Routes>
-          {/* Shell wraps all main pages */}
+          {/* MufasaShell wraps all standard pages */}
           <Route element={<MufasaShell />}>
-            {/* Home */}
+            {/* 🌍 Main Navigation */}
             <Route index element={<Home />} />
-
-            {/* Main Nav Pages */}
             <Route path="timeline" element={<TimelinePage />} />
             <Route path="calendar" element={<CalendarPage />} />
             <Route path="journal" element={<JournalPage />} />
@@ -37,12 +39,17 @@ export default function App() {
             <Route path="membership" element={<MembershipPlan />} />
             <Route path="portal/decolonize" element={<PortalDecolonize />} />
 
-            {/* Apps */}
+            {/* 💰 Ledger Pages */}
             <Route path="ledger" element={<LedgerPage />} />
             <Route path="ledger-v2" element={<LedgerV2Page />} />
+
+            {/* ⚙️ Other Apps */}
             <Route path="pagt" element={<PagtPage />} />
 
-            {/* Safety fallback */}
+            {/* 🧠 Admin Dashboard */}
+            <Route path="admin" element={<AdminDashboard />} />
+
+            {/* 🧭 Safety fallback */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>
