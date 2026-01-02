@@ -2,7 +2,7 @@ import { Outlet, NavLink } from "react-router-dom";
 import "../styles/MufasaShell.css";
 
 export default function MufasaShell() {
-  // ✅ Active-state styling without changing your CSS setup
+  // Active-state styling without changing your CSS setup
   const linkClass = ({ isActive }) => `nav-item${isActive ? " active" : ""}`;
 
   return (
@@ -25,10 +25,6 @@ export default function MufasaShell() {
 
         {/* Navigation */}
         <nav className="nav-bar">
-          {/* ✅ These paths assume your App.jsx routes under MufasaShell are:
-              timeline, library, calendar, journal, membership, ledger, pagt
-              (no leading slash in App.jsx, BUT in NavLink we can safely use absolute) */}
-
           <NavLink to="/" className={linkClass} end>
             Ask
           </NavLink>
@@ -53,14 +49,17 @@ export default function MufasaShell() {
             30-Day Plan
           </NavLink>
 
-          {/* ✅ NEW: Ledger + Pan-Africa Got Talent */}
+          {/* Ledger */}
           <NavLink to="/ledger" className={linkClass}>
             Ledger
           </NavLink>
 
-          <NavLink to="/ledger-v2" className="nav-item">Ledger</NavLink>
+          {/* Ledger V2 (new system – safe sandbox) */}
+          <NavLink to="/ledger-v2" className={linkClass}>
+            Ledger V2
+          </NavLink>
 
-          
+          {/* Pan-Africa Got Talent */}
           <NavLink to="/pagt" className={linkClass}>
             Pan-Africa Got Talent
           </NavLink>
@@ -75,7 +74,8 @@ export default function MufasaShell() {
       {/* Footer */}
       <footer className="mufasa-footer">
         <p>
-          Every Month Is Black History · <strong>Powered by MufasaBrain</strong>
+          Every Month Is Black History ·{" "}
+          <strong>Powered by MufasaBrain</strong>
         </p>
       </footer>
     </div>
