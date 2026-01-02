@@ -1,11 +1,9 @@
-// src/App.jsx
 import React from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
 import LoginGate from "./components/LoginGate";
 import MufasaShell from "./layouts/MufasaShell";
 
-// Main Pages
 import Home from "./pages/Home";
 import TimelinePage from "./pages/TimelinePage";
 import CalendarPage from "./pages/CalendarPage";
@@ -14,23 +12,18 @@ import LibraryDecolonize from "./pages/LibraryDecolonize";
 import MembershipPlan from "./pages/MembershipPlan";
 import PortalDecolonize from "./pages/PortalDecolonize";
 
-// Ledger + Apps
 import LedgerPage from "./pages/LedgerPage";
 import LedgerV2Page from "./v2-ledger/LedgerV2Page";
 import PagtPage from "./pages/PagtPage";
 
-// Admin
 import AdminDashboard from "./v2-admin/AdminDashboard";
 
 export default function App() {
   return (
     <BrowserRouter>
-      {/* 🔒 Protect everything behind the LoginGate */}
       <LoginGate>
         <Routes>
-          {/* MufasaShell wraps all standard pages */}
           <Route element={<MufasaShell />}>
-            {/* 🌍 Main Navigation */}
             <Route index element={<Home />} />
             <Route path="timeline" element={<TimelinePage />} />
             <Route path="calendar" element={<CalendarPage />} />
@@ -39,17 +32,12 @@ export default function App() {
             <Route path="membership" element={<MembershipPlan />} />
             <Route path="portal/decolonize" element={<PortalDecolonize />} />
 
-            {/* 💰 Ledger Pages */}
             <Route path="ledger" element={<LedgerPage />} />
             <Route path="ledger-v2" element={<LedgerV2Page />} />
-
-            {/* ⚙️ Other Apps */}
             <Route path="pagt" element={<PagtPage />} />
 
-            {/* 🧠 Admin Dashboard */}
             <Route path="admin" element={<AdminDashboard />} />
 
-            {/* 🧭 Safety fallback */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>
