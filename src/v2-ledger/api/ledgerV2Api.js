@@ -3,22 +3,13 @@ import { api } from '../../api/api';
 // GET balance
 export const getBalance = () => api('/ledger/balance');
 
-// POST share
-export const postShare = ({ share_platform, share_url, proof_url }) =>
-  api('/ledger/share', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: { share_platform, share_url, proof_url },
-  });
-
-// GET activity feed
+// GET activity (with fallback)
 export const getActivity = async () => {
   try {
     const data = await api('/ledger/activity');
     if (data?.ok && Array.isArray(data.items)) return data.items;
   } catch (err) {
     try {
-      // fallback: merge STAR + BD
       const [stars, bd] = await Promise.all([
         api('/ledger/star-transactions'),
         api('/ledger/bd-transactions'),
@@ -34,6 +25,14 @@ export const getActivity = async () => {
   }
   return [];
 };
+
+// POST share
+export const postShare = ({ share_platform, share_url, proof_url }) =>
+  api('/ledger/share', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: { share_platform, share_url, proof_url },
+  });
 
 // POST review video
 export const postReviewVideo = ({
