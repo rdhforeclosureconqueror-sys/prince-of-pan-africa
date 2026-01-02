@@ -1,13 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, Suspense } from 'react';
 import './ledgerV2.css';
+
 import IdentityPanel from './components/IdentityPanel';
 import BalanceCore from './components/BalanceCore';
 import ActionConsole from './components/ActionConsole';
 import ActivityStream from './components/ActivityStream';
 import SystemMessages from './components/SystemMessages';
 import useLedgerData from './hooks/useLedgerData';
-import EarnStarModal from './components/EarnStarModal';
-import ReviewVideoModal from './components/ReviewVideoModal';
+
+// Lazy-load modals for performance
+const EarnStarModal = React.lazy(() => import('./components/EarnStarModal'));
+const ReviewVideoModal = React.lazy(() => import('./components/ReviewVideoModal'));
 
 export default function LedgerV2Page() {
   const { balance, loading, error, refreshBalance } = useLedgerData();
@@ -33,12 +36,21 @@ export default function LedgerV2Page() {
       <ActivityStream />
       <SystemMessages />
 
-      {showShareModal && (
-        <EarnStarModal onClose={() => setShowShareModal(false)} onSuccess={refreshBalance} />
-      )}
-      {showReviewModal && (
-        <ReviewVideoModal onClose={() => setShowReviewModal(false)} onSuccess={refreshBalance} />
-      )}
+      {/* Lazy-loaded modals */}
+      <Suspense fallback={null}>
+        {showShareModal && (
+          <EarnStarModal
+            onClose={() => setShowShareModal(false)}
+            onSuccess={refreshBalance}
+          />
+        )}
+        {showReviewModal && (
+          <ReviewVideoModal
+            onClose={() => setShowReviewModal(false)}
+            onSuccess={refreshBalance}
+          />
+        )}
+      </Suspense>
     </div>
   );
 }
