@@ -1,179 +1,186 @@
-// src/components/LoginGate.jsx
-import { useEffect, useState } from "react";
-import { API_BASE } from "../config";
+// ✅ src/components/LionGate.jsx
+import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
-export default function LoginGate({ children }) {
-  const [loading, setLoading] = useState(true);
-  const [me, setMe] = useState(null);
+export default function LionGate({ children }) {
+  const navigate = useNavigate();
 
-  async function fetchMe() {
+  // Base API URL (from your config or .env)
+  const API = import.meta.env.VITE_API_BASE_URL || "https://api.simbawaujamaa.com";
+
+  const [status, setStatus] = useState("checking"); // checking | authed | guest | error
+  const [user, setUser] = useState(null);
+  const [err, setErr] = useState("");
+
+  const videoSrc = useMemo(() => "/asset/video/lion-run.mp4", []);
+
+  // 🧠 Check session
+  async function checkMe() {
+    setErr("");
+    setStatus("checking");
+
     try {
-      const res = await fetch(`${API_BASE}/auth/me`, { credentials: "include" });
-      if (!res.ok) throw new Error("not authed");
+      const res = await fetch(`${API}/auth/me`, {
+        method: "GET",
+        credentials: "include",
+        headers: { Accept: "application/json" },
+      });
+
+      if (!res.ok) {
+        setStatus("guest");
+        setUser(null);
+        return;
+      }
+
       const data = await res.json();
-      setMe(data.user);
-    } catch {
-      setMe(null);
-    } finally {
-      setLoading(false);
+
+      if (data?.ok && data?.auth) {
+        setStatus("authed");
+        setUser(data.user);
+
+        // ✅ If admin → go straight to admin page
+        if (data.user.role === "admin") {
+          navigate("/admin", { replace: true });
+        }
+      } else {
+        setStatus("guest");
+        setUser(null);
+      }
+    } catch (e) {
+      console.error("❌ LionGate check failed:", e);
+      setStatus("error");
+      setErr(e?.message || "Network error");
     }
   }
 
   useEffect(() => {
-    fetchMe();
+    checkMe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function login() {
-    // sends user to API -> Google -> back to site
-    window.location.href = `${API_BASE}/auth/google`;
+  // 🦁 Trigger Google OAuth login
+  function startLogin() {
+    window.location.href = `${API}/auth/google`;
   }
 
-  if (loading) {
-    return (
-      <div style={styles.center}>
-        <div>Loading…</div>
-      </div>
-    );
+  // 🦁 If authenticated, show the app
+  if (status === "authed") {
+    return children;
   }
 
-  // If NOT logged in -> show video + modal gate
-  if (!me) {
-    return (
-      <div style={styles.page}>
-        <video
-          style={styles.video}
-          autoPlay
-          muted
-          loop
-          playsInline
-          preload="auto"
-        >
-          <source src="/video/lion-run.mp4" type="video/mp4" />
-        </video>
-
-        <div style={styles.overlay} />
-
-        <div style={styles.modal}>
-          <div style={styles.title}>Are you human?</div>
-
-          <div style={styles.text}>
-            Sign in with Google to enter.
-            <br />
-            <span style={styles.subtext}>
-              Signing in does <b>not</b> create a membership or require payment.
-              It’s only used to verify you and protect the site.
-            </span>
-          </div>
-
-          <button style={styles.button} onClick={login}>
-            Sign in with Google
-          </button>
-
-          <div style={styles.footerText}>
-            Protected access • SIMBA Wa Ujamaa
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Logged in -> allow site to render
+  // 🦁 Otherwise show gate screen
   return (
-    <>
-      {children}
-      {/* You can remove this later; it’s helpful while testing */}
-      <div style={styles.cornerTag}>
-        ✅ Signed in as: {me.email || me.displayName || "User"}
+    <div style={styles.wrap}>
+      {/* Background Video */}
+      <video
+        src={videoSrc}
+        autoPlay
+        muted
+        loop
+        playsInline
+        style={styles.video}
+      />
+
+      {/* Overlay */}
+      <div style={styles.overlay} />
+
+      {/* Gate Modal */}
+      <div style={styles.modal}>
+        <div style={styles.title}>🦁 LionGate</div>
+        <div style={styles.sub}>Verify your humanity to enter MufasaBrain.</div>
+
+        <button onClick={startLogin} style={styles.button}>
+          Sign in with Google
+        </button>
+
+        <div style={styles.note}>
+          This is a secure Google verification — no payment or membership yet.
+        </div>
+
+        <div style={styles.small}>
+          {status === "checking" && "Checking your session..."}
+          {status === "guest" && "Not signed in yet."}
+          {status === "error" && `Error: ${err}`}
+        </div>
+
+        {status !== "checking" && (
+          <button onClick={checkMe} style={styles.linkBtn}>
+            🔄 Refresh login status
+          </button>
+        )}
       </div>
-    </>
+    </div>
   );
 }
 
+// 🎨 Styles (cinematic look)
 const styles = {
-  page: {
-    position: "relative",
-    width: "100%",
-    minHeight: "100vh",
+  wrap: {
+    position: "fixed",
+    inset: 0,
     overflow: "hidden",
     background: "#000",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 9999,
   },
   video: {
     position: "absolute",
-    top: 0,
-    left: 0,
+    inset: 0,
     width: "100%",
     height: "100%",
     objectFit: "cover",
-    filter: "contrast(1.1) saturate(1.1)",
+    filter: "contrast(1.1) saturate(1.05) brightness(0.95)",
   },
   overlay: {
     position: "absolute",
     inset: 0,
-    background:
-      "linear-gradient(180deg, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.75) 50%, rgba(0,0,0,0.85) 100%)",
+    background: "linear-gradient(180deg, rgba(0,0,0,0.6), rgba(0,0,0,0.75))",
   },
   modal: {
     position: "relative",
-    zIndex: 2,
-    maxWidth: 520,
-    margin: "0 auto",
-    top: "14vh",
-    padding: 24,
+    width: "min(520px, 92vw)",
     borderRadius: 16,
-    background: "rgba(0,0,0,0.55)",
-    border: "1px solid rgba(255,255,255,0.18)",
-    backdropFilter: "blur(10px)",
-    textAlign: "center",
+    padding: 24,
+    background: "rgba(10,10,10,0.8)",
+    border: "1px solid rgba(255,255,255,0.12)",
+    boxShadow: "0 0 25px rgba(255, 255, 255, 0.1)",
+    backdropFilter: "blur(14px)",
     color: "#fff",
+    textAlign: "center",
+    fontFamily: "Poppins, system-ui, sans-serif",
   },
   title: {
-    fontSize: 28,
+    fontSize: 30,
     fontWeight: 800,
-    letterSpacing: 0.5,
-    marginBottom: 10,
+    marginBottom: 6,
+    color: "#FFD700",
+    textShadow: "0 0 8px rgba(255,215,0,0.4)",
   },
-  text: {
-    fontSize: 16,
-    lineHeight: 1.4,
-    opacity: 0.95,
-    marginBottom: 18,
-  },
-  subtext: {
-    display: "inline-block",
-    marginTop: 10,
-    fontSize: 13,
-    opacity: 0.85,
-  },
+  sub: { fontSize: 15, opacity: 0.9, marginBottom: 16 },
   button: {
     width: "100%",
-    padding: "12px 16px",
+    padding: "12px 14px",
     borderRadius: 12,
     border: "none",
-    fontWeight: 800,
     cursor: "pointer",
+    fontWeight: 700,
+    fontSize: 16,
+    background: "linear-gradient(90deg, #ffb300, #ffcc00)",
+    color: "#000",
+    transition: "0.3s",
   },
-  footerText: {
-    marginTop: 14,
+  note: { marginTop: 12, fontSize: 12, opacity: 0.85, lineHeight: 1.4 },
+  small: { marginTop: 12, fontSize: 12, opacity: 0.75 },
+  linkBtn: {
+    marginTop: 10,
+    background: "transparent",
+    border: "none",
+    color: "#FFD700",
+    opacity: 0.85,
+    textDecoration: "underline",
+    cursor: "pointer",
     fontSize: 12,
-    opacity: 0.75,
-  },
-  center: {
-    minHeight: "100vh",
-    display: "grid",
-    placeItems: "center",
-    background: "#000",
-    color: "#fff",
-  },
-  cornerTag: {
-    position: "fixed",
-    right: 10,
-    bottom: 10,
-    background: "rgba(0,0,0,0.6)",
-    color: "#fff",
-    padding: "8px 10px",
-    borderRadius: 10,
-    fontSize: 12,
-    zIndex: 9999,
-    border: "1px solid rgba(255,255,255,0.15)",
   },
 };
