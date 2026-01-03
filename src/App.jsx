@@ -1,6 +1,8 @@
 // src/App.jsx
 import React from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+
+// 🧱 Core Layout + Auth
 import LoginGate from "./components/LoginGate";
 import MufasaShell from "./layouts/MufasaShell";
 
@@ -16,18 +18,18 @@ import LedgerPage from "./pages/LedgerPage";
 import LedgerV2Page from "./v2-ledger/LedgerV2Page";
 import PagtPage from "./pages/PagtPage";
 
-// 🦁 Admin Panels
-import AdminPage from "./admin/AdminPage";            // Full command center
-import AdminDashboard from "./v2-admin/AdminDashboard"; // Optional lightweight dashboard
+// 🦁 Admin Panel (New Cosmic Dashboard)
+import AdminDashboard from "./pages/AdminDashboard";
 
 export default function App() {
   return (
     <BrowserRouter>
+      {/* 🔒 All routes protected by login gate */}
       <LoginGate>
         <Routes>
-          {/* 🧱 Core Layout (Shell wraps all main pages) */}
+          {/* 🦁 Mufasa Shell wraps main navigation */}
           <Route element={<MufasaShell />}>
-            {/* 🌍 Public / Member Routes */}
+            {/* 🌍 Member / Public Pages */}
             <Route index element={<Home />} />
             <Route path="timeline" element={<TimelinePage />} />
             <Route path="calendar" element={<CalendarPage />} />
@@ -39,12 +41,10 @@ export default function App() {
             <Route path="ledger-v2" element={<LedgerV2Page />} />
             <Route path="pagt" element={<PagtPage />} />
 
-            {/* 🦁 Admin Routes */}
-            <Route path="admin" element={<AdminPage />} />
-            {/* Optional secondary route for a smaller overview */}
-            <Route path="admin/overview" element={<AdminDashboard />} />
+            {/* 🧭 Admin Route (New Galaxy Dashboard) */}
+            <Route path="admin" element={<AdminDashboard />} />
 
-            {/* 🚧 Fallback */}
+            {/* 🚧 Fallback Route */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>
