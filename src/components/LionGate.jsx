@@ -1,7 +1,8 @@
+// ✅ src/components/LionGate.jsx
 import React, { useEffect, useMemo, useState } from "react";
 
 export default function LionGate({ children }) {
-  const API = import.meta.env.VITE_API_BASE_URL;
+  const API = import.meta.env.VITE_API_BASE_URL || "";
 
   const [status, setStatus] = useState("checking"); // checking | authed | guest | error
   const [user, setUser] = useState(null);
@@ -12,10 +13,10 @@ export default function LionGate({ children }) {
   async function checkMe() {
     setErr("");
     try {
-      const res = await fetch(`${API}/me`, {
+      const res = await fetch(`${API}/auth/me`, {
         method: "GET",
         credentials: "include",
-        headers: { "Accept": "application/json" },
+        headers: { Accept: "application/json" },
       });
 
       if (!res.ok) {
@@ -40,50 +41,31 @@ export default function LionGate({ children }) {
 
   useEffect(() => {
     checkMe();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function startLogin() {
-    // Send them to your API to begin OAuth
     window.location.href = `${API}/auth/google`;
   }
 
-  if (status === "authed") {
-    return children;
-  }
+  if (status === "authed") return children;
 
   return (
     <div style={styles.wrap}>
-      {/* Background video */}
-      <video
-        src={videoSrc}
-        autoPlay
-        muted
-        loop
-        playsInline
-        style={styles.video}
-      />
-
-      {/* Dark overlay */}
+      <video src={videoSrc} autoPlay muted loop playsInline style={styles.video} />
       <div style={styles.overlay} />
 
-      {/* Modal */}
       <div style={styles.modal}>
-        <div style={styles.title}>Are you human?</div>
-        <div style={styles.sub}>
-          Sign in with Google to continue.
-        </div>
+        <div style={styles.title}>🦁 Verify Your Humanity</div>
+        <div style={styles.sub}>Sign in with Google to continue</div>
 
         <button onClick={startLogin} style={styles.button}>
           Sign in with Google
         </button>
 
         <div style={styles.note}>
-          Signing in does <b>not</b> create a membership or start any payment. <br />
-          This is only a human verification step.
+          This sign-in doesn’t start a membership. It’s only for secure access.
         </div>
 
-        {/* Helpful status */}
         <div style={styles.small}>
           {status === "checking" && "Checking session..."}
           {status === "guest" && "Not signed in yet."}
@@ -117,7 +99,7 @@ const styles = {
     width: "100%",
     height: "100%",
     objectFit: "cover",
-    filter: "contrast(1.05) saturate(1.05)",
+    filter: "contrast(1.1) saturate(1.05)",
   },
   overlay: {
     position: "absolute",
