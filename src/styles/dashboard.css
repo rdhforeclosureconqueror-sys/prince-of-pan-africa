@@ -1,113 +1,270 @@
-/* src/styles/dashboard.css */
+/* ✅ src/styles/dashboard.css */
+/* ---------------------------------------------
+   SIMBA COMMAND CENTER — Cosmic Dashboard Style
+   --------------------------------------------- */
 
-/* 🌌 Layer 1 — Galaxy background */
-.universe-bg {
-  position: fixed;
-  inset: 0;
-  background: url("/bg-universe.jpg") center / cover no-repeat fixed;
-  background-color: #000;
-  z-index: 0;
-  filter: brightness(0.9) contrast(1.05) saturate(1.1);
+/* 🌌 GLOBAL RESET */
+body {
+  margin: 0;
+  font-family: "Poppins", "Segoe UI", sans-serif;
+  background: transparent;
+  color: #fff;
+  overflow-x: hidden;
 }
 
-/* 🪐 Layer 2 — Vignette overlay for readability */
-.universe-overlay {
-  position: fixed;
-  inset: 0;
-  background: radial-gradient(
-    circle at top,
-    rgba(0, 0, 0, 0.1),
-    rgba(0, 0, 0, 0.8)
-  );
-  pointer-events: none;
-  z-index: 1;
-}
-
-/* 🌠 Layer 3 — UI content */
 .admin-dashboard {
   position: relative;
+  padding: 8rem 3vw 6rem;
   z-index: 2;
-  color: #fff;
-  padding: 4rem 2rem;
-  max-width: 1200px;
-  margin: 0 auto;
   text-align: center;
 }
 
-/* Title styling */
-.admin-dashboard h1 {
-  font-family: "Orbitron", sans-serif;
-  font-size: 2.6rem;
-  color: #ffd166;
-  text-shadow: 0 0 8px rgba(255, 215, 0, 0.5);
-  margin-bottom: 2rem;
+/* 🦁 HEADER */
+.dashboard-header {
+  margin-bottom: 3rem;
 }
 
-/* Stat card grid */
+.dashboard-header h1 {
+  font-size: 2.5rem;
+  color: gold;
+  text-shadow: 0 0 12px rgba(255, 215, 0, 0.7);
+  letter-spacing: 1px;
+  margin-bottom: 0.5rem;
+}
+
+.dashboard-header .subtitle {
+  font-size: 1rem;
+  opacity: 0.8;
+  color: #d9d9d9;
+  font-weight: 400;
+}
+
+/* 🧱 GRID — Core Stats */
 .dashboard-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 2rem;
+  margin-bottom: 4rem;
+  justify-items: center;
 }
 
-/* Cards with glow */
 .stat-card {
-  background: rgba(20, 20, 20, 0.6);
+  background: rgba(12, 12, 18, 0.6);
   border: 1px solid rgba(255, 215, 0, 0.2);
-  border-radius: 14px;
+  border-radius: 16px;
   padding: 1.5rem;
-  backdrop-filter: blur(8px);
-  transition: all 0.25s ease;
-}
-.stat-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 0 12px rgba(255, 215, 0, 0.4);
-}
-.stat-card h2 {
-  font-size: 2rem;
-  color: #ffcc33;
-  margin: 0;
-}
-.stat-card p {
-  font-size: 0.9rem;
-  opacity: 0.85;
+  box-shadow: 0 0 25px rgba(255, 215, 0, 0.05),
+              inset 0 0 12px rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(10px);
+  transition: all 0.35s ease;
+  width: 100%;
+  max-width: 260px;
+  cursor: default;
+  position: relative;
 }
 
-/* Data tables */
+.stat-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 16px;
+  background: radial-gradient(
+    circle at 50% 0%,
+    rgba(255, 215, 0, 0.1),
+    transparent 70%
+  );
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.stat-card:hover::before {
+  opacity: 1;
+}
+
+.stat-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 0 40px rgba(255, 215, 0, 0.15),
+              inset 0 0 16px rgba(255, 255, 255, 0.08);
+}
+
+.stat-card h2 {
+  font-size: 2.2rem;
+  color: #fff;
+  margin: 0;
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.25);
+}
+
+.stat-card p {
+  margin-top: 0.5rem;
+  font-size: 0.9rem;
+  letter-spacing: 0.5px;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+/* 🪞 SECTIONS */
+.cosmic-section {
+  margin-top: 3.5rem;
+  padding: 2rem 1rem;
+  background: rgba(10, 10, 18, 0.45);
+  border-radius: 18px;
+  border: 1px solid rgba(255, 215, 0, 0.15);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 0 25px rgba(0, 0, 0, 0.4),
+              inset 0 0 20px rgba(255, 255, 255, 0.02);
+  max-width: 1000px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.cosmic-section h2 {
+  color: gold;
+  font-size: 1.3rem;
+  margin-bottom: 1rem;
+  text-shadow: 0 0 10px rgba(255, 215, 0, 0.4);
+}
+
+/* 🪩 TABLES */
 .admin-table {
   width: 100%;
   border-collapse: collapse;
-  margin-top: 2rem;
-  background: rgba(0, 0, 0, 0.4);
-  border-radius: 10px;
-  overflow: hidden;
+  font-size: 0.9rem;
+  text-align: left;
 }
+
+.admin-table thead {
+  background: rgba(255, 215, 0, 0.08);
+  border-bottom: 1px solid rgba(255, 215, 0, 0.2);
+}
+
 .admin-table th,
 .admin-table td {
-  padding: 10px 14px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
+
 .admin-table th {
-  background: rgba(255, 215, 0, 0.1);
-  color: #ffd166;
-  font-weight: 700;
+  color: gold;
+  font-weight: 600;
 }
-.admin-table td {
-  color: #ddd;
+
+.admin-table tr:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.admin-table a {
+  color: #fff;
+  text-decoration: underline;
+  opacity: 0.85;
+  transition: opacity 0.3s;
+}
+.admin-table a:hover {
+  opacity: 1;
+}
+
+/* 💫 ACTIVITY FEED */
+.activity-feed {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  text-align: left;
+}
+
+.activity-feed li {
+  padding: 0.7rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.85);
   font-size: 0.9rem;
 }
 
-/* Glow lines at bottom */
-@keyframes glowline {
-  0% { box-shadow: 0 0 0 rgba(255, 215, 0, 0); }
-  50% { box-shadow: 0 0 12px rgba(255, 215, 0, 0.6); }
-  100% { box-shadow: 0 0 0 rgba(255, 215, 0, 0); }
+.activity-feed li:last-child {
+  border-bottom: none;
 }
 
+.activity-feed .highlight {
+  color: gold;
+  font-weight: 600;
+}
+
+.activity-feed .timestamp {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.8rem;
+}
+
+/* 🌠 FOOTER */
 .admin-footer {
-  margin-top: 3rem;
+  margin-top: 4rem;
   padding: 1rem 0;
-  border-top: 1px solid rgba(255, 215, 0, 0.2);
-  font-size: 0.85rem;
-  animation: glowline 4s infinite ease-in-out;
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.75);
+  text-align: center;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(10, 10, 18, 0.4);
+  backdrop-filter: blur(10px);
+  border-radius: 10px;
+  max-width: 800px;
+  margin: 4rem auto 0 auto;
+  box-shadow: 0 0 20px rgba(255, 215, 0, 0.08);
+}
+
+/* 🌟 LOADING STATES */
+.admin-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  color: gold;
+  font-size: 1.4rem;
+  flex-direction: column;
+  text-shadow: 0 0 10px rgba(255, 215, 0, 0.7);
+  background: radial-gradient(
+    circle at center,
+    rgba(10, 10, 18, 0.8),
+    rgba(0, 0, 0, 0.95)
+  );
+}
+
+.admin-loading .loading-text {
+  margin-top: 1rem;
+  font-size: 1rem;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+/* 🌈 GLOW ANIMATIONS */
+@keyframes glowPulse {
+  0% {
+    box-shadow: 0 0 12px rgba(255, 215, 0, 0.15);
+  }
+  50% {
+    box-shadow: 0 0 24px rgba(255, 215, 0, 0.35);
+  }
+  100% {
+    box-shadow: 0 0 12px rgba(255, 215, 0, 0.15);
+  }
+}
+
+.cosmic-card:hover {
+  animation: glowPulse 2.5s infinite ease-in-out;
+}
+
+/* 📱 RESPONSIVE */
+@media (max-width: 768px) {
+  .dashboard-header h1 {
+    font-size: 2rem;
+  }
+
+  .dashboard-grid {
+    gap: 1rem;
+  }
+
+  .stat-card {
+    padding: 1rem;
+  }
+
+  .cosmic-section {
+    padding: 1rem;
+  }
+
+  .admin-footer {
+    font-size: 0.8rem;
+  }
 }
