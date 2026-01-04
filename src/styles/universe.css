@@ -1,0 +1,13 @@
+/* ✅ src/styles/universe.css */
+/* Cosmic animated background */
+
+#universe-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(circle at 20% 20%, #090909 0%, #000010 100%);
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.9;
+}
