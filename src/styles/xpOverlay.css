@@ -1,0 +1,33 @@
+/* ✅ src/styles/xpOverlay.css */
+.xp-overlay {
+  position: fixed;
+  bottom: 80px;
+  right: 20px;
+  width: 220px;
+  background: rgba(0, 0, 0, 0.7);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 8px;
+  padding: 8px;
+  text-align: center;
+  color: #fff;
+  font-family: "Poppins", sans-serif;
+}
+
+.xp-bar {
+  height: 8px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 5px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+
+.xp-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #ffa500, #ffdd55);
+  transition: width 0.5s ease-out;
+}
+
+.xp-label {
+  font-size: 0.8rem;
+  opacity: 0.9;
+}
