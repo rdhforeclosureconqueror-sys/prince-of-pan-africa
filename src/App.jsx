@@ -1,8 +1,8 @@
-// src/App.jsx
-import React from "react";
+// ✅ src/App.jsx — Simba Frontend Unified Entry
+import React, { useEffect, useState, useRef } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
-// 🧱 Core Layout + Auth
+// 🧱 Core Layouts & Components
 import LoginGate from "./components/LoginGate";
 import MufasaShell from "./layouts/MufasaShell";
 
@@ -17,19 +17,87 @@ import PortalDecolonize from "./pages/PortalDecolonize";
 import LedgerPage from "./pages/LedgerPage";
 import LedgerV2Page from "./v2-ledger/LedgerV2Page";
 import PagtPage from "./pages/PagtPage";
-
-// 🦁 Admin Panel (New Cosmic Dashboard)
 import AdminDashboard from "./pages/AdminDashboard";
 
+// 🧠 Contexts / Utilities (WebSocket, Notifications)
+import { toast } from "react-hot-toast";
+
 export default function App() {
+  const [user, setUser] = useState(null);
+  const wsRef = useRef(null);
+
+  // -----------------------------------------------
+  // 🔗 1️⃣ WebSocket Connection (Realtime Engine)
+  // -----------------------------------------------
+  useEffect(() => {
+    if (!user) return;
+
+    const ws = new WebSocket(import.meta.env.VITE_WS_URL || "wss://simbawaujamaa.com");
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      console.log("🟢 WebSocket connected");
+      ws.send(JSON.stringify({
+        type: user.role === "admin" ? "admin_register" : "register",
+        member_id: user.id,
+        role: user.role,
+      }));
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+
+        switch (data.type) {
+          case "reward_update":
+            toast.success(`🏆 +${data.xp} XP • ⭐ +${data.stars}`);
+            break;
+          case "star_award":
+            toast(`⭐ ${data.message}`, { icon: "🌟" });
+            break;
+          case "reminder":
+            toast.info(data.message);
+            break;
+          case "member_activity":
+            if (user.role === "admin") console.log("🧠 Admin Activity:", data);
+            break;
+          default:
+            console.log("🔹 WS:", data);
+        }
+      } catch (e) {
+        console.error("⚠️ WebSocket message error:", e);
+      }
+    };
+
+    ws.onclose = () => console.log("🔴 WebSocket disconnected");
+    return () => ws.close();
+  }, [user]);
+
+  // -----------------------------------------------
+  // 🔒 2️⃣ Authentication Handling
+  // -----------------------------------------------
+  useEffect(() => {
+    async function fetchUser() {
+      try {
+        const res = await fetch("/auth/me", { credentials: "include" });
+        const data = await res.json();
+        if (data.ok) setUser(data.user);
+      } catch (err) {
+        console.error("❌ Auth check failed:", err);
+      }
+    }
+    fetchUser();
+  }, []);
+
+  // -----------------------------------------------
+  // 🧭 3️⃣ Router Structure
+  // -----------------------------------------------
   return (
     <BrowserRouter>
-      {/* 🔒 All routes protected by login gate */}
-      <LoginGate>
+      <LoginGate user={user}>
         <Routes>
-          {/* 🦁 Mufasa Shell wraps main navigation */}
-          <Route element={<MufasaShell />}>
-            {/* 🌍 Member / Public Pages */}
+          <Route element={<MufasaShell user={user} />}>
+            {/* 🌍 Core Member Pages */}
             <Route index element={<Home />} />
             <Route path="timeline" element={<TimelinePage />} />
             <Route path="calendar" element={<CalendarPage />} />
@@ -41,10 +109,17 @@ export default function App() {
             <Route path="ledger-v2" element={<LedgerV2Page />} />
             <Route path="pagt" element={<PagtPage />} />
 
-            {/* 🧭 Admin Route (New Galaxy Dashboard) */}
-            <Route path="admin" element={<AdminDashboard />} />
+            {/* 🧠 AI-Enhanced Phases */}
+            <Route path="fitness" element={<JournalPage section="fitness" />} />
+            <Route path="study" element={<JournalPage section="study" />} />
+            <Route path="language" element={<JournalPage section="language" />} />
 
-            {/* 🚧 Fallback Route */}
+            {/* 🦁 Admin Galaxy Panel */}
+            {user?.role === "admin" && (
+              <Route path="admin" element={<AdminDashboard />} />
+            )}
+
+            {/* 🚧 Fallback */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>
