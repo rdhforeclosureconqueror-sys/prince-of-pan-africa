@@ -9,7 +9,7 @@ const isDev = import.meta.env.DEV;
 const hostname = window?.location?.hostname || "production";
 
 // -----------------------------
-// 🔗 API BASE (Backend URL)
+// 🔗 PRIMARY BACKEND (Simba Waa Ujamaa API)
 // -----------------------------
 const PROD_API = "https://api.simbawaujamaa.com";
 const DEV_API = "http://localhost:3000";
@@ -42,6 +42,25 @@ export const WS_BASE_URL =
   (hostname === "localhost" ? DEV_WS : PROD_WS);
 
 // -----------------------------
+// 🧠 SECONDARY SERVICES (AI + Voice + Knowledge)
+// -----------------------------
+
+// Mufasa Knowledge Bank
+export const MUFASA_API_URL =
+  import.meta.env.VITE_MUFASA_API ||
+  "https://mufasa-knowledge-bank.onrender.com";
+
+// OpenVoice / Voice API
+export const OPENVOICE_API_URL =
+  import.meta.env.VITE_OPENVOICE_API ||
+  "https://aivoice-wmrv.onrender.com";
+
+// Optional: Future AI/ML Models (TensorFlow, etc.)
+export const AI_MODEL_API_URL =
+  import.meta.env.VITE_AI_MODEL_API ||
+  `${API_BASE_URL}/ai`;
+
+// -----------------------------
 // 🧩 UTILITY FLAGS
 // -----------------------------
 export const ENV = {
@@ -54,11 +73,13 @@ export const ENV = {
 // ✅ LOG CONFIG SUMMARY (Dev only)
 // -----------------------------
 if (isDev) {
-  console.groupCollapsed("✅ Mufasa Config Loaded");
+  console.groupCollapsed("✅ Simba Waa Ujamaa Config Loaded");
   console.table({
-    API_BASE_URL,
-    APP_BASE_URL,
-    WS_BASE_URL,
+    "Primary API": API_BASE_URL,
+    "Mufasa API": MUFASA_API_URL,
+    "OpenVoice API": OPENVOICE_API_URL,
+    "App Base": APP_BASE_URL,
+    "WebSocket": WS_BASE_URL,
     Mode: ENV.mode,
   });
   console.groupEnd();
