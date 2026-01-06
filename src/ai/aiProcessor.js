@@ -1,22 +1,18 @@
-// ✅ Frontend: src/ai/aiProcessor.js
+// ✅ src/ai/movementProcessor.js
 import * as tf from "@tensorflow/tfjs";
 
-export async function calculateMotionAccuracy(motionData) {
-  const input = tf.tensor(motionData);
+/**
+ * Calculate accuracy and reps using pose data from MoveNet/BlazePose.
+ */
+export async function calculateMovementMetrics(poseData = []) {
+  if (!poseData.length) return { accuracy: 0, reps: 0 };
+
+  const input = tf.tensor(poseData);
   const normalized = input.div(tf.scalar(255));
-  const intensity = (await normalized.mean().data())[0] * 100;
-  const accuracy = Math.max(0, 100 - Math.abs(50 - intensity));
-  return { intensity, accuracy };
-}
+  const avgConfidence = (await normalized.mean().data())[0] * 100;
 
-export async function calculateVoiceClarity(audioFeatures) {
-  const clarity = tf.tensor(audioFeatures).mean().dataSync()[0] * 100;
-  return { clarity };
-}
+  const reps = Math.floor(poseData.length / 30); // 30 frames per rep
+  const accuracy = Math.min(100, Math.round(avgConfidence));
 
-export function calculateJournalPositivity(content) {
-  const positivity =
-    (content.match(/(peace|growth|love|progress|power|heal|unity)/gi) || [])
-      .length * 10;
-  return { positivity };
+  return { accuracy, reps };
 }
