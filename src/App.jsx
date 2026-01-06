@@ -1,5 +1,6 @@
 import React from "react";
-import { BrowserRouter, Routes, Route, Link } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import MufasaShell from "./layouts/MufasaShell";
 
 // ===== Import All Pages =====
 import Home from "./pages/Home";
@@ -17,45 +18,22 @@ import MembershipPlan from "./pages/MembershipPlan";
 import AdminDashboard from "./pages/AdminDashboard";
 import AdminDashboardAI from "./pages/AdminDashboardAI";
 
-// ===== Basic Navbar Component =====
-const NavBar = () => {
-  return (
-    <nav className="bg-gray-900 text-white px-6 py-3 flex flex-wrap gap-4 items-center justify-center">
-      <Link to="/" className="hover:text-yellow-400 font-semibold">Home</Link>
-      <Link to="/dashboard" className="hover:text-yellow-400">Dashboard</Link>
-      <Link to="/fitness" className="hover:text-yellow-400">Fitness</Link>
-      <Link to="/study" className="hover:text-yellow-400">Study</Link>
-      <Link to="/journal" className="hover:text-yellow-400">Journal</Link>
-      <Link to="/language" className="hover:text-yellow-400">Language</Link>
-      <Link to="/ledger" className="hover:text-yellow-400">Ledger</Link>
-      <Link to="/library" className="hover:text-yellow-400">Library</Link>
-      <Link to="/portal" className="hover:text-yellow-400">Portal</Link>
-      <Link to="/timeline" className="hover:text-yellow-400">Timeline</Link>
-      <Link to="/membership" className="hover:text-yellow-400">Membership</Link>
-      <Link to="/admin" className="hover:text-yellow-400">Admin</Link>
-      <Link to="/admin/ai" className="hover:text-yellow-400">AI Dashboard</Link>
-    </nav>
-  );
-};
-
-// ===== App.jsx Root =====
-function App() {
+// ✅ App Component — Uses MufasaShell for layout and background management
+export default function App() {
   return (
     <BrowserRouter>
-      <div className="min-h-screen bg-gray-100 text-gray-900">
-        {/* Navigation bar */}
-        <NavBar />
-
-        {/* Page Routes */}
+      {/* 🦁 Wrap everything in MufasaShell for universal layout and theme */}
+      <MufasaShell>
         <Routes>
+          {/* 🌍 Public & Main Routes */}
           <Route path="/" element={<Home />} />
 
-          {/* Dashboards */}
+          {/* 🧭 Dashboards */}
           <Route path="/dashboard" element={<HolisticDashboard />} />
           <Route path="/admin" element={<AdminDashboard />} />
           <Route path="/admin/ai" element={<AdminDashboardAI />} />
 
-          {/* Functional Pages */}
+          {/* 💪 Functional Pages */}
           <Route path="/fitness" element={<FitnessPage />} />
           <Route path="/study" element={<StudyPage />} />
           <Route path="/journal" element={<JournalPage />} />
@@ -67,22 +45,20 @@ function App() {
           <Route path="/timeline" element={<TimelinePage />} />
           <Route path="/membership" element={<MembershipPlan />} />
 
-          {/* Fallback route */}
+          {/* ❌ Fallback Route */}
           <Route
             path="*"
             element={
               <div className="p-8 text-center">
                 <h1 className="text-3xl font-bold text-red-500 mb-4">404</h1>
-                <p className="text-gray-600">
+                <p className="text-gray-400">
                   The page you’re looking for doesn’t exist.
                 </p>
               </div>
             }
           />
         </Routes>
-      </div>
+      </MufasaShell>
     </BrowserRouter>
   );
 }
-
-export default App;
