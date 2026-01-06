@@ -2,33 +2,29 @@
 import { Outlet, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import LogoutButton from "../components/LogoutButton";
-
-// 🧩 Import all needed styles
 import "../styles/MufasaShell.css";
-import "../styles/universe.css";
-import "../styles/dashboard.css";
-import "../styles/achievementToast.css";
-import "../styles/xpOverlay.css";
-import "../styles/themes.css";
-import "../styles/ledgerV2.css";
-import "../styles/admin.css";
 
 export default function MufasaShell() {
   const [user, setUser] = useState(null);
   const navigate = useNavigate();
   const location = useLocation();
 
-  // 🌌 Dynamic background logic
+  // 🌌 Dynamic background control
   useEffect(() => {
     const path = location.pathname;
 
-    if (path.startsWith("/fitness")) {
+    // FITNESS = Orange background
+    if (path.includes("fitness")) {
       document.body.style.background =
         "linear-gradient(135deg, #ff8c00, #b21f1f)";
-    } else if (path.startsWith("/language")) {
+    }
+    // LANGUAGE = Green background
+    else if (path.includes("language")) {
       document.body.style.background =
         "linear-gradient(to bottom right, #004400, #001100)";
-    } else {
+    }
+    // ALL OTHERS = Galaxy background
+    else {
       document.body.style.background =
         "radial-gradient(circle at 20% 20%, #090909 0%, #000010 100%)";
     }
@@ -38,7 +34,7 @@ export default function MufasaShell() {
     document.body.style.color = "var(--gold)";
   }, [location]);
 
-  // 👤 Load user data
+  // 👤 Fetch logged-in user
   useEffect(() => {
     async function fetchUser() {
       try {
@@ -58,7 +54,6 @@ export default function MufasaShell() {
 
   return (
     <div className="mufasa-shell">
-      {/* 🦁 HEADER */}
       <header className="mufasa-header">
         <div className="brand">
           <img
@@ -140,12 +135,10 @@ export default function MufasaShell() {
         )}
       </header>
 
-      {/* MAIN CONTENT */}
       <main className="mufasa-content">
         <Outlet />
       </main>
 
-      {/* FOOTER */}
       <footer className="mufasa-footer">
         <p>
           Every Month Is Black History •{" "}
