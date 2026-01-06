@@ -4,7 +4,7 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 
 // 🧩 Import global styles (load order matters!)
-import "./styles/themes.css";
+import "./styles/theme.css";
 import "./styles/universe.css";
 import "./styles/MufasaShell.css";
 import "./styles/dashboard.css";
