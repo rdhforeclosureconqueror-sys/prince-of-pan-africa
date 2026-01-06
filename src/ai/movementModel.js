@@ -1,51 +1,55 @@
 // ✅ src/ai/movementModel.js
-import * as tf from "@tensorflow/tfjs-node";
 import { pool } from "../server.js";
 import { notifyAI } from "../utils/aiNotifier.js";
 
 /**
- * Simulates pose recognition and form scoring.
- * In production, integrate MoveNet or BlazePose.
+ * Receives pre-processed motion data (accuracy, reps, etc.)
+ * from the client (browser-side MoveNet or BlazePose).
+ * Stores session results and handles rewards + notifications.
  */
-export async function analyzeMovement({ member_id, session_id, movement_type, poseData }) {
+export async function analyzeMovement({
+  member_id,
+  session_id,
+  movement_type,
+  accuracy,
+  reps,
+}) {
   try {
-    // 🔹 Normalize & predict
-    const input = tf.tensor(poseData);
-    const normalized = input.div(tf.scalar(255));
-    const avgConfidence = normalized.mean().dataSync()[0] * 100;
+    // 🔹 Validate and normalize input
+    const safeAccuracy = Math.min(Math.max(Number(accuracy) || 0, 0), 100);
+    const safeReps = Math.max(Number(reps) || 0, 0);
 
-    // 🔹 Determine reps and accuracy (placeholder logic)
-    const reps = Math.floor(poseData.length / 30); // 30 frames per rep
-    const accuracy = Math.min(100, Math.round(avgConfidence));
-
-    // 🔹 Save session
+    // 🔹 Save session results
     await pool.query(
-      `INSERT INTO ai_movement_sessions (member_id, session_id, movement_type, reps, accuracy)
+      `INSERT INTO ai_movement_sessions
+        (member_id, session_id, movement_type, reps, accuracy)
        VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (session_id)
-       DO NOTHING;`,
-      [member_id, session_id, movement_type, reps, accuracy]
+       ON CONFLICT (session_id) DO UPDATE
+       SET reps = EXCLUDED.reps, accuracy = EXCLUDED.accuracy;`,
+      [member_id, session_id, movement_type, safeReps, safeAccuracy]
     );
 
-    // 🔹 Award stars or XP
-    if (accuracy >= 80 && reps >= 5) {
+    // 🔹 Award stars if thresholds met
+    if (safeAccuracy >= 80 && safeReps >= 5) {
       await pool.query(
         `INSERT INTO star_transactions (member_id, delta, reason)
-         VALUES ($1, 1, 'High-Accuracy Movement Session')`,
+         VALUES ($1, 1, 'High-Accuracy Movement Session');`,
         [member_id]
       );
     }
 
-    // 🔹 Notify real-time
+    // 🔹 Real-time feedback (WebSocket broadcast)
     notifyAI(member_id, {
       type: "movement_feedback",
       category: movement_type,
-      message: `🏋️ ${reps} reps • ${accuracy}% accuracy (+${accuracy >= 80 ? "1⭐" : "0⭐"})`,
-      score: accuracy,
-      reps,
+      message: `🏋️ ${safeReps} reps • ${safeAccuracy}% accuracy (+${
+        safeAccuracy >= 80 ? "1⭐" : "0⭐"
+      })`,
+      score: safeAccuracy,
+      reps: safeReps,
     });
 
-    return { ok: true, accuracy, reps };
+    return { ok: true, accuracy: safeAccuracy, reps: safeReps };
   } catch (err) {
     console.error("❌ Movement analysis error:", err);
     return { ok: false, error: err.message };
