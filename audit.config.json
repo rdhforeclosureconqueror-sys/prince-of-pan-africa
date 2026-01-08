@@ -1,0 +1,20 @@
+{
+  "expectedEnv": [
+    "VITE_API_BASE_URL",
+    "DATABASE_URL",
+    "SESSION_SECRET",
+    "GOOGLE_CLIENT_ID",
+    "GOOGLE_CLIENT_SECRET"
+  ],
+  "endpoints": [
+    "https://api.simbawaujamaa.com/health",
+    "https://api.simbawaujamaa.com/auth/me",
+    "https://black-dollar-ledger.onrender.com"
+  ],
+  "requiredFiles": [
+    "src/App.jsx",
+    "src/main.jsx",
+    "src/pages/FitnessPage.jsx",
+    "src/utils/sessionLogger.js"
+  ]
+}
