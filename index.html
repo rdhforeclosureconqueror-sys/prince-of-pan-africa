@@ -1,14 +1,26 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
-  
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Mufasa The Decolonizer</title>
-  </head>
-  <body class="bg-panblack text-white">
-   <div id="root"></div>
-<script type="module" src="/src/index.jsx"></script>
+    <title>Mufasa Coach • Galaxy Mode</title>
 
+    <!-- TensorFlow + MoveNet CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.14.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection/dist/movenet.min.js"></script>
+
+    <link rel="stylesheet" href="/src/styles/fitness.css" />
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <!-- Loader -->
+    <div id="loader">
+      <div class="gold-ring"></div>
+      <div class="loader-text">Activating Mufasa Coach…</div>
+    </div>
+
+    <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
