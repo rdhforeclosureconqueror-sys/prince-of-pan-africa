@@ -3,12 +3,18 @@ import CalendarSection from "../components/Fitness/CalendarSection";
 import ChatSection from "../components/Fitness/ChatSection";
 import NutritionSection from "../components/Fitness/NutritionSection";
 import ProgressCharts from "../components/Fitness/ProgressCharts";
-import MufasaSessionLauncher from "../components/Fitness/MufasaSessionLauncher";
 import MufasaCoach from "./MufasaCoach";
 import "../styles/FitnessPage.css";
 
 export default function FitnessPage() {
   const [showCoach, setShowCoach] = useState(false);
+
+  // Launches full-screen MufasaCoach
+  const launchCoachSession = () => {
+    setShowCoach(true);
+    const elem = document.documentElement;
+    if (elem.requestFullscreen) elem.requestFullscreen();
+  };
 
   return (
     <div className="fitness-dashboard galaxy-bg">
@@ -22,13 +28,22 @@ export default function FitnessPage() {
           </header>
 
           <div className="dashboard-grid">
-            {/* Left Column */}
+            {/* LEFT SIDE */}
             <div className="dashboard-left">
               <CalendarSection />
-              <MufasaSessionLauncher onLaunch={() => setShowCoach(true)} />
+              <div className="panel session-launcher">
+                <h2>Start Training</h2>
+                <p>
+                  When ready, activate your AI coach for real-time movement tracking and
+                  encouragement.
+                </p>
+                <button className="start-btn" onClick={launchCoachSession}>
+                  Launch Mufasa Coach 🦁
+                </button>
+              </div>
             </div>
 
-            {/* Right Column */}
+            {/* RIGHT SIDE */}
             <div className="dashboard-right">
               <ChatSection />
               <NutritionSection />
