@@ -1,22 +1,24 @@
 import React from "react";
 import { Outlet, Link } from "react-router-dom";
-import "./AppLayout.css";
+import "../styles/layout.css";
 
 export default function AppLayout() {
   return (
     <div className="app-layout">
       <nav className="navbar">
-        <h2 className="logo">Ma’at 2.0</h2>
+        <div className="logo">🧠 Ma’at 2.0</div>
         <div className="nav-links">
           <Link to="/dashboard">Dashboard</Link>
+          <Link to="/fitness">Fitness</Link>
           <Link to="/history">History</Link>
           <Link to="/languages">Languages</Link>
-          <Link to="/fitness">Fitness Hub</Link>
+          <Link to="/" onClick={() => localStorage.removeItem("auth_token")}>
+            Logout
+          </Link>
         </div>
       </nav>
-
       <main className="main-content">
-        <Outlet /> {/* This renders the current page */}
+        <Outlet />
       </main>
     </div>
   );
