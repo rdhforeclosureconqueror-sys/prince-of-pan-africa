@@ -26,7 +26,7 @@ body {
 body {
   margin: 0;
   padding: 0;
-  background: var(--black);
+  background: transparent;
   color: var(--gold);
   font-family: var(--font-body);
 
@@ -34,6 +34,13 @@ body {
   display: block;
   min-height: 100%;
   overflow-x: hidden;
+}
+
+/* ✅ Keep app content above galaxy canvas */
+#root {
+  position: relative;
+  min-height: 100%;
+  z-index: 1;
 }
 
 /* ✅ App wrapper should be full width */
@@ -56,7 +63,11 @@ body {
   flex-direction: column;
 
   padding: 16px;
-  background: linear-gradient(180deg, #0a0a0a 0%, #1b1b1b 100%);
+  background: linear-gradient(
+    180deg,
+    rgba(10, 10, 10, 0.75) 0%,
+    rgba(27, 27, 27, 0.7) 100%
+  );
 }
 
 /* Header */

@@ -3,10 +3,10 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-d
 import AppLayout from "./layout/AppLayout";
 import AdminDashboardAI from "./pages/AdminDashboardAI";
 import FitnessPage from "./pages/FitnessPage";
-import HistoryPage from "./pages/HistoryPage";
+import Home from "./pages/Home";
 import LanguagePage from "./pages/LanguagePage";
-import LoginPage from "./pages/LoginPage";
-import "./styles/global.css";
+import TimelinePage from "./pages/TimelinePage";
+import UniverseOverlay from "./components/UniverseOverlay";
 
 export default function App() {
   // Simple example auth logic (replace with your real one)
@@ -14,9 +14,10 @@ export default function App() {
 
   return (
     <Router>
+      <UniverseOverlay />
       <Routes>
         {/* Public route for login */}
-        <Route path="/" element={<LoginPage />} />
+        <Route path="/" element={<Home />} />
 
         {/* Protected layout with all inner routes */}
         {isAuthenticated ? (
@@ -24,7 +25,7 @@ export default function App() {
             {/* Default redirect to AdminDashboardAI after login */}
             <Route path="/dashboard" element={<AdminDashboardAI />} />
             <Route path="/fitness" element={<FitnessPage />} />
-            <Route path="/history" element={<HistoryPage />} />
+            <Route path="/history" element={<TimelinePage />} />
             <Route path="/languages" element={<LanguagePage />} />
             {/* Redirect root to dashboard */}
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
