@@ -286,6 +286,7 @@
           <div class="note" id="sentenceBox">—</div>
 
           <div class="controls" style="margin-top:12px">
+            <button class="btn" id="btnTestVoice" type="button">✨ Test AI Voice</button>
             <button class="btn green" id="btnSpeakSentence" type="button">🔊 Speak Sentence</button>
           </div>
         </div>
@@ -317,6 +318,7 @@
 
   const ttsPlayer = document.getElementById("aiTtsPlayer");
   const voiceSelect = document.getElementById("voiceModel");
+  const testVoiceBtn = document.getElementById("btnTestVoice");
 
   function setStatus(msg){ statusEl.textContent = msg; }
   function showDebug(msg){
@@ -388,6 +390,12 @@
       setStatus("AI voice error. Falling back to browser voice.");
       speakFallback(text);
     }
+  }
+
+  if (testVoiceBtn) {
+    testVoiceBtn.addEventListener("click", () =>
+      speak("Hello! This is the Mufasa AI voice test in Yoruba mode.")
+    );
   }
 
   function speakFallback(text){

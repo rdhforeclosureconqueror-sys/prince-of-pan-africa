@@ -1,39 +1,49 @@
 import React from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
-import AppLayout from "./layout/AppLayout";
-import AdminDashboardAI from "./pages/AdminDashboardAI";
-import FitnessPage from "./pages/FitnessPage";
-import Home from "./pages/Home";
-import LanguagePage from "./pages/LanguagePage";
-import TimelinePage from "./pages/TimelinePage";
+import GlobalNav from "./components/GlobalNav";
 import UniverseOverlay from "./components/UniverseOverlay";
+import AdminDashboard from "./pages/AdminDashboard";
+import AdminDashboardAI from "./pages/AdminDashboardAI";
+import CalendarPage from "./pages/CalendarPage";
+import FitnessPage from "./pages/FitnessPage";
+import HolisticDashboard from "./pages/HolisticDashboard";
+import Home from "./pages/Home";
+import JournalPage from "./pages/JournalPage";
+import LanguagePage from "./pages/LanguagePage";
+import LanguagesHub from "./pages/LanguagesHub";
+import LedgerPage from "./pages/LedgerPage";
+import LibraryDecolonize from "./pages/LibraryDecolonize";
+import MembershipPlan from "./pages/MembershipPlan";
+import PagtPage from "./pages/PagtPage";
+import PortalDecolonize from "./pages/PortalDecolonize";
+import StudyPage from "./pages/StudyPage";
+import TimelinePage from "./pages/TimelinePage";
 
 export default function App() {
-  // Simple example auth logic (replace with your real one)
-  const isAuthenticated = localStorage.getItem("auth_token");
-
   return (
     <Router>
       <UniverseOverlay />
+      <GlobalNav />
       <Routes>
-        {/* Public route for login */}
+        {/* Landing */}
         <Route path="/" element={<Home />} />
-
-        {/* Protected layout with all inner routes */}
-        {isAuthenticated ? (
-          <Route element={<AppLayout />}>
-            {/* Default redirect to AdminDashboardAI after login */}
-            <Route path="/dashboard" element={<AdminDashboardAI />} />
-            <Route path="/fitness" element={<FitnessPage />} />
-            <Route path="/history" element={<TimelinePage />} />
-            <Route path="/languages" element={<LanguagePage />} />
-            {/* Redirect root to dashboard */}
-            <Route path="*" element={<Navigate to="/dashboard" replace />} />
-          </Route>
-        ) : (
-          // If not logged in, redirect to login
-          <Route path="*" element={<Navigate to="/" replace />} />
-        )}
+        <Route path="/dashboard" element={<AdminDashboardAI />} />
+        <Route path="/admin-legacy" element={<AdminDashboard />} />
+        <Route path="/fitness" element={<FitnessPage />} />
+        <Route path="/timeline" element={<TimelinePage />} />
+        <Route path="/history" element={<TimelinePage />} />
+        <Route path="/languages" element={<LanguagesHub />} />
+        <Route path="/language-practice" element={<LanguagePage />} />
+        <Route path="/calendar" element={<CalendarPage />} />
+        <Route path="/journal" element={<JournalPage />} />
+        <Route path="/ledger" element={<LedgerPage />} />
+        <Route path="/study" element={<StudyPage />} />
+        <Route path="/pagt" element={<PagtPage />} />
+        <Route path="/membership" element={<MembershipPlan />} />
+        <Route path="/decolonize" element={<LibraryDecolonize />} />
+        <Route path="/portal/decolonize" element={<PortalDecolonize />} />
+        <Route path="/holistic" element={<HolisticDashboard />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>
   );
