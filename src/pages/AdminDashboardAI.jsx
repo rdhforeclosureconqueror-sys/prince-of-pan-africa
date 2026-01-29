@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../api/api";
-import UniverseOverlay from "../components/UniverseOverlay";
 import "../styles/dashboard.css";
 
 export default function AdminDashboardAI() {
@@ -26,7 +25,6 @@ export default function AdminDashboardAI() {
 
   return (
     <>
-      <UniverseOverlay />
       <div className="admin-dashboard">
         <h1>🧠 Simba AI Metrics Command Center</h1>
 

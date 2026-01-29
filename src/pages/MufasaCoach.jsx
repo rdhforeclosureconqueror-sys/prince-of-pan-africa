@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { initVoice, speak, listenForWakeWord } from "../utils/voiceCoach";
 import { initPose, analyzePose } from "../utils/poseAnalyzer";
 import SessionLogPanel from "../components/SessionLogPanel";
+import "../styles/fitness.css";
 
 export default function MufasaCoach() {
   const [mode, setMode] = useState("yoga"); // yoga | fitness
