@@ -4,7 +4,7 @@ import ChatSection from "../components/Fitness/ChatSection";
 import NutritionSection from "../components/Fitness/NutritionSection";
 import ProgressCharts from "../components/Fitness/ProgressCharts";
 import MufasaCoach from "./MufasaCoach";
-import "../styles/FitnessPage.css";
+import "./FitnessPage.css";
 
 export default function FitnessPage() {
   const [showCoach, setShowCoach] = useState(false);
