@@ -8,8 +8,6 @@ import CalendarPage from "./pages/CalendarPage";
 import FitnessPage from "./pages/FitnessPage";
 import AdminDashboard from "./pages/AdminDashboard";
 import AdminDashboardAI from "./pages/AdminDashboardAI";
-import CalendarPage from "./pages/CalendarPage";
-import FitnessPage from "./pages/FitnessPage";
 import HolisticDashboard from "./pages/HolisticDashboard";
 import Home from "./pages/Home";
 import JournalPage from "./pages/JournalPage";
