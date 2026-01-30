@@ -2,9 +2,11 @@ import React from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import GlobalNav from "./components/GlobalNav";
 import UniverseOverlay from "./components/UniverseOverlay";
-import AdminOperationsDashboard from "./pages/AdminOperationsDashboard";
+import AdminDashboard from "./pages/AdminDashboard";
+import AdminDashboardAI from "./pages/AdminDashboardAI";
 import CalendarPage from "./pages/CalendarPage";
 import FitnessPage from "./pages/FitnessPage";
+import HolisticDashboard from "./pages/HolisticDashboard";
 import Home from "./pages/Home";
 import JournalPage from "./pages/JournalPage";
 import LanguagePage from "./pages/LanguagePage";
@@ -25,8 +27,8 @@ export default function App() {
       <Routes>
         {/* Landing */}
         <Route path="/" element={<Home />} />
-        <Route path="/dashboard" element={<AdminOperationsDashboard />} />
-        <Route path="/admin-legacy" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/dashboard" element={<AdminDashboardAI />} />
+        <Route path="/admin-legacy" element={<AdminDashboard />} />
         <Route path="/fitness" element={<FitnessPage />} />
         <Route path="/timeline" element={<TimelinePage />} />
         <Route path="/history" element={<TimelinePage />} />
