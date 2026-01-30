@@ -4,7 +4,6 @@ import "../styles/globalNav.css";
 
 const NAV_LINKS = [
   { label: "Home", to: "/" },
-  { label: "Dashboard", to: "/dashboard" },
   { label: "Fitness", to: "/fitness" },
   { label: "Timeline", to: "/timeline" },
   { label: "Languages Hub", to: "/languages" },
@@ -17,8 +16,6 @@ const NAV_LINKS = [
   { label: "Study", to: "/study" },
   { label: "Pan-Africa’s Got Talent", to: "/pagt" },
   { label: "Membership", to: "/membership" },
-  { label: "Holistic Dashboard", to: "/holistic" },
-  { label: "Admin (Legacy)", to: "/admin-legacy" },
 ];
 
 const EXTERNAL_LINKS = [
@@ -26,7 +23,7 @@ const EXTERNAL_LINKS = [
   { label: "Yoruba Lesson", href: "/languages/yoruba.html" },
 ];
 
-export default function GlobalNav() {
+export default function GlobalNav({ isAdmin }) {
   const [open, setOpen] = useState(false);
   const location = useLocation();
 
@@ -66,6 +63,31 @@ export default function GlobalNav() {
               {link.label}
             </Link>
           ))}
+          {isAdmin ? (
+            <Link
+              to="/dashboard"
+              onClick={closeMenu}
+              className={
+                location.pathname === "/dashboard"
+                  ? "global-nav__link is-active"
+                  : "global-nav__link"
+              }
+            >
+              Operations Deck
+            </Link>
+          ) : (
+            <Link
+              to="/dashboard"
+              onClick={closeMenu}
+              className={
+                location.pathname === "/dashboard"
+                  ? "global-nav__link is-active"
+                  : "global-nav__link"
+              }
+            >
+              My Dashboard
+            </Link>
+          )}
           {EXTERNAL_LINKS.map((link) => (
             <a
               key={link.href}

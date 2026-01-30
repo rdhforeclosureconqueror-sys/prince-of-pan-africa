@@ -1,7 +1,7 @@
 // ✅ src/components/LionGate.jsx
 import React, { useEffect, useMemo, useState } from "react";
 
-export default function LionGate({ children }) {
+export default function LionGate({ children, onAuth }) {
   const API = import.meta.env.VITE_API_BASE_URL || "";
 
   const [status, setStatus] = useState("checking"); // checking | authed | guest | error
@@ -29,6 +29,7 @@ export default function LionGate({ children }) {
       if (data?.auth) {
         setStatus("authed");
         setUser(data.user || null);
+        if (onAuth) onAuth(data.user || null);
       } else {
         setStatus("guest");
         setUser(null);
