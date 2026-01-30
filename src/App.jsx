@@ -42,7 +42,7 @@ export default function App() {
         <Route path="/membership" element={<MembershipPlan />} />
         <Route path="/decolonize" element={<LibraryDecolonize />} />
         <Route path="/portal/decolonize" element={<PortalDecolonize />} />
-        <Route path="/holistic" element={<HolisticDashboard />} />
+        <Route path="/holistic" element={<Navigate to="/dashboard" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>
