@@ -56,7 +56,7 @@ export default function LionGate({ children, onAuth }) {
       <div style={styles.overlay} />
 
       <div style={styles.modal}>
-        <div style={styles.title}>🦁 Verify Your Humanity</div>
+        <div style={styles.title}>🦁 Verify you’re human</div>
         <div style={styles.sub}>Sign in with Google to continue</div>
 
         <button onClick={startLogin} style={styles.button}>

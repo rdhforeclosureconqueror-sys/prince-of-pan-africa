@@ -4,23 +4,29 @@ import { api } from "./api"; // existing helper that includes credentials
 export const mvpApi = {
   // 🏋️ Fitness
   async logWorkout() {
-    return await api("/fitness/log", { method: "POST", body: { type: "workout" } });
+    return await api("/fitness/log", {
+      method: "POST",
+      body: JSON.stringify({ type: "workout" }),
+    });
   },
   async logWater() {
-    return await api("/fitness/log", { method: "POST", body: { type: "water" } });
+    return await api("/fitness/log", {
+      method: "POST",
+      body: JSON.stringify({ type: "water" }),
+    });
   },
 
   // 📚 Study
   async addJournal({ title, content }) {
     return await api("/study/journal", {
       method: "POST",
-      body: { title, content },
+      body: JSON.stringify({ title, content }),
     });
   },
   async shareTopic({ topic }) {
     return await api("/study/share", {
       method: "POST",
-      body: { topic },
+      body: JSON.stringify({ topic }),
     });
   },
 
@@ -28,7 +34,7 @@ export const mvpApi = {
   async logLanguagePractice({ language_key, recordings }) {
     return await api("/language/practice", {
       method: "POST",
-      body: { language_key, practice_date: new Date(), recordings },
+      body: JSON.stringify({ language_key, practice_date: new Date(), recordings }),
     });
   },
 
@@ -36,7 +42,7 @@ export const mvpApi = {
   async submitForm({ form_type, form_data }) {
     return await api("/forms/submit", {
       method: "POST",
-      body: { form_type, form_data },
+      body: JSON.stringify({ form_type, form_data }),
     });
   },
 
@@ -44,7 +50,7 @@ export const mvpApi = {
   async startAISession({ session_id, summary }) {
     return await api("/ai/session", {
       method: "POST",
-      body: { session_id, summary },
+      body: JSON.stringify({ session_id, summary }),
     });
   },
 };
