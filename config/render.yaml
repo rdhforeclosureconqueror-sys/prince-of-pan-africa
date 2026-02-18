@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: prince-of-pan-africa-backend
+    env: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: AIVOICE_BASE_URL
+        value: https://aivoice-wmrv.onrender.com
+      - key: OPENVOICE_URL
+        value: https://ffmpeg-9xhs.onrender.com
+      - key: ALLOWED_ORIGINS
+        value: https://simbawaujamaa.com,https://www.simbawaujamaa.com,https://prince-of-pan-africa-frontend.onrender.com
+      - key: PYTHON_VERSION
+        value: 3.11
+
+  - type: static
+    name: prince-of-pan-africa-frontend
+    rootDir: .
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_BASE_URL
+        value: https://prince-of-pan-africa-backend.onrender.com

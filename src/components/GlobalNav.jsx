@@ -23,7 +23,7 @@ const EXTERNAL_LINKS = [
   { label: "Yoruba Lesson", href: "/languages/yoruba.html" },
 ];
 
-export default function GlobalNav({ isAdmin }) {
+export default function GlobalNav() {
   const [open, setOpen] = useState(false);
   const location = useLocation();
 
@@ -63,31 +63,17 @@ export default function GlobalNav({ isAdmin }) {
               {link.label}
             </Link>
           ))}
-          {isAdmin ? (
-            <Link
-              to="/dashboard"
-              onClick={closeMenu}
-              className={
-                location.pathname === "/dashboard"
-                  ? "global-nav__link is-active"
-                  : "global-nav__link"
-              }
-            >
-              Operations Deck
-            </Link>
-          ) : (
-            <Link
-              to="/dashboard"
-              onClick={closeMenu}
-              className={
-                location.pathname === "/dashboard"
-                  ? "global-nav__link is-active"
-                  : "global-nav__link"
-              }
-            >
-              My Dashboard
-            </Link>
-          )}
+          <Link
+            to="/dashboard"
+            onClick={closeMenu}
+            className={
+              location.pathname === "/dashboard"
+                ? "global-nav__link is-active"
+                : "global-nav__link"
+            }
+          >
+            Operations Deck
+          </Link>
           {EXTERNAL_LINKS.map((link) => (
             <a
               key={link.href}

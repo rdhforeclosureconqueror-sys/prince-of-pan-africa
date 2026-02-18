@@ -12,9 +12,7 @@ export default function AppLayout() {
           <Link to="/fitness">Fitness</Link>
           <Link to="/history">History</Link>
           <Link to="/languages">Languages</Link>
-          <Link to="/" onClick={() => localStorage.removeItem("auth_token")}>
-            Logout
-          </Link>
+          <Link to="/">Home</Link>
         </div>
       </nav>
       <main className="main-content">

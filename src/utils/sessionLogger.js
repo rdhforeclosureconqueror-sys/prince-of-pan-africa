@@ -39,7 +39,7 @@ async function syncLogs() {
     await fetch(`${API_BASE}/fitness/session-log`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      credentials: "include",
+      credentials: "omit",
       body: JSON.stringify({ logs }),
     });
 

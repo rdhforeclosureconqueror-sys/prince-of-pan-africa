@@ -11,8 +11,8 @@ const hostname = window?.location?.hostname || "production";
 // -----------------------------
 // 🔗 PRIMARY BACKEND (Simba Waa Ujamaa API)
 // -----------------------------
-const PROD_API = "https://api.simbawaujamaa.com";
-const DEV_API = "http://localhost:3000";
+const PROD_API = "https://mufasa-knowledge-bank.onrender.com";
+const DEV_API = "http://localhost:8000";
 
 export const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ||
@@ -34,8 +34,8 @@ export const APP_BASE_URL =
 // -----------------------------
 // 🔌 WEBSOCKET BASE (Realtime)
 // -----------------------------
-const PROD_WS = "wss://api.simbawaujamaa.com";
-const DEV_WS = "ws://localhost:3000";
+const PROD_WS = "wss://mufasa-knowledge-bank.onrender.com";
+const DEV_WS = "ws://localhost:8000";
 
 export const WS_BASE_URL =
   import.meta.env.VITE_WS_BASE_URL ||
@@ -45,10 +45,8 @@ export const WS_BASE_URL =
 // 🧠 SECONDARY SERVICES (AI + Voice + Knowledge)
 // -----------------------------
 
-// Mufasa Knowledge Bank
-export const MUFASA_API_URL =
-  import.meta.env.VITE_MUFASA_API ||
-  "https://mufasa-knowledge-bank.onrender.com";
+// Backend API alias for chat/voice modules
+export const MUFASA_API_URL = API_BASE_URL;
 
 // OpenVoice / Voice API
 export const OPENVOICE_API_URL =

@@ -39,7 +39,7 @@ export default function SimbaBotWidget({ memberId }) {
     // Fallback: Poll for missed notifications
     const pollInterval = setInterval(async () => {
       try {
-        const res = await fetch("/ledger/notifications", { credentials: "include" });
+        const res = await fetch("/ledger/notifications", { credentials: "omit" });
         const json = await res.json();
         if (json.ok && json.items?.length) {
           const newMsgs = json.items.map((i) => ({

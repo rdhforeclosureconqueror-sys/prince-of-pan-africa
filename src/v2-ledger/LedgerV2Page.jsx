@@ -1,5 +1,4 @@
 import React, { useState, useEffect, Suspense } from "react";
-import { API_BASE_URL } from "../config"; // ✅ import base URL
 import "./ledgerV2.css";
 
 import IdentityPanel from "./components/IdentityPanel";
@@ -25,26 +24,10 @@ export default function LedgerV2Page() {
   const [memberId, setMemberId] = useState(null);
   const [user, setUser] = useState(null);
 
-  // Fetch user info from backend
   useEffect(() => {
-    async function fetchUser() {
-      try {
-        const res = await fetch(`${API_BASE_URL}/auth/me`, {
-          credentials: "include",
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        if (data.ok && data.auth) {
-          setUser(data.user);
-          setMemberId(data.user?.id || data.user?.member_id);
-        } else {
-          console.warn("Not authenticated:", data);
-        }
-      } catch (err) {
-        console.error("Failed to fetch user info", err);
-      }
-    }
-    fetchUser();
+    const prototypeUser = { id: "prototype-user", display_name: "Prototype Admin", role: "admin" };
+    setUser(prototypeUser);
+    setMemberId(prototypeUser.id);
   }, []);
 
   return (

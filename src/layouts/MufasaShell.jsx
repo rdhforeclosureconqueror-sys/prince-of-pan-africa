@@ -29,18 +29,12 @@ export default function MufasaShell({ children }) {
     document.body.style.color = "var(--gold)";
   }, [location]);
 
-  // 👤 Fetch user
   useEffect(() => {
-    async function fetchUser() {
-      try {
-        const res = await fetch("/auth/me", { credentials: "include" });
-        const data = await res.json();
-        if (data.ok && data.auth) setUser(data.user);
-      } catch (err) {
-        console.error("Error loading user:", err);
-      }
-    }
-    fetchUser();
+    setUser({
+      id: "prototype-user",
+      displayName: "Prototype Admin",
+      role: "admin",
+    });
   }, []);
 
   const linkClass = ({ isActive }) => `nav-item${isActive ? " active" : ""}`;

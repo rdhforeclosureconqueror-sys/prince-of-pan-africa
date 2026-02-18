@@ -1,10 +1,10 @@
 // src/api/mufasaClient.js
 
 const API_BASE =
-  import.meta.env.VITE_MUFASA_API || "https://mufasa-knowledge-bank.onrender.com";
+  import.meta.env.VITE_API_BASE_URL || "https://prince-of-pan-africa-backend.onrender.com";
 
 /**
- * Generic helper for calling the Mufasa Knowledge Bank API
+ * Generic helper for calling the Prince of Pan-Africa Backend API
  */
 async function callMufasaAPI(endpoint, payload = {}, method = "POST") {
   try {
