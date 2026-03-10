@@ -63,6 +63,7 @@ This repository is a split frontend/backend application:
 - `GET /` — service liveness banner.
 - `GET /health` — basic health/environment signal.
 - `GET /info` — app metadata and route list.
+- `POST /tts` — OpenAI TTS binary audio endpoint for lessons and voice playback.
 
 ### Chat
 - `GET /chat/ping` — chat subsystem ping.

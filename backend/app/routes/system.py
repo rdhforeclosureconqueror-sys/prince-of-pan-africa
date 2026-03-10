@@ -27,6 +27,7 @@ def test_routes(request: Request):
         "/system/tests/database",
         "/system/tests/services",
         "/system/tests/integrations",
+      "/tts",
     ]
     missing = [endpoint for endpoint in expected if endpoint not in routes]
     return {
@@ -48,7 +49,7 @@ def test_database():
 
 @router.get("/tests/services")
 def test_services():
-    checks = {"chat_service": True, "portal_service": True, "voice_service": True, "admin_seed_service": True}
+    checks = {"chat_service": True, "portal_service": True, "voice_service": True, "admin_seed_service": True, "tts_service": True}
     return {
         "services_total": len(checks),
         "services_verified": sum(1 for value in checks.values() if value),
@@ -60,7 +61,7 @@ def test_services():
 def test_integrations():
     from app.config import settings
 
-    integrations = {"openai": bool(settings.OPENAI_API_KEY), "aivoice": bool(settings.AIVOICE_BASE_URL)}
+    integrations = {"openai": bool(settings.OPENAI_API_KEY), "aivoice": bool(settings.AIVOICE_BASE_URL), "tts_openai": bool(settings.OPENAI_API_KEY)}
     return {
         "integrations_total": len(integrations),
         "integrations_verified": sum(1 for value in integrations.values() if value),

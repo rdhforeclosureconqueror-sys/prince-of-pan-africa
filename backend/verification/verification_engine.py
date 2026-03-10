@@ -71,10 +71,13 @@ def build_system_verification(app) -> dict[str, Any]:
     if not ai_modules.get("ok"):
         missing_components.extend([f"ai_module:{name}" for name in ai_modules.get("missing", [])])
 
+    tts_available = bool(os.getenv("OPENAI_API_KEY"))
+
     return {
         "system_status": "OK" if not missing_components else "DEGRADED",
         "routes_registered": routes_registered,
-        "services_operational": ["chat", "portal", "voice", "admin_seed"],
+        "services_operational": ["chat", "portal", "voice", "admin_seed", "tts"],
+        "tts_available": tts_available,
         "database_models_loaded": models.get("loaded_models", []),
         "missing_components": missing_components,
         "database": database,
