@@ -63,7 +63,6 @@ This repository is a split frontend/backend application:
 - `GET /` — service liveness banner.
 - `GET /health` — basic health/environment signal.
 - `GET /info` — app metadata and route list.
-- `GET /auth/me` — no-auth compatibility identity payload for frontend bootstrap.
 
 ### Chat
 - `GET /chat/ping` — chat subsystem ping.
