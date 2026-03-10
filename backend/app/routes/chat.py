@@ -17,7 +17,7 @@ AIVOICE_BASE_URL = settings.AIVOICE_BASE_URL
 AIVOICE_API_KEY = settings.AIVOICE_API_KEY
 OPENAI_API_KEY = settings.OPENAI_API_KEY
 
-client = OpenAI(api_key=OPENAI_API_KEY)
+client = OpenAI(api_key=OPENAI_API_KEY or "DUMMY_KEY")
 
 
 def aivoice_headers():
