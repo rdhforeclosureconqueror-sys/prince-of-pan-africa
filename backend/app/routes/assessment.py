@@ -41,6 +41,7 @@ def _resolve_or_create_user(db: Session, user_identifier: str | None) -> User:
 @router.post("/submit")
 def submit_assessment(payload: AssessmentSubmitRequest, db: Session = Depends(get_db)):
     user = _resolve_or_create_user(db, payload.userId)
+
     scored = score_assessment(payload.responses)
 
     scores_blob = {
@@ -74,6 +75,7 @@ def submit_assessment(payload: AssessmentSubmitRequest, db: Session = Depends(ge
 @router.get("/results/{user_id}")
 def get_latest_assessment(user_id: str, db: Session = Depends(get_db)):
     query = db.query(LeadershipAssessment)
+
     if user_id.isdigit():
         query = query.filter(LeadershipAssessment.user_id == int(user_id))
     else:

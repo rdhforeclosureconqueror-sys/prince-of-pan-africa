@@ -86,6 +86,7 @@ export default function LeadershipResultsPage() {
           </ul>
         </section>
       ) : null}
+      <ResultsDashboard result={result} />
     </main>
   );
 }

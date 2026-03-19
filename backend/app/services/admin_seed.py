@@ -24,6 +24,7 @@ def _ensure_profile_and_activity(db: Session, user: User) -> None:
         .filter(ActivityLog.user_id == user.id, ActivityLog.action == "admin_seeded")
         .first()
     )
+
     if not has_seed_activity:
         db.add(ActivityLog(user_id=user.id, action="admin_seeded"))
 
@@ -32,6 +33,7 @@ def seed_admin() -> dict:
     db = SessionLocal()
     try:
         user = db.query(User).filter(User.email == ADMIN_EMAIL).first()
+
         if not user:
             user = User(
                 email=ADMIN_EMAIL,
@@ -45,7 +47,15 @@ def seed_admin() -> dict:
             created = False
 
         _ensure_profile_and_activity(db, user)
+
         db.commit()
-        return {"created": created, "email": user.email, "role": user.role, "user_id": user.id}
+
+        return {
+            "created": created,
+            "email": user.email,
+            "role": user.role,
+            "user_id": user.id,
+        }
+
     finally:
         db.close()

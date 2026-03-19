@@ -123,7 +123,6 @@ def _tts_check(app, client: TestClient) -> dict[str, Any]:
     }
     health_probe = client.post("/chat/tts", json={"text": "verification ping", "voice": "alloy"})
 
-    # External provider may fail in dev; route readiness and env readiness are reported separately.
     return {
         "ok": route_exists,
         "route_exists": route_exists,

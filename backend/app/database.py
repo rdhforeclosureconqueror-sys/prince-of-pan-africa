@@ -22,6 +22,7 @@ engine = create_engine(
     SQLALCHEMY_DATABASE_URL,
     connect_args={"check_same_thread": False} if IS_SQLITE else {},
 )
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
@@ -41,6 +42,9 @@ def get_db_connection():
         yield conn
 
 
+# =========================
+# SQLITE COMPAT MIGRATIONS
+# =========================
 def _run_sqlite_compat_migrations() -> None:
     if not IS_SQLITE:
         return
@@ -59,8 +63,9 @@ def _run_sqlite_compat_migrations() -> None:
             )
 
 
-
-
+# =========================
+# DATABASE TYPE DETECTION
+# =========================
 def get_database_type() -> str:
     if SQLALCHEMY_DATABASE_URL.startswith("postgresql"):
         return "postgresql"
@@ -69,6 +74,9 @@ def get_database_type() -> str:
     return "unknown"
 
 
+# =========================
+# SQLITE PATH HELPER
+# =========================
 def _sqlite_db_path() -> str | None:
     if not IS_SQLITE:
         return None
@@ -77,8 +85,14 @@ def _sqlite_db_path() -> str | None:
     return None
 
 
+# =========================
+# DEV RESET (SAFE-GUARDED)
+# =========================
 def reset_local_sqlite_database() -> dict:
-    """Destructive dev-only reset for local SQLite databases."""
+    """
+    Destructive dev-only reset for local SQLite databases.
+    NEVER runs on Postgres.
+    """
     if not IS_SQLITE:
         return {"ok": False, "reason": "Database is not SQLite; reset skipped."}
 
@@ -89,14 +103,31 @@ def reset_local_sqlite_database() -> dict:
     try:
         if os.path.exists(db_path):
             os.remove(db_path)
+
+        # Recreate schema
         from app import models  # noqa: F401
+
         Base.metadata.create_all(bind=engine)
-        return {"ok": True, "database": db_path, "message": "SQLite database reset complete."}
+
+        return {
+            "ok": True,
+            "database": db_path,
+            "message": "SQLite database reset complete.",
+        }
+
     except Exception as exc:
         return {"ok": False, "reason": str(exc)}
 
+
+# =========================
+# INIT DB (UNIFIED VERSION)
+# =========================
 def init_db() -> None:
-    from app import models  # noqa: F401
+    """
+    Initializes DB + runs compatibility migrations.
+    Safe for both SQLite and Postgres.
+    """
+    from app import models  # ensures models are registered
 
     Base.metadata.create_all(bind=engine)
     _run_sqlite_compat_migrations()

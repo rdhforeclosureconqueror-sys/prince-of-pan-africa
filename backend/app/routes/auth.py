@@ -10,8 +10,14 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 @router.get("/me")
 def auth_me(db: Session = Depends(get_db)):
     user = db.query(User).order_by(User.id.asc()).first()
+
     if not user:
-        return {"ok": True, "auth": False, "authenticated": False, "user": None}
+        return {
+            "ok": True,
+            "auth": False,
+            "authenticated": False,
+            "user": None,
+        }
 
     return {
         "ok": True,
