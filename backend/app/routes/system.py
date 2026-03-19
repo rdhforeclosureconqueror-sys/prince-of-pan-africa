@@ -35,6 +35,8 @@ def test_routes(request: Request):
         "/admin/ai/overview",
         "/admin/ai/members",
         "/admin/ai/profiles",
+        "/member/overview",
+        "/member/activity",
     ]
     missing = [endpoint for endpoint in expected if endpoint not in routes]
     return {
