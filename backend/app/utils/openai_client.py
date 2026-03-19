@@ -1,10 +1,13 @@
 import os
+
 import openai
 from dotenv import load_dotenv
+from fastapi import HTTPException
 
 load_dotenv()
 
-client = openai.AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+client = openai.AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY") or "DUMMY_KEY")
 
 
 def load_portal_text(portal_id: str) -> str:
@@ -17,6 +20,9 @@ def load_portal_text(portal_id: str) -> str:
 
 
 async def generate_openai_response(prompt: str) -> str:
+    if not os.getenv("OPENAI_API_KEY"):
+        raise HTTPException(status_code=503, detail="OPENAI_API_KEY is not configured.")
+
     response = await client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[

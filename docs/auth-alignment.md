@@ -1,16 +1,13 @@
-# Auth and API Alignment
+# Auth Alignment (Post-Cleanup)
 
-## Current architecture
-- Frontend uses `VITE_API_BASE_URL` for primary auth/session endpoints (`/auth/google`, `/auth/me`, `/auth/google/callback`).
-- Mufasa Knowledge Bank backend under `backend/` is a secondary AI service and does not implement Google OAuth.
+- This repository no longer contains Google OAuth server routes or handlers.
+- The FastAPI backend under `backend/` now provides core AI and system operations only.
+- Authentication/session variables in `config/env.example` were simplified to generic session/database settings.
 
-## Alignment checks
-1. Google OAuth callback route must be served by primary API (`api.simbawaujamaa.com`), not Mufasa Knowledge Bank.
-2. Frontend admin recognition remains:
-   - backend role: `user.role === "admin"` or `user.is_admin`
-   - allowlist fallback: `VITE_ADMIN_EMAILS` (case-insensitive)
-3. CORS for Mufasa service controlled by `ALLOWED_ORIGINS`.
+## Current Backend Auth Posture
+1. No `/auth/google` routes are registered in FastAPI.
+2. No Google OAuth middleware or client configuration is active.
+3. Administrative bootstrap account is seeded at startup for development verification.
 
-## Required environment variables
-- Auth service: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `SESSION_SECRET`, `DATABASE_URL`, `JWT_SECRET`, `FRONTEND_URL`, `BACKEND_URL`.
-- Mufasa service: `OPENAI_API_KEY`, `AIVOICE_BASE_URL`, `AIVOICE_API_KEY`, `OPENVOICE_URL`, `ALLOWED_ORIGINS`.
+## Operational Notes
+- If a separate identity provider is introduced later, it should be integrated as an independent module and documented in deployment config.
