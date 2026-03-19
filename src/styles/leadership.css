@@ -163,3 +163,65 @@
 .coaching-panel li + li {
   margin-top: 0.35rem;
 }
+
+
+.top-three-section {
+  margin: 1rem 0;
+  background: rgba(7, 7, 8, 0.86);
+  border: 1px solid rgba(255, 208, 122, 0.22);
+  border-radius: 12px;
+  padding: 0.95rem;
+}
+
+.top-three-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.85rem;
+}
+
+.circle-progress-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  background: rgba(20, 20, 20, 0.65);
+  border: 1px solid rgba(255, 208, 122, 0.18);
+  border-radius: 12px;
+  padding: 0.65rem;
+}
+
+.role-image {
+  width: 58px;
+  height: 58px;
+  border-radius: 999px;
+  object-fit: cover;
+  border: 1px solid rgba(255, 208, 122, 0.35);
+}
+
+.circle-bg {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.15);
+  stroke-width: 9;
+}
+
+.circle-fill {
+  fill: none;
+  stroke: #d9a84c;
+  stroke-width: 9;
+  stroke-linecap: round;
+  transform-origin: 50% 50%;
+  transform: rotate(-90deg);
+}
+
+.pathway-panel {
+  margin-top: 1rem;
+  background: rgba(7, 7, 8, 0.86);
+  border: 1px solid rgba(255, 208, 122, 0.22);
+  border-radius: 12px;
+  padding: 0.95rem;
+}
+
+.pathway-panel ul {
+  margin: 0.6rem 0 0;
+  padding-left: 1.1rem;
+}

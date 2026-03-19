@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.database import init_db
-from app.routes import assessment, auth, chat, portal, system, tts, voice
+from app.routes import admin, assessment, auth, chat, portal, system, tts, voice
 from app.services.admin_seed import seed_admin
 
 app = FastAPI(
@@ -17,14 +17,7 @@ app = FastAPI(
     version="1.0.0",
 )
 
-default_origins = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "https://prince-of-pan-africa.onrender.com",
-    "https://mufasa-knowledge-bank.onrender.com",
-    "https://simbawaujamaa.com",
-    "https://www.simbawaujamaa.com",
-]
+default_origins = ["*"]
 
 raw_allowed_origins = os.getenv("ALLOWED_ORIGINS", "")
 allowed_origins = (
@@ -52,6 +45,7 @@ app.include_router(system.router)
 app.include_router(auth.router)
 app.include_router(tts.router)
 app.include_router(assessment.router)
+app.include_router(admin.router)
 
 
 @app.get("/")

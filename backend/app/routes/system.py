@@ -32,6 +32,9 @@ def test_routes(request: Request):
         "/assessment/submit",
         "/assessment/results/{user_id}",
         "/assessment/analytics/roles",
+        "/admin/ai/overview",
+        "/admin/ai/members",
+        "/admin/ai/profiles",
     ]
     missing = [endpoint for endpoint in expected if endpoint not in routes]
     return {
@@ -53,7 +56,7 @@ def test_database():
 
 @router.get("/tests/services")
 def test_services():
-    checks = {"chat_service": True, "portal_service": True, "voice_service": True, "admin_seed_service": True, "tts_service": True, "assessment_service": True}
+    checks = {"chat_service": True, "portal_service": True, "voice_service": True, "admin_seed_service": True, "tts_service": True, "assessment_service": True, "admin_ai_service": True}
     return {
         "services_total": len(checks),
         "services_verified": sum(1 for value in checks.values() if value),

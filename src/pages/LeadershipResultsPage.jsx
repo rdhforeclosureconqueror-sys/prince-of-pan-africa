@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import ResultsDashboard from "../components/leadership/ResultsDashboard";
 import { fetchLeadershipResultByUserId } from "../services/leadershipService";
@@ -30,6 +30,19 @@ export default function LeadershipResultsPage() {
     };
   }, [userId, location.state]);
 
+  const pathway = useMemo(() => {
+    if (!result?.roles) return null;
+    return {
+      primary: result.roles.primary,
+      nextSteps: [
+        `Double down on ${result.roles.primary}`,
+        `Support with ${result.roles.secondary}`,
+        `Train ${result.roles.growth}`,
+        `Monitor ${result.roles.shadow}`,
+      ],
+    };
+  }, [result]);
+
   if (loading) {
     return (
       <main className="leadership-page">
@@ -60,6 +73,19 @@ export default function LeadershipResultsPage() {
         <h1>Leadership Results Dashboard</h1>
         <p>User ID: {result.userId}</p>
       </header>
+
+      <ResultsDashboard result={result} />
+
+      {pathway ? (
+        <section className="pathway-panel">
+          <h3>Pathway System — {pathway.primary}</h3>
+          <ul>
+            {pathway.nextSteps.map((step) => (
+              <li key={step}>{step}</li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
       <ResultsDashboard result={result} />
     </main>
   );
