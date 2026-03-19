@@ -1,58 +1,67 @@
 import os
-import sqlite3
 from contextlib import contextmanager
+
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import declarative_base, sessionmaker
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./mufasa.db")
 
 
-def _resolve_sqlite_path() -> str:
-    if DATABASE_URL.startswith("sqlite:///"):
-        return DATABASE_URL.replace("sqlite:///", "", 1)
-    return "mufasa.db"
+def _normalize_database_url(raw_url: str) -> str:
+    if raw_url.startswith("postgres://"):
+        return raw_url.replace("postgres://", "postgresql+psycopg://", 1)
+    if raw_url.startswith("postgresql://") and "+" not in raw_url.split("://", 1)[0]:
+        return raw_url.replace("postgresql://", "postgresql+psycopg://", 1)
+    return raw_url
 
 
-DB_PATH = _resolve_sqlite_path()
+SQLALCHEMY_DATABASE_URL = _normalize_database_url(DATABASE_URL)
+IS_SQLITE = SQLALCHEMY_DATABASE_URL.startswith("sqlite")
+
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL,
+    connect_args={"check_same_thread": False} if IS_SQLITE else {},
+)
+
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
+
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 
 @contextmanager
 def get_db_connection():
-    conn = sqlite3.connect(DB_PATH)
-    try:
+    """Backward-compatible raw connection for legacy callers."""
+    with engine.begin() as conn:
         yield conn
-    finally:
-        conn.close()
+
+
+def _run_sqlite_compat_migrations() -> None:
+    if not IS_SQLITE:
+        return
+
+    with engine.begin() as conn:
+        cols = [
+            row[1]
+            for row in conn.execute(text("PRAGMA table_info(leadership_assessments)"))
+        ]
+        if cols and "version" not in cols:
+            conn.execute(
+                text(
+                    "ALTER TABLE leadership_assessments "
+                    "ADD COLUMN version TEXT NOT NULL DEFAULT 'v1'"
+                )
+            )
 
 
 def init_db() -> None:
-    with get_db_connection() as conn:
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                email TEXT UNIQUE NOT NULL,
-                password_hash TEXT NOT NULL,
-                role TEXT NOT NULL,
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )
-            """
-        )
+    from app import models  # ensures models are registered
 
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS leadership_assessments (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id TEXT NOT NULL,
-                responses TEXT NOT NULL,
-                scores TEXT NOT NULL,
-                version TEXT NOT NULL DEFAULT 'v1',
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )
-            """
-        )
-
-        # Lightweight migration for existing databases created before version column.
-        cols = [row[1] for row in conn.execute("PRAGMA table_info(leadership_assessments)").fetchall()]
-        if "version" not in cols:
-            conn.execute("ALTER TABLE leadership_assessments ADD COLUMN version TEXT NOT NULL DEFAULT 'v1'")
-
-        conn.commit()
+    Base.metadata.create_all(bind=engine)
+    _run_sqlite_compat_migrations()

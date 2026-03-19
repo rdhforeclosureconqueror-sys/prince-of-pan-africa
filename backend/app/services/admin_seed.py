@@ -1,25 +1,61 @@
-from app.database import get_db_connection
+from sqlalchemy.orm import Session
+
+from app.database import SessionLocal
+from app.models import ActivityLog, MemberProfile, User
 from app.security import hash_password
 
 ADMIN_EMAIL = "rdhforeclosureconqueror@gmail.com"
 ADMIN_PASSWORD = "beastmode"
 ADMIN_ROLE = "admin"
-ALLOWED_ROLES = {"admin", "operator", "viewer"}
+
+
+def _ensure_profile_and_activity(db: Session, user: User) -> None:
+    if not user.profile:
+        db.add(
+            MemberProfile(
+                user_id=user.id,
+                role=user.role,
+                attributes={"level": "founder", "status": "active"},
+            )
+        )
+
+    has_seed_activity = (
+        db.query(ActivityLog)
+        .filter(ActivityLog.user_id == user.id, ActivityLog.action == "admin_seeded")
+        .first()
+    )
+
+    if not has_seed_activity:
+        db.add(ActivityLog(user_id=user.id, action="admin_seeded"))
 
 
 def seed_admin() -> dict:
-    with get_db_connection() as conn:
-        row = conn.execute(
-            "SELECT id, email, role FROM users WHERE email = ?",
-            (ADMIN_EMAIL,),
-        ).fetchone()
-        if row:
-            return {"created": False, "email": row[1], "role": row[2]}
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.email == ADMIN_EMAIL).first()
 
-        conn.execute(
-            "INSERT INTO users (email, password_hash, role) VALUES (?, ?, ?)",
-            (ADMIN_EMAIL, hash_password(ADMIN_PASSWORD), ADMIN_ROLE),
-        )
-        conn.commit()
+        if not user:
+            user = User(
+                email=ADMIN_EMAIL,
+                password_hash=hash_password(ADMIN_PASSWORD),
+                role=ADMIN_ROLE,
+            )
+            db.add(user)
+            db.flush()
+            created = True
+        else:
+            created = False
 
-    return {"created": True, "email": ADMIN_EMAIL, "role": ADMIN_ROLE}
+        _ensure_profile_and_activity(db, user)
+
+        db.commit()
+
+        return {
+            "created": created,
+            "email": user.email,
+            "role": user.role,
+            "user_id": user.id,
+        }
+
+    finally:
+        db.close()

@@ -17,7 +17,14 @@ app = FastAPI(
     version="1.0.0",
 )
 
-default_origins = ["*"]
+default_origins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://prince-of-pan-africa.onrender.com",
+    "https://mufasa-knowledge-bank.onrender.com",
+    "https://simbawajamaa.com",
+    "https://www.simbawajamaa.com",
+]
 
 raw_allowed_origins = os.getenv("ALLOWED_ORIGINS", "")
 allowed_origins = (

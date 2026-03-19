@@ -1,11 +1,12 @@
 import json
-from datetime import datetime
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 
-from app.database import get_db_connection
+from app.database import get_db
+from app.models import ActivityLog, LeadershipAssessment, User
 from app.services.leadership_question_map import ROLE_KEYS
 from app.services.leadership_scoring import score_assessment
 
@@ -13,13 +14,34 @@ router = APIRouter(prefix="/assessment", tags=["Leadership Assessment"])
 
 
 class AssessmentSubmitRequest(BaseModel):
-    userId: str | None = Field(default=None, min_length=3)
+    userId: str | None = Field(default=None, min_length=1)
     responses: list[str | int | float] = Field(min_length=30, max_length=30)
 
 
+def _resolve_or_create_user(db: Session, user_identifier: str | None) -> User:
+    if user_identifier:
+        if user_identifier.isdigit():
+            user = db.query(User).filter(User.id == int(user_identifier)).first()
+            if user:
+                return user
+        user = db.query(User).filter(User.email == user_identifier).first()
+        if user:
+            return user
+
+    new_user = User(
+        email=f"member-{uuid4()}@local.mufasa",
+        password_hash="",
+        role="member",
+    )
+    db.add(new_user)
+    db.flush()
+    return new_user
+
+
 @router.post("/submit")
-def submit_assessment(payload: AssessmentSubmitRequest):
-    user_id = payload.userId or str(uuid4())
+def submit_assessment(payload: AssessmentSubmitRequest, db: Session = Depends(get_db)):
+    user = _resolve_or_create_user(db, payload.userId)
+
     scored = score_assessment(payload.responses)
 
     scores_blob = {
@@ -29,24 +51,18 @@ def submit_assessment(payload: AssessmentSubmitRequest):
         "coaching": scored["coaching"],
     }
 
-    with get_db_connection() as conn:
-        conn.execute(
-            """
-            INSERT INTO leadership_assessments (user_id, responses, scores, version, created_at)
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            (
-                user_id,
-                json.dumps(scored["responses"]),
-                json.dumps(scores_blob),
-                "v1",
-                datetime.utcnow().isoformat(),
-            ),
-        )
-        conn.commit()
+    record = LeadershipAssessment(
+        user_id=user.id,
+        responses=json.dumps(scored["responses"]),
+        scores=json.dumps(scores_blob),
+        version="v1",
+    )
+    db.add(record)
+    db.add(ActivityLog(user_id=user.id, action="assessment_submitted"))
+    db.commit()
 
     return {
-        "userId": user_id,
+        "userId": str(user.id),
         "percentages": scored["percentages"],
         "roles": scored["roles"],
         "insights": scored["insights"],
@@ -57,41 +73,40 @@ def submit_assessment(payload: AssessmentSubmitRequest):
 
 
 @router.get("/results/{user_id}")
-def get_latest_assessment(user_id: str):
-    with get_db_connection() as conn:
-        row = conn.execute(
-            """
-            SELECT user_id, responses, scores, version, created_at
-            FROM leadership_assessments
-            WHERE user_id = ?
-            ORDER BY id DESC
-            LIMIT 1
-            """,
-            (user_id,),
-        ).fetchone()
+def get_latest_assessment(user_id: str, db: Session = Depends(get_db)):
+    query = db.query(LeadershipAssessment)
+
+    if user_id.isdigit():
+        query = query.filter(LeadershipAssessment.user_id == int(user_id))
+    else:
+        user = db.query(User).filter(User.email == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="No assessment found for this user.")
+        query = query.filter(LeadershipAssessment.user_id == user.id)
+
+    row = query.order_by(LeadershipAssessment.id.desc()).first()
 
     if not row:
         raise HTTPException(status_code=404, detail="No assessment found for this user.")
 
-    scores = json.loads(row[2])
-    responses = json.loads(row[1])
+    scores = json.loads(row.scores)
+    responses = json.loads(row.responses)
 
     return {
-        "userId": row[0],
+        "userId": str(row.user_id),
         "responses": responses,
         "percentages": scores.get("percentages", {}),
         "roles": scores.get("roles", {}),
         "insights": scores.get("insights", {}),
         "coaching": scores.get("coaching", ""),
-        "version": row[3] or "v1",
-        "createdAt": row[4],
+        "version": row.version or "v1",
+        "createdAt": row.created_at.isoformat() if row.created_at else None,
     }
 
 
 @router.get("/analytics/roles")
-def role_analytics():
-    with get_db_connection() as conn:
-        rows = conn.execute("SELECT scores FROM leadership_assessments").fetchall()
+def role_analytics(db: Session = Depends(get_db)):
+    rows = db.query(LeadershipAssessment.scores).all()
 
     if not rows:
         return {
@@ -103,8 +118,8 @@ def role_analytics():
     role_counts = {role: 0 for role in ROLE_KEYS}
     sums = {role: 0.0 for role in ROLE_KEYS}
 
-    for row in rows:
-        scores = json.loads(row[0])
+    for (scores_raw,) in rows:
+        scores = json.loads(scores_raw)
         roles = scores.get("roles", {})
         percentages = scores.get("percentages", {})
 
