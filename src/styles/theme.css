@@ -34,6 +34,7 @@ body {
   display: block;
   min-height: 100%;
   overflow-x: hidden;
+  overflow-y: auto;
 }
 
 /* ✅ Keep app content above galaxy canvas */
@@ -101,6 +102,7 @@ body {
   min-height: 0;           /* key for flex scroll containers */
   overflow-y: auto;
   overflow-x: hidden;
+  overflow-y: auto;
 
   display: flex;
   flex-direction: column;

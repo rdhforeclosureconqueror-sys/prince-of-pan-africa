@@ -6,14 +6,14 @@ export default function IdentityPanel() {
 
   useEffect(() => {
     api('/auth/me').then((res) => {
-      if (res?.ok && res.user) setUser(res.user);
+      if (res?.user) setUser(res.user);
     });
   }, []);
 
   if (!user) return null;
 
   const avatar = user.photo || '/assets/lion-logo.png';
-  const displayId = user.googleId || user.email || 'Member';
+  const displayId = user.id || user.email || 'Member';
 
   return (
     <div className="identity-panel">

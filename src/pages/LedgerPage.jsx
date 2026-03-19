@@ -20,14 +20,12 @@ export default function LedgerPage() {
         add(`✅ /auth/me OK`);
 
         // ✅ Your server creates the session user like:
-        // { provider:"google", googleId, displayName, email, photo }
-        // So the canonical ID in DB should be googleId.
-        const id = me?.user?.googleId || me?.user?.email;
+        const id = me?.user?.id || me?.user?.email;
 
         add(`Resolved id = ${id || "(missing)"}`);
 
         if (!id) {
-          throw new Error("No id found. Expected me.user.googleId (or fallback to email).");
+          throw new Error("No id found. Expected me.user.id (or fallback to email).");
         }
 
         add(`Calling /ledger/balance/${encodeURIComponent(id)} ...`);

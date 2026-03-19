@@ -11,7 +11,7 @@ export default function PagtPage() {
 
     try {
       const me = await api("/auth/me");
-      const member_id = me.user.googleId || me.user.email;
+      const member_id = me.user.id || me.user.email;
 
       // ⚠️ Match your actual voteSchema keys in pagtRoutes.js
       const payload = {
