@@ -16,6 +16,7 @@ const NAV_LINKS = [
   { label: "Study", to: "/study" },
   { label: "Pan-Africa’s Got Talent", to: "/pagt" },
   { label: "Membership", to: "/membership" },
+  { label: "Leadership", to: "/leadership" },
 ];
 
 const EXTERNAL_LINKS = [
