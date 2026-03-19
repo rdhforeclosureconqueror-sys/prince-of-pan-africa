@@ -37,6 +37,6 @@
 
 .main-content {
   flex: 1;
-  padding: 2rem;
+  padding: 80px 2rem 2rem;
   background: linear-gradient(180deg, #000, #111);
 }
