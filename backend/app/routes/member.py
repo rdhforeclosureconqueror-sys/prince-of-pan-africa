@@ -10,12 +10,23 @@ router = APIRouter(tags=["Member"])
 @router.get("/member/overview")
 def get_member_overview(db: Session = Depends(get_db)):
     user = db.query(User).options(joinedload(User.profile)).order_by(User.id.asc()).first()
+
     if not user:
         raise HTTPException(status_code=404, detail="No member found")
 
     profile = user.profile
-    assessment_count = db.query(LeadershipAssessment).filter(LeadershipAssessment.user_id == user.id).count()
-    activity_count = db.query(ActivityLog).filter(ActivityLog.user_id == user.id).count()
+
+    assessment_count = (
+        db.query(LeadershipAssessment)
+        .filter(LeadershipAssessment.user_id == user.id)
+        .count()
+    )
+
+    activity_count = (
+        db.query(ActivityLog)
+        .filter(ActivityLog.user_id == user.id)
+        .count()
+    )
 
     return {
         "status": "ok",
@@ -39,6 +50,7 @@ def get_member_overview(db: Session = Depends(get_db)):
 @router.get("/member/activity")
 def get_member_activity(limit: int = 10, db: Session = Depends(get_db)):
     user = db.query(User).order_by(User.id.asc()).first()
+
     if not user:
         raise HTTPException(status_code=404, detail="No member found")
 

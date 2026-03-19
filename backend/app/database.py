@@ -22,6 +22,7 @@ engine = create_engine(
     SQLALCHEMY_DATABASE_URL,
     connect_args={"check_same_thread": False} if IS_SQLITE else {},
 )
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
@@ -60,7 +61,7 @@ def _run_sqlite_compat_migrations() -> None:
 
 
 def init_db() -> None:
-    from app import models  # noqa: F401
+    from app import models  # ensures models are registered
 
     Base.metadata.create_all(bind=engine)
     _run_sqlite_compat_migrations()
