@@ -17,6 +17,8 @@ import PortalDecolonize from "./pages/PortalDecolonize";
 import StudyPage from "./pages/StudyPage";
 import TimelinePage from "./pages/TimelinePage";
 import MemberDashboard from "./pages/MemberDashboard";
+import LeadershipAssessmentPage from "./pages/LeadershipAssessmentPage";
+import LeadershipResultsPage from "./pages/LeadershipResultsPage";
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -73,6 +75,8 @@ export default function App() {
         <Route path="/study" element={<StudyPage />} />
         <Route path="/pagt" element={<PagtPage />} />
         <Route path="/membership" element={<MembershipPlan />} />
+        <Route path="/leadership" element={<LeadershipAssessmentPage />} />
+        <Route path="/results" element={<LeadershipResultsPage />} />
         <Route path="/decolonize" element={<LibraryDecolonize />} />
         <Route path="/portal/decolonize" element={<PortalDecolonize />} />
         <Route path="/holistic" element={<Navigate to="/dashboard" replace />} />

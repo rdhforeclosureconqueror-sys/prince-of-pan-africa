@@ -1,0 +1,154 @@
+.leadership-page {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 5.5rem 1rem 2rem;
+  color: #f3ead6;
+}
+
+.leadership-page h1 {
+  margin: 0;
+  font-size: clamp(1.8rem, 4vw, 2.4rem);
+}
+
+.leadership-page > header p {
+  margin-top: 0.75rem;
+  color: #d9c89f;
+}
+
+.leadership-form {
+  display: grid;
+  gap: 1rem;
+}
+
+.leadership-form__progress {
+  background: rgba(12, 12, 14, 0.8);
+  border: 1px solid rgba(255, 208, 122, 0.25);
+  border-radius: 12px;
+  padding: 0.9rem;
+}
+
+.leadership-question {
+  background: rgba(7, 7, 8, 0.86);
+  border: 1px solid rgba(255, 208, 122, 0.2);
+  border-radius: 14px;
+  padding: 0.95rem;
+}
+
+.leadership-question__title {
+  margin: 0 0 0.75rem;
+}
+
+.leadership-question__options {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.leadership-question__options label {
+  display: flex;
+  gap: 0.45rem;
+  align-items: center;
+  color: #f0e4c9;
+  font-size: 0.95rem;
+}
+
+.leadership-submit {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  padding: 0.85rem 1.1rem;
+  border-radius: 999px;
+  border: 1px solid #f0cf88;
+  background: linear-gradient(135deg, #e4b861, #f4da9d);
+  color: #2c1902;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.leadership-submit:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.leadership-error {
+  margin: 1rem 0;
+  background: rgba(156, 29, 29, 0.3);
+  border: 1px solid rgba(250, 115, 115, 0.45);
+  padding: 0.8rem;
+  border-radius: 12px;
+}
+
+.identity-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+.identity-cards article {
+  background: rgba(7, 7, 8, 0.86);
+  border: 1px solid rgba(255, 208, 122, 0.22);
+  border-radius: 12px;
+  padding: 0.8rem;
+}
+
+.identity-cards h4 {
+  margin: 0;
+  color: #d9c89f;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.identity-cards p {
+  margin: 0.35rem 0 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.role-meters {
+  background: rgba(7, 7, 8, 0.86);
+  border: 1px solid rgba(255, 208, 122, 0.22);
+  border-radius: 12px;
+  padding: 0.95rem;
+}
+
+.role-meter + .role-meter {
+  margin-top: 0.65rem;
+}
+
+.role-meter__head {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.25rem;
+}
+
+.role-meter__track {
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+
+.role-meter__fill {
+  height: 100%;
+  background: linear-gradient(135deg, #d9a84c, #f3d693);
+}
+
+.coaching-panel {
+  margin-top: 1rem;
+  background: rgba(7, 7, 8, 0.86);
+  border: 1px solid rgba(255, 208, 122, 0.22);
+  border-radius: 12px;
+  padding: 0.95rem;
+}
+
+.coaching-panel h3 {
+  margin: 0 0 0.5rem;
+}
+
+.coaching-panel p {
+  margin: 0;
+  line-height: 1.6;
+  color: #eaddc2;
+}

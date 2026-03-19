@@ -27,7 +27,8 @@ def test_routes(request: Request):
         "/system/tests/database",
         "/system/tests/services",
         "/system/tests/integrations",
-      "/tts",
+        "/auth/me",
+        "/tts",
     ]
     missing = [endpoint for endpoint in expected if endpoint not in routes]
     return {
