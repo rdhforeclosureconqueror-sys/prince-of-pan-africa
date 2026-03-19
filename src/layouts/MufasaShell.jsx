@@ -35,7 +35,7 @@ export default function MufasaShell({ children }) {
       try {
         const res = await fetch("/auth/me", { credentials: "include" });
         const data = await res.json();
-        if (data.ok && data.auth) setUser(data.user);
+        if (data?.user && (data.authenticated || data.auth || data.ok)) setUser(data.user);
       } catch (err) {
         console.error("Error loading user:", err);
       }
