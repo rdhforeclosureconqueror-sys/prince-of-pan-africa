@@ -19,6 +19,7 @@ import TimelinePage from "./pages/TimelinePage";
 import MemberDashboard from "./pages/MemberDashboard";
 import LeadershipAssessmentPage from "./pages/LeadershipAssessmentPage";
 import LeadershipResultsPage from "./pages/LeadershipResultsPage";
+import SystemVerificationPage from "./pages/SystemVerificationPage";
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -77,6 +78,7 @@ export default function App() {
         <Route path="/membership" element={<MembershipPlan />} />
         <Route path="/leadership" element={<LeadershipAssessmentPage />} />
         <Route path="/results" element={<LeadershipResultsPage />} />
+        <Route path="/ops/verification" element={<SystemVerificationPage />} />
         <Route path="/decolonize" element={<LibraryDecolonize />} />
         <Route path="/portal/decolonize" element={<PortalDecolonize />} />
         <Route path="/holistic" element={<Navigate to="/dashboard" replace />} />

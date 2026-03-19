@@ -65,17 +65,30 @@ export default function GlobalNav({ isAdmin }) {
             </Link>
           ))}
           {isAdmin ? (
-            <Link
-              to="/dashboard"
-              onClick={closeMenu}
-              className={
-                location.pathname === "/dashboard"
-                  ? "global-nav__link is-active"
-                  : "global-nav__link"
-              }
-            >
-              Operations Deck
-            </Link>
+            <>
+              <Link
+                to="/dashboard"
+                onClick={closeMenu}
+                className={
+                  location.pathname === "/dashboard"
+                    ? "global-nav__link is-active"
+                    : "global-nav__link"
+                }
+              >
+                Operations Deck
+              </Link>
+              <Link
+                to="/ops/verification"
+                onClick={closeMenu}
+                className={
+                  location.pathname === "/ops/verification"
+                    ? "global-nav__link is-active"
+                    : "global-nav__link"
+                }
+              >
+                Verification Center
+              </Link>
+            </>
           ) : (
             <Link
               to="/dashboard"

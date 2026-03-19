@@ -42,6 +42,9 @@ def get_db_connection():
         yield conn
 
 
+# =========================
+# SQLITE COMPAT MIGRATIONS
+# =========================
 def _run_sqlite_compat_migrations() -> None:
     if not IS_SQLITE:
         return
@@ -60,7 +63,70 @@ def _run_sqlite_compat_migrations() -> None:
             )
 
 
+# =========================
+# DATABASE TYPE DETECTION
+# =========================
+def get_database_type() -> str:
+    if SQLALCHEMY_DATABASE_URL.startswith("postgresql"):
+        return "postgresql"
+    if SQLALCHEMY_DATABASE_URL.startswith("sqlite"):
+        return "sqlite"
+    return "unknown"
+
+
+# =========================
+# SQLITE PATH HELPER
+# =========================
+def _sqlite_db_path() -> str | None:
+    if not IS_SQLITE:
+        return None
+    if SQLALCHEMY_DATABASE_URL.startswith("sqlite:///"):
+        return SQLALCHEMY_DATABASE_URL.replace("sqlite:///", "", 1)
+    return None
+
+
+# =========================
+# DEV RESET (SAFE-GUARDED)
+# =========================
+def reset_local_sqlite_database() -> dict:
+    """
+    Destructive dev-only reset for local SQLite databases.
+    NEVER runs on Postgres.
+    """
+    if not IS_SQLITE:
+        return {"ok": False, "reason": "Database is not SQLite; reset skipped."}
+
+    db_path = _sqlite_db_path()
+    if not db_path or db_path in {":memory:", ""}:
+        return {"ok": False, "reason": "SQLite path is not a local file; reset skipped."}
+
+    try:
+        if os.path.exists(db_path):
+            os.remove(db_path)
+
+        # Recreate schema
+        from app import models  # noqa: F401
+
+        Base.metadata.create_all(bind=engine)
+
+        return {
+            "ok": True,
+            "database": db_path,
+            "message": "SQLite database reset complete.",
+        }
+
+    except Exception as exc:
+        return {"ok": False, "reason": str(exc)}
+
+
+# =========================
+# INIT DB (UNIFIED VERSION)
+# =========================
 def init_db() -> None:
+    """
+    Initializes DB + runs compatibility migrations.
+    Safe for both SQLite and Postgres.
+    """
     from app import models  # ensures models are registered
 
     Base.metadata.create_all(bind=engine)
