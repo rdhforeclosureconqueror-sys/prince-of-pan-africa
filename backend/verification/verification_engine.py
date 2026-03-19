@@ -39,7 +39,7 @@ def _check_env() -> dict[str, Any]:
 
 
 def _check_ai_modules() -> dict[str, Any]:
-    modules = ["app.routes.chat", "app.utils.openai_client", "app.routes.voice"]
+    modules = ["app.routes.chat", "app.utils.openai_client", "app.routes.voice", "app.routes.assessment"]
     missing = []
     for module in modules:
         try:
@@ -76,7 +76,7 @@ def build_system_verification(app) -> dict[str, Any]:
     return {
         "system_status": "OK" if not missing_components else "DEGRADED",
         "routes_registered": routes_registered,
-        "services_operational": ["chat", "portal", "voice", "admin_seed", "tts"],
+        "services_operational": ["chat", "portal", "voice", "admin_seed", "tts", "assessment"],
         "tts_available": tts_available,
         "database_models_loaded": models.get("loaded_models", []),
         "missing_components": missing_components,

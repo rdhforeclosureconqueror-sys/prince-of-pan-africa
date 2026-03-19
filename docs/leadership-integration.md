@@ -8,21 +8,26 @@
 - `GET /leadership` — 30-question public assessment form
 - `GET /results?userId=<id>` — dynamic results dashboard
 
+## Backend API Endpoints
+- `POST /assessment/submit`
+- `GET /assessment/results/{userId}`
+- `GET /assessment/analytics/roles`
+
 ## API Configuration
-Set your Google Apps Script Web App URL in frontend env:
+Set your backend base URL in frontend env:
 
 ```bash
-VITE_LEADERSHIP_API_URL="https://script.google.com/macros/s/.../exec"
+VITE_API_BASE_URL="https://mufasa-knowledge-bank.onrender.com"
 ```
 
-If this variable is not set, the app runs in simulation mode so UX can still be validated end-to-end.
+If this variable is not set or the API call fails, the app falls back to simulation mode so UX can still be validated end-to-end.
 
 ## Payload contract used by frontend
 ### Request
 ```json
 {
   "userId": "string",
-  "answers": ["1", "2", "3", "4", "5", "..."]
+  "responses": ["1", "2", "3", "4", "5", "..."]
 }
 ```
 
@@ -47,7 +52,13 @@ If this variable is not set, the app runs in simulation mode so UX can still be 
     "growth": "Educator",
     "shadow": "Nurturer"
   },
-  "coaching": "string"
+  "coaching": "string",
+  "insights": {
+    "primary": "string",
+    "growth": "string",
+    "shadow": "string"
+  },
+  "version": "v1"
 }
 ```
 

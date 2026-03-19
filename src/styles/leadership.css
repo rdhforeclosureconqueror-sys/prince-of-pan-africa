@@ -152,3 +152,14 @@
   line-height: 1.6;
   color: #eaddc2;
 }
+
+
+.coaching-panel ul {
+  margin: 0.75rem 0 0;
+  padding-left: 1.1rem;
+  color: #f1e5cd;
+}
+
+.coaching-panel li + li {
+  margin-top: 0.35rem;
+}

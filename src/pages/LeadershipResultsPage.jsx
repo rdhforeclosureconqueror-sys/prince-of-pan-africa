@@ -1,21 +1,44 @@
-import React, { useMemo } from "react";
+import React, { useEffect, useState } from "react";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import ResultsDashboard from "../components/leadership/ResultsDashboard";
-import { getLeadershipResultByUserId } from "../services/leadershipService";
+import { fetchLeadershipResultByUserId } from "../services/leadershipService";
 import "../styles/leadership.css";
 
 export default function LeadershipResultsPage() {
   const [searchParams] = useSearchParams();
   const location = useLocation();
+  const [result, setResult] = useState(location.state?.result || null);
+  const [loading, setLoading] = useState(!location.state?.result);
 
   const userId = searchParams.get("userId") || "";
 
-  const result = useMemo(() => {
-    const inMemory = location.state?.result;
-    if (inMemory) return inMemory;
-    if (!userId) return null;
-    return getLeadershipResultByUserId(userId);
-  }, [location.state, userId]);
+  useEffect(() => {
+    if (!userId || location.state?.result) return;
+
+    let mounted = true;
+    setLoading(true);
+    fetchLeadershipResultByUserId(userId)
+      .then((loaded) => {
+        if (mounted) setResult(loaded);
+      })
+      .finally(() => {
+        if (mounted) setLoading(false);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [userId, location.state]);
+
+  if (loading) {
+    return (
+      <main className="leadership-page">
+        <header>
+          <h1>Loading leadership dashboard…</h1>
+        </header>
+      </main>
+    );
+  }
 
   if (!result) {
     return (

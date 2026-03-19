@@ -40,7 +40,7 @@ export default function ResultsDashboard({ result }) {
         ))}
       </section>
 
-      <CoachingPanel coaching={result.coaching} />
+      <CoachingPanel coaching={result.coaching} insights={result.insights} />
     </div>
   );
 }

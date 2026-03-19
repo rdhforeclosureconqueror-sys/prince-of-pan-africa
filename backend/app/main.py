@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.database import init_db
-from app.routes import auth, chat, portal, system, tts, voice
+from app.routes import assessment, auth, chat, portal, system, tts, voice
 from app.services.admin_seed import seed_admin
 
 app = FastAPI(
@@ -51,6 +51,7 @@ app.include_router(voice.router, prefix="/api/voice", tags=["Voice"])
 app.include_router(system.router)
 app.include_router(auth.router)
 app.include_router(tts.router)
+app.include_router(assessment.router)
 
 
 @app.get("/")
