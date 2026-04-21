@@ -9,11 +9,11 @@
     }
   }
 
-  async function speakWithBackend({ text, voice = "alloy", style = "strong", format = "mp3", endpoint = "", player, onStatus }) {
+  async function speakWithBackend({ text, voice = "alloy", endpoint = "", player, onStatus }) {
     const res = await fetch(endpoint, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "audio/mpeg" },
-      body: JSON.stringify({ text, voice, style, format }),
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ text, voice_model: voice }),
     });
 
     if (!res.ok) {
@@ -27,9 +27,12 @@
       throw new Error(detail);
     }
 
-    const blob = await res.blob();
-    const objectUrl = URL.createObjectURL(blob);
-    player.src = objectUrl;
+    const data = await res.json();
+    if (!data?.audio_url) {
+      throw new Error("Missing audio_url in TTS response");
+    }
+
+    player.src = data.audio_url;
     await player.play();
     if (onStatus) onStatus("AI voice playing.");
   }
@@ -48,7 +51,7 @@
     }
   }
 
-  async function speak({ text, voice, style, endpoint, playerId = "aiTtsPlayer", onStatus }) {
+  async function speak({ text, voice, endpoint, playerId = "aiTtsPlayer", onStatus }) {
     if (!text || !text.trim()) return;
     const player = document.getElementById(playerId);
     if (!player) throw new Error("Audio player not found");
@@ -56,7 +59,7 @@
     stopPlayer(player);
 
     try {
-      await speakWithBackend({ text, voice, style, endpoint, player, onStatus });
+      await speakWithBackend({ text, voice, endpoint, player, onStatus });
     } catch (error) {
       browserFallback(text, onStatus);
       throw error;
