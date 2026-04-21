@@ -360,8 +360,7 @@
 <script src="/languages/lessonTts.js"></script>
 <script>
   const DATA_URL = "swahili_30days.json";
-  const MUFASA_BASE = "https://mufasa-knowledge-bank.onrender.com";
-  const TTS_ENDPOINT = `${MUFASA_BASE}/tts`;
+  const TTS_ENDPOINT = "https://prince-of-pan-africa-backend.onrender.com/chat/tts";
 
   let PACK = null;
   let idx = 0;
@@ -411,7 +410,6 @@
       await window.lessonTts.speak({
         text,
         voice: (voiceSelect?.value || "alloy"),
-        style: "strong",
         endpoint: TTS_ENDPOINT,
         onStatus: setStatus,
       });
