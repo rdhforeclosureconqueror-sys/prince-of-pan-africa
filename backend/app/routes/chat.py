@@ -29,6 +29,27 @@ def aivoice_headers():
     return headers
 
 
+def _masked_key(value: str | None) -> str:
+    if not value:
+        return "<missing>"
+    if len(value) <= 8:
+        return "*" * len(value)
+    return f"{value[:4]}...{value[-4:]}"
+
+
+def _tts_error_reason(status_code: int | None, body_snippet: str, err: Exception | None = None) -> str:
+    lowered = (body_snippet or "").lower()
+    if err is not None:
+        return "network unreachable"
+    if status_code in {401, 403} or "invalid api key" in lowered or "unauthorized" in lowered:
+        return "invalid API key"
+    if status_code == 404:
+        return "incorrect endpoint path"
+    if status_code in {400, 415, 422}:
+        return "incorrect request body format"
+    return "provider rejected request"
+
+
 def generate_audio_filename(ext="mp3"):
     return STATIC_AUDIO_DIR / f"{uuid.uuid4()}.{ext}"
 
@@ -42,34 +63,78 @@ def save_audio_file(audio_bytes, ext="mp3"):
 
 def request_aivoice_tts(*, text: str, voice: str, timeout: int = 45):
     payload = {"text": text, "format": "mp3", "voice": voice}
+    provider_url = f"{AIVOICE_BASE_URL.rstrip('/')}/tts"
+    headers = aivoice_headers()
+    logged_headers = dict(headers)
+    logged_headers["X-AIVOICE-KEY"] = _masked_key(headers.get("X-AIVOICE-KEY"))
+
+    logger.info(
+        "aiVoice request url=%s headers=%s payload_keys=%s text_len=%s",
+        provider_url,
+        logged_headers,
+        sorted(payload.keys()),
+        len(text or ""),
+    )
+
     try:
         response = requests.post(
-            f"{AIVOICE_BASE_URL}/tts",
+            provider_url,
             json=payload,
-            headers=aivoice_headers(),
+            headers=headers,
             timeout=timeout,
             stream=True,
         )
     except requests.RequestException as exc:
-        logger.error("aiVoice network error base_url=%s error=%s", AIVOICE_BASE_URL, exc)
+        reason = _tts_error_reason(None, "", exc)
+        logger.error(
+            "aiVoice network error url=%s headers=%s reason=%s error=%s",
+            provider_url,
+            logged_headers,
+            reason,
+            exc,
+        )
         raise HTTPException(
             status_code=502,
-            detail=f"aiVoice unreachable at {AIVOICE_BASE_URL}: {exc}",
+            detail={
+                "error": "TTS provider request failed",
+                "reason": reason,
+                "provider_url": provider_url,
+                "headers_sent": logged_headers,
+                "provider_status": None,
+                "provider_body_snippet": str(exc)[:200],
+            },
         ) from exc
 
     if response.status_code != 200:
-        detail = response.text[:250]
+        detail = response.text[:200]
+        reason = _tts_error_reason(response.status_code, detail)
         logger.error(
-            "aiVoice /tts rejected status=%s base_url=%s body=%s",
+            "aiVoice /tts rejected url=%s headers=%s status=%s reason=%s body=%s",
+            provider_url,
+            logged_headers,
             response.status_code,
-            AIVOICE_BASE_URL,
+            reason,
             detail,
         )
         raise HTTPException(
             status_code=response.status_code,
-            detail=f"aiVoice /tts rejected request ({response.status_code}): {detail}",
+            detail={
+                "error": "TTS provider rejected request",
+                "reason": reason,
+                "provider_url": provider_url,
+                "headers_sent": logged_headers,
+                "provider_status": response.status_code,
+                "provider_body_snippet": detail,
+                "request_payload_shape": sorted(payload.keys()),
+            },
         )
 
+    logger.info(
+        "aiVoice /tts success url=%s status=%s content_type=%s",
+        provider_url,
+        response.status_code,
+        response.headers.get("content-type"),
+    )
     return response.content
 
 
@@ -126,7 +191,7 @@ async def generate_openai_response(payload: dict):
 @router.post("/tts")
 async def text_to_speech(payload: dict):
     text = payload.get("text", "").strip()
-    voice = payload.get("voice_model", "alloy")
+    voice = payload.get("voice_model") or payload.get("voice") or "alloy"
 
     if not text:
         raise HTTPException(status_code=400, detail="No text provided for TTS.")
