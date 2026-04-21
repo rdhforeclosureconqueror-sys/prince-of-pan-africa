@@ -38,16 +38,22 @@ export default function AdminDashboard() {
           </tr>
         </thead>
         <tbody>
-          {profiles.map((p, i) => (
-            <tr key={i}>
-              <td>{p.member_id}</td>
-              <td>{p.motion_avg}</td>
-              <td>{p.voice_avg}</td>
-              <td>{p.journal_avg}</td>
-              <td>{p.consistency_score}</td>
-              <td>{p.current_difficulty}</td>
+          {profiles.length === 0 ? (
+            <tr>
+              <td colSpan={6}>No adaptive profiles have been generated yet.</td>
             </tr>
-          ))}
+          ) : (
+            profiles.map((p, i) => (
+              <tr key={i}>
+                <td>{p.member_id}</td>
+                <td>{p.motion_avg}</td>
+                <td>{p.voice_avg}</td>
+                <td>{p.journal_avg}</td>
+                <td>{p.consistency_score}</td>
+                <td>{p.current_difficulty}</td>
+              </tr>
+            ))
+          )}
         </tbody>
       </table>
     </div>

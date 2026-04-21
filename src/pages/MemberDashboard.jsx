@@ -19,7 +19,7 @@ export default function MemberDashboard() {
 
         if (!mounted) return;
         setOverview(overviewRes || null);
-        setActivity(activityRes?.activity || []);
+        setActivity(activityRes?.activity || activityRes?.items || []);
       } catch (err) {
         if (!mounted) return;
         setError(err.message || "Unable to load your experience data yet.");
@@ -36,25 +36,27 @@ export default function MemberDashboard() {
   if (loading) return <div className="admin-loading">Loading your dashboard...</div>;
   if (error) return <div className="admin-error">⚠️ {error}</div>;
 
+  const summary = overview?.summary_stats || overview || {};
+
   return (
     <div className="admin-dashboard">
       <h1>🌟 Member Experience Dashboard</h1>
 
       <div className="dashboard-grid">
         <div className="stat-card">
-          <h2>{overview?.reading_minutes ?? 0}</h2>
+          <h2>{summary?.reading_minutes ?? 0}</h2>
           <p>Reading Minutes</p>
         </div>
         <div className="stat-card">
-          <h2>{overview?.workouts_completed ?? 0}</h2>
+          <h2>{summary?.workouts_completed ?? 0}</h2>
           <p>Workouts Completed</p>
         </div>
         <div className="stat-card">
-          <h2>{overview?.shares ?? 0}</h2>
+          <h2>{summary?.shares ?? 0}</h2>
           <p>Shared Posts</p>
         </div>
         <div className="stat-card">
-          <h2>{overview?.streak_days ?? 0}</h2>
+          <h2>{summary?.streak_days ?? 0}</h2>
           <p>Consistency Streak</p>
         </div>
       </div>

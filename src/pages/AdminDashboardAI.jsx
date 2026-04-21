@@ -46,13 +46,17 @@ export default function AdminDashboardAI() {
               </tr>
             </thead>
             <tbody>
-              {overview?.byType?.map((t, i) => (
-                <tr key={i}>
-                  <td>{t.metric_type}</td>
-                  <td>{t.avg_score}</td>
-                  <td>{t.samples}</td>
-                </tr>
-              ))}
+              {(overview?.byType || []).length === 0 ? (
+                <tr><td colSpan={3}>No performance metrics available yet.</td></tr>
+              ) : (
+                overview.byType.map((t, i) => (
+                  <tr key={i}>
+                    <td>{t.metric_type}</td>
+                    <td>{t.avg_score}</td>
+                    <td>{t.samples}</td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </section>
@@ -69,14 +73,18 @@ export default function AdminDashboardAI() {
               </tr>
             </thead>
             <tbody>
-              {overview?.models?.map((m, i) => (
-                <tr key={i}>
-                  <td>{m.model_name}</td>
-                  <td>{m.version}</td>
-                  <td>{new Date(m.created_at).toLocaleString()}</td>
-                  <td>{JSON.stringify(m.parameters || {})}</td>
-                </tr>
-              ))}
+              {(overview?.models || []).length === 0 ? (
+                <tr><td colSpan={4}>No model versions published yet.</td></tr>
+              ) : (
+                overview.models.map((m, i) => (
+                  <tr key={i}>
+                    <td>{m.model_name}</td>
+                    <td>{m.version}</td>
+                    <td>{m.created_at ? new Date(m.created_at).toLocaleString() : "—"}</td>
+                    <td>{JSON.stringify(m.parameters || {})}</td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </section>
@@ -96,17 +104,21 @@ export default function AdminDashboardAI() {
               </tr>
             </thead>
             <tbody>
-              {members.map((m, i) => (
-                <tr key={i}>
-                  <td>{m.display_name}</td>
-                  <td>{m.email}</td>
-                  <td>{m.avg_score ?? "—"}</td>
-                  <td>{m.total_metrics}</td>
-                  <td>{m.motions}</td>
-                  <td>{m.voices}</td>
-                  <td>{m.journals}</td>
-                </tr>
-              ))}
+              {members.length === 0 ? (
+                <tr><td colSpan={7}>No member AI metrics yet.</td></tr>
+              ) : (
+                members.map((m, i) => (
+                  <tr key={i}>
+                    <td>{m.display_name}</td>
+                    <td>{m.email}</td>
+                    <td>{m.avg_score ?? "—"}</td>
+                    <td>{m.total_metrics}</td>
+                    <td>{m.motions}</td>
+                    <td>{m.voices}</td>
+                    <td>{m.journals}</td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </section>

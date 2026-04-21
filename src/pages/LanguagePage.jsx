@@ -1,24 +1,24 @@
-import React, { useState } from "react";
+import React from "react";
 import { useMvpActions } from "../hooks/useMvpActions";
 
 export default function LanguagePage() {
-  const { logLanguagePractice, lastReward } = useMvpActions();
-  const [languageKey, setLanguageKey] = useState("swahili");
+  const { lastReward } = useMvpActions();
 
   return (
     <div className="mvp-page">
       <h1>🗣️ Language Practice</h1>
       <p>Select Language</p>
-      <select onChange={(e) => setLanguageKey(e.target.value)}>
+      <select defaultValue="swahili">
         <option value="swahili">Swahili</option>
         <option value="zulu">Zulu</option>
         <option value="yoruba">Yoruba</option>
       </select>
-      <button
-        onClick={() => logLanguagePractice(languageKey, ["voice1.mp3", "voice2.mp3"])}
-      >
+      <button disabled title="Pilot mode: endpoint not enabled yet">
         🎤 Log Practice
       </button>
+      <p style={{ opacity: 0.8, marginTop: 10 }}>
+        Language practice logging is temporarily disabled in pilot mode.
+      </p>
 
       {lastReward && (
         <div className="reward-toast">
