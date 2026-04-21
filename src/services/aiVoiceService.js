@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://mufasa-knowledge-bank.onrender.com";
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 
 export async function requestAiVoice(text, voiceModel = "alloy") {
   const res = await fetch(`${API_BASE}/chat/tts`, {

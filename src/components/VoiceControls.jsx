@@ -20,7 +20,7 @@ export default function VoiceControls({ latestMessage, onVoiceSend }) {
   // ✅ Keep mic stream reference so we can STOP it (critical fix)
   const streamRef = useRef(null);
 
-  const baseURL = "https://mufasa-knowledge-bank.onrender.com";
+  const baseURL = import.meta.env.VITE_API_BASE_URL || "";
 
   // ✅ GLOBAL: show silent crashes / silent play() failures
   useEffect(() => {

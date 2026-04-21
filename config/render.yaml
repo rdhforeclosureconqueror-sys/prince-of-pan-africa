@@ -25,5 +25,3 @@ services:
     envVars:
       - key: VITE_API_BASE_URL
         value: https://api.simbawaujamaa.com
-      - key: VITE_MUFASA_API
-        value: https://mufasa-knowledge-bank.onrender.com

@@ -5,6 +5,7 @@ import JournalSidebar from "../components/JournalSidebar";
 import CalendarPanel from "../components/CalendarPanel";
 import "../styles/theme.css";
 import { sendChatMessage, sendVoiceMessage } from "../api/mufasaClient";
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 
 export default function Home() {
   const [messages, setMessages] = useState([]);
@@ -93,13 +94,12 @@ export default function Home() {
         });
       }
 
-      const baseURL = "https://mufasa-knowledge-bank.onrender.com";
       const rawAudio = data?.audio_url || data?.audioUrl || null;
 
       const fullAudioUrl = rawAudio
         ? rawAudio.startsWith("http")
           ? rawAudio
-          : `${baseURL}${rawAudio}`
+          : `${API_BASE}${rawAudio}`
         : null;
 
       setMessages((prev) => [
