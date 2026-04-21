@@ -53,6 +53,7 @@ app.include_router(auth.router)
 app.include_router(tts.router)
 app.include_router(assessment.router)
 app.include_router(admin.router)
+app.include_router(admin.legacy_router)
 app.include_router(member.router)
 
 
