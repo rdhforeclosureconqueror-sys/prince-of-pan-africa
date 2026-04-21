@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useMvpActions } from "../hooks/useMvpActions";
 
 export default function StudyPage() {
-  const { addJournal, shareTopic, lastReward } = useMvpActions();
+  const { lastReward } = useMvpActions();
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
 
@@ -19,8 +19,11 @@ export default function StudyPage() {
         value={content}
         onChange={(e) => setContent(e.target.value)}
       />
-      <button onClick={() => addJournal(title, content)}>📝 Submit Journal</button>
-      <button onClick={() => shareTopic(title)}>📤 Share Study</button>
+      <button disabled title="Pilot mode: endpoint not enabled yet">📝 Submit Journal</button>
+      <button disabled title="Pilot mode: endpoint not enabled yet">📤 Share Study</button>
+      <p style={{ opacity: 0.8, marginTop: 10 }}>
+        Study submission is temporarily disabled in pilot mode while backend endpoints are finalized.
+      </p>
 
       {lastReward && (
         <div className="reward-toast">

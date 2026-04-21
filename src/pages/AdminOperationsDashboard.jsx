@@ -68,13 +68,19 @@ export default function AdminOperationsDashboard() {
             </tr>
           </thead>
           <tbody>
-            {(overview?.byType || EMPTY_ARRAY).map((t, i) => (
-              <tr key={i}>
-                <td>{t.metric_type}</td>
-                <td>{t.avg_score}</td>
-                <td>{t.samples}</td>
+            {(overview?.byType || EMPTY_ARRAY).length === 0 ? (
+              <tr>
+                <td colSpan={3}>No performance metrics available yet.</td>
               </tr>
-            ))}
+            ) : (
+              (overview?.byType || EMPTY_ARRAY).map((t, i) => (
+                <tr key={i}>
+                  <td>{t.metric_type}</td>
+                  <td>{t.avg_score}</td>
+                  <td>{t.samples}</td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </section>
@@ -91,14 +97,20 @@ export default function AdminOperationsDashboard() {
             </tr>
           </thead>
           <tbody>
-            {(overview?.models || EMPTY_ARRAY).map((m, i) => (
-              <tr key={i}>
-                <td>{m.model_name}</td>
-                <td>{m.version}</td>
-                <td>{new Date(m.created_at).toLocaleString()}</td>
-                <td>{JSON.stringify(m.parameters || {})}</td>
+            {(overview?.models || EMPTY_ARRAY).length === 0 ? (
+              <tr>
+                <td colSpan={4}>No model versions published yet.</td>
               </tr>
-            ))}
+            ) : (
+              (overview?.models || EMPTY_ARRAY).map((m, i) => (
+                <tr key={i}>
+                  <td>{m.model_name}</td>
+                  <td>{m.version}</td>
+                  <td>{m.created_at ? new Date(m.created_at).toLocaleString() : "—"}</td>
+                  <td>{JSON.stringify(m.parameters || {})}</td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </section>
@@ -118,17 +130,23 @@ export default function AdminOperationsDashboard() {
             </tr>
           </thead>
           <tbody>
-            {members.map((m, i) => (
-              <tr key={i}>
-                <td>{m.display_name}</td>
-                <td>{m.email}</td>
-                <td>{m.avg_score ?? "—"}</td>
-                <td>{m.total_metrics}</td>
-                <td>{m.motions}</td>
-                <td>{m.voices}</td>
-                <td>{m.journals}</td>
+            {members.length === 0 ? (
+              <tr>
+                <td colSpan={7}>No member AI metrics yet.</td>
               </tr>
-            ))}
+            ) : (
+              members.map((m, i) => (
+                <tr key={i}>
+                  <td>{m.display_name}</td>
+                  <td>{m.email}</td>
+                  <td>{m.avg_score ?? "—"}</td>
+                  <td>{m.total_metrics}</td>
+                  <td>{m.motions}</td>
+                  <td>{m.voices}</td>
+                  <td>{m.journals}</td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </section>
@@ -147,16 +165,22 @@ export default function AdminOperationsDashboard() {
             </tr>
           </thead>
           <tbody>
-            {profiles.map((p, i) => (
-              <tr key={i}>
-                <td>{p.member_id}</td>
-                <td>{p.motion_avg}</td>
-                <td>{p.voice_avg}</td>
-                <td>{p.journal_avg}</td>
-                <td>{p.consistency_score}</td>
-                <td>{p.current_difficulty}</td>
+            {profiles.length === 0 ? (
+              <tr>
+                <td colSpan={6}>No adaptive profiles have been generated yet.</td>
               </tr>
-            ))}
+            ) : (
+              profiles.map((p, i) => (
+                <tr key={i}>
+                  <td>{p.member_id}</td>
+                  <td>{p.motion_avg}</td>
+                  <td>{p.voice_avg}</td>
+                  <td>{p.journal_avg}</td>
+                  <td>{p.consistency_score}</td>
+                  <td>{p.current_difficulty}</td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </section>

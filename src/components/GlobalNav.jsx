@@ -12,7 +12,6 @@ const NAV_LINKS = [
   { label: "Decolonize Portal", to: "/portal/decolonize" },
   { label: "Calendar", to: "/calendar" },
   { label: "Journal", to: "/journal" },
-  { label: "Ledger", to: "/ledger" },
   { label: "Study", to: "/study" },
   { label: "Pan-Africa’s Got Talent", to: "/pagt" },
   { label: "Membership", to: "/membership" },
