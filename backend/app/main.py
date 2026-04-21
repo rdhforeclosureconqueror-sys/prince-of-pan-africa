@@ -1,6 +1,8 @@
 import os
+import logging
 
 from fastapi import FastAPI
+from fastapi import Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -17,24 +19,46 @@ app = FastAPI(
     version="1.0.0",
 )
 
+logger = logging.getLogger("mufasa-cors")
+
 default_origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "https://prince-of-pan-africa.onrender.com",
+    "https://prince-of-pan-africa-frontend.onrender.com",
     "https://mufasa-knowledge-bank.onrender.com",
+    "https://api.simbawaujamaa.com",
+    "https://simbawaujamaa.com",
+    "https://www.simbawaujamaa.com",
     "https://simbawajamaa.com",
     "https://www.simbawajamaa.com",
 ]
 
 
 def _parse_origins(raw: str) -> list[str]:
-    return [origin.strip().rstrip("/") for origin in raw.split(",") if origin.strip()]
+    parsed = [origin.strip().rstrip("/") for origin in raw.split(",") if origin.strip()]
+    deduped: list[str] = []
+    for origin in parsed:
+        if origin not in deduped:
+            deduped.append(origin)
+    return deduped
 
 
-raw_allowed_origins = os.getenv("ALLOWED_ORIGINS", "") or os.getenv("CORS_ALLOWED_ORIGINS", "")
-allowed_origins = _parse_origins(raw_allowed_origins) if raw_allowed_origins else default_origins
+raw_allowed_origins = os.getenv("ALLOWED_ORIGINS", "")
+raw_cors_allowed_origins = os.getenv("CORS_ALLOWED_ORIGINS", "")
+origins_source = "default_origins"
+raw_origins = ""
+
+if raw_allowed_origins.strip():
+    raw_origins = raw_allowed_origins
+    origins_source = "ALLOWED_ORIGINS"
+elif raw_cors_allowed_origins.strip():
+    raw_origins = raw_cors_allowed_origins
+    origins_source = "CORS_ALLOWED_ORIGINS"
+
+allowed_origins = _parse_origins(raw_origins) if raw_origins else default_origins
 
 app.add_middleware(
     CORSMiddleware,
@@ -43,6 +67,28 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def log_tts_preflight(request: Request, call_next):
+    if request.method == "OPTIONS" and request.url.path == "/chat/tts":
+        logger.info(
+            "OPTIONS /chat/tts preflight origin=%s acr_method=%s acr_headers=%s",
+            request.headers.get("origin"),
+            request.headers.get("access-control-request-method"),
+            request.headers.get("access-control-request-headers"),
+        )
+
+    response = await call_next(request)
+
+    if request.method == "OPTIONS" and request.url.path == "/chat/tts":
+        logger.info(
+            "OPTIONS /chat/tts response status=%s allow_origin=%s",
+            response.status_code,
+            response.headers.get("access-control-allow-origin"),
+        )
+
+    return response
 
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 os.makedirs(STATIC_DIR, exist_ok=True)
@@ -93,5 +139,12 @@ def info():
 async def startup_event():
     init_db()
     result = seed_admin()
+    logger.info(
+        "CORS config source=%s ALLOWED_ORIGINS_raw=%s CORS_ALLOWED_ORIGINS_raw=%s parsed_allowed_origins=%s",
+        origins_source,
+        raw_allowed_origins,
+        raw_cors_allowed_origins,
+        allowed_origins,
+    )
     print(f"Admin seed status: {result}")
     print("🔥 Mufasa Knowledge Bank is awake and ready to serve the Pride!")
