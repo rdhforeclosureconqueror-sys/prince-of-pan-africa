@@ -1,7 +1,6 @@
 // src/api/mufasaClient.js
 
-const API_BASE =
-  import.meta.env.VITE_MUFASA_API || "https://mufasa-knowledge-bank.onrender.com";
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 
 /**
  * Generic helper for calling the Mufasa Knowledge Bank API
