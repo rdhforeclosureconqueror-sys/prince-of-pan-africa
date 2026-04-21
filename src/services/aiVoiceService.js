@@ -8,7 +8,8 @@ export async function requestAiVoice(text, voiceModel = "alloy") {
   });
 
   if (!res.ok) {
-    throw new Error(`AI voice request failed (${res.status})`);
+    const detail = await res.text();
+    throw new Error(`AI voice request failed (${res.status}): ${detail}`);
   }
 
   return res.json();
