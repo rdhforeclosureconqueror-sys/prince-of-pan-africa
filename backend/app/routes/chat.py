@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Request
 from openai import OpenAI
 import requests
 import tempfile
@@ -10,7 +10,7 @@ from app.config import settings
 
 router = APIRouter()
 
-STATIC_AUDIO_DIR = Path("app/static/audio")
+STATIC_AUDIO_DIR = Path(__file__).resolve().parents[1] / "static" / "audio"
 STATIC_AUDIO_DIR.mkdir(parents=True, exist_ok=True)
 
 MUFASA_MODEL = "gpt-4o-mini"
@@ -58,7 +58,11 @@ def save_audio_file(audio_bytes, ext="mp3"):
     filename = generate_audio_filename(ext)
     with open(filename, "wb") as f:
         f.write(audio_bytes)
-    return f"/static/audio/{filename.name}"
+    return filename
+
+
+def build_audio_url(request: Request, audio_file: Path) -> str:
+    return str(request.url_for("static", path=f"audio/{audio_file.name}"))
 
 
 def request_aivoice_tts(*, text: str, voice: str, timeout: int = 45):
@@ -166,7 +170,7 @@ async def ping_mufasa():
 
 
 @router.post("/message")
-async def generate_openai_response(payload: dict):
+async def generate_openai_response(payload: dict, request: Request):
     message = payload.get("message", "").strip()
     make_voice = payload.get("voice", False)
     voice_model = payload.get("voice_model", "alloy")
@@ -178,7 +182,8 @@ async def generate_openai_response(payload: dict):
     audio_url = None
 
     if make_voice:
-        audio_url = save_audio_file(request_aivoice_tts(text=ai_text, voice=voice_model))
+        audio_file = save_audio_file(request_aivoice_tts(text=ai_text, voice=voice_model))
+        audio_url = build_audio_url(request, audio_file)
 
     return {
         "reply": ai_text,
@@ -189,19 +194,20 @@ async def generate_openai_response(payload: dict):
 
 
 @router.post("/tts")
-async def text_to_speech(payload: dict):
+async def text_to_speech(payload: dict, request: Request):
     text = payload.get("text", "").strip()
     voice = payload.get("voice_model") or payload.get("voice") or "alloy"
 
     if not text:
         raise HTTPException(status_code=400, detail="No text provided for TTS.")
 
-    audio_url = save_audio_file(request_aivoice_tts(text=text, voice=voice))
+    audio_file = save_audio_file(request_aivoice_tts(text=text, voice=voice))
+    audio_url = build_audio_url(request, audio_file)
     return {"audio_url": audio_url, "voice": voice}
 
 
 @router.post("/voice")
-async def handle_voice_input(file: UploadFile = File(...)):
+async def handle_voice_input(request: Request, file: UploadFile = File(...)):
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as tmp:
             tmp.write(await file.read())
@@ -216,7 +222,8 @@ async def handle_voice_input(file: UploadFile = File(...)):
 
         ai_text = openai_response(user_text)
 
-        audio_url = save_audio_file(request_aivoice_tts(text=ai_text, voice="alloy"))
+        audio_file = save_audio_file(request_aivoice_tts(text=ai_text, voice="alloy"))
+        audio_url = build_audio_url(request, audio_file)
 
         os.remove(tmp_path)
 
