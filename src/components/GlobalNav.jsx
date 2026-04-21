@@ -1,22 +1,7 @@
 import React, { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import "../styles/globalNav.css";
-
-const NAV_LINKS = [
-  { label: "Home", to: "/" },
-  { label: "Fitness", to: "/fitness" },
-  { label: "Timeline", to: "/timeline" },
-  { label: "Languages Hub", to: "/languages" },
-  { label: "Language Practice", to: "/language-practice" },
-  { label: "Decolonize Library", to: "/decolonize" },
-  { label: "Decolonize Portal", to: "/portal/decolonize" },
-  { label: "Calendar", to: "/calendar" },
-  { label: "Journal", to: "/journal" },
-  { label: "Study", to: "/study" },
-  { label: "Pan-Africa’s Got Talent", to: "/pagt" },
-  { label: "Membership", to: "/membership" },
-  { label: "Leadership", to: "/leadership" },
-];
+import { PILOT_NAV_LINKS } from "../pilotScope";
 
 const EXTERNAL_LINKS = [
   { label: "Swahili Lesson", href: "/languages/swahili.html" },
@@ -51,7 +36,7 @@ export default function GlobalNav({ isAdmin }) {
           id="global-nav-menu"
           className={`global-nav__links ${open ? "is-open" : ""}`}
         >
-          {NAV_LINKS.map((link) => (
+          {PILOT_NAV_LINKS.map((link) => (
             <Link
               key={link.to}
               to={link.to}
