@@ -7,7 +7,11 @@ import logging
 
 router = APIRouter()
 
-AIVOICE_BASE_URL = os.getenv("AIVOICE_BASE_URL", "https://aivoice-wmrv.onrender.com")
+AIVOICE_BASE_URL = (
+    os.getenv("AIVOICE_BASE_URL")
+    or os.getenv("OPENVOICE_URL")
+    or "https://aivoice-wmrv.onrender.com"
+)
 AIVOICE_API_KEY = os.getenv("AIVOICE_API_KEY", "")
 
 logger = logging.getLogger("mufasa-voice")
@@ -84,6 +88,17 @@ def health():
             headers={"X-AIVOICE-KEY": AIVOICE_API_KEY} if AIVOICE_API_KEY else {},
             timeout=10,
         )
-        return {"ok": res.status_code == 200, "status": res.status_code, "details": res.json()}
+        return {
+            "ok": res.status_code == 200,
+            "status": res.status_code,
+            "provider_base_url": AIVOICE_BASE_URL,
+            "provider_key_present": bool(AIVOICE_API_KEY),
+            "details": res.json(),
+        }
     except Exception as e:
-        return {"ok": False, "error": str(e)}
+        return {
+            "ok": False,
+            "provider_base_url": AIVOICE_BASE_URL,
+            "provider_key_present": bool(AIVOICE_API_KEY),
+            "error": str(e),
+        }

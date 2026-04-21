@@ -4,6 +4,7 @@ import requests
 import tempfile
 import os
 import uuid
+import logging
 from pathlib import Path
 from app.config import settings
 
@@ -18,6 +19,7 @@ AIVOICE_API_KEY = settings.AIVOICE_API_KEY
 OPENAI_API_KEY = settings.OPENAI_API_KEY
 
 client = OpenAI(api_key=OPENAI_API_KEY or "DUMMY_KEY")
+logger = logging.getLogger("mufasa-chat-voice")
 
 
 def aivoice_headers():
@@ -36,6 +38,39 @@ def save_audio_file(audio_bytes, ext="mp3"):
     with open(filename, "wb") as f:
         f.write(audio_bytes)
     return f"/static/audio/{filename.name}"
+
+
+def request_aivoice_tts(*, text: str, voice: str, timeout: int = 45):
+    payload = {"text": text, "format": "mp3", "voice": voice}
+    try:
+        response = requests.post(
+            f"{AIVOICE_BASE_URL}/tts",
+            json=payload,
+            headers=aivoice_headers(),
+            timeout=timeout,
+            stream=True,
+        )
+    except requests.RequestException as exc:
+        logger.error("aiVoice network error base_url=%s error=%s", AIVOICE_BASE_URL, exc)
+        raise HTTPException(
+            status_code=502,
+            detail=f"aiVoice unreachable at {AIVOICE_BASE_URL}: {exc}",
+        ) from exc
+
+    if response.status_code != 200:
+        detail = response.text[:250]
+        logger.error(
+            "aiVoice /tts rejected status=%s base_url=%s body=%s",
+            response.status_code,
+            AIVOICE_BASE_URL,
+            detail,
+        )
+        raise HTTPException(
+            status_code=response.status_code,
+            detail=f"aiVoice /tts rejected request ({response.status_code}): {detail}",
+        )
+
+    return response.content
 
 
 def openai_response(prompt: str) -> str:
@@ -78,25 +113,7 @@ async def generate_openai_response(payload: dict):
     audio_url = None
 
     if make_voice:
-        try:
-            tts_response = requests.post(
-                f"{AIVOICE_BASE_URL}/tts",
-                json={"text": ai_text, "format": "mp3", "voice": voice_model},
-                headers=aivoice_headers(),
-                timeout=45,
-                stream=True,
-            )
-
-            if tts_response.status_code == 200:
-                audio_url = save_audio_file(tts_response.content)
-            else:
-                raise HTTPException(
-                    status_code=tts_response.status_code,
-                    detail=f"aiVoice TTS failed: {tts_response.text}",
-                )
-
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"TTS service failed: {e}")
+        audio_url = save_audio_file(request_aivoice_tts(text=ai_text, voice=voice_model))
 
     return {
         "reply": ai_text,
@@ -114,23 +131,8 @@ async def text_to_speech(payload: dict):
     if not text:
         raise HTTPException(status_code=400, detail="No text provided for TTS.")
 
-    try:
-        tts_response = requests.post(
-            f"{AIVOICE_BASE_URL}/tts",
-            json={"text": text, "format": "mp3", "voice": voice},
-            headers=aivoice_headers(),
-            timeout=45,
-            stream=True,
-        )
-
-        if tts_response.status_code == 200:
-            audio_url = save_audio_file(tts_response.content)
-            return {"audio_url": audio_url, "voice": voice}
-
-        raise HTTPException(status_code=500, detail="TTS failed to generate.")
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"TTS failed: {e}")
+    audio_url = save_audio_file(request_aivoice_tts(text=text, voice=voice))
+    return {"audio_url": audio_url, "voice": voice}
 
 
 @router.post("/voice")
@@ -149,22 +151,7 @@ async def handle_voice_input(file: UploadFile = File(...)):
 
         ai_text = openai_response(user_text)
 
-        tts_response = requests.post(
-            f"{AIVOICE_BASE_URL}/tts",
-            json={"text": ai_text, "format": "mp3", "voice": "alloy"},
-            headers=aivoice_headers(),
-            timeout=45,
-            stream=True,
-        )
-
-        audio_url = None
-        if tts_response.status_code == 200:
-            audio_url = save_audio_file(tts_response.content)
-        else:
-            raise HTTPException(
-                status_code=tts_response.status_code,
-                detail="aiVoice TTS request failed",
-            )
+        audio_url = save_audio_file(request_aivoice_tts(text=ai_text, voice="alloy"))
 
         os.remove(tmp_path)
 
