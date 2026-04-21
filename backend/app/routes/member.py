@@ -28,7 +28,18 @@ def get_member_overview(db: Session = Depends(get_db)):
         .count()
     )
 
+    # Canonical summary block (additive; older fields are preserved below).
+    summary_stats = {
+        "assessment_count": assessment_count,
+        "activity_count": activity_count,
+        "reading_minutes": 0,
+        "workouts_completed": 0,
+        "shares": 0,
+        "streak_days": 0,
+    }
+
     return {
+        "ok": True,
         "status": "ok",
         "user": {
             "id": user.id,
@@ -40,10 +51,12 @@ def get_member_overview(db: Session = Depends(get_db)):
             "role": (profile.role if profile else user.role),
             "attributes": profile.attributes if profile else {},
         },
-        "summary_stats": {
-            "assessment_count": assessment_count,
-            "activity_count": activity_count,
-        },
+        "summary_stats": summary_stats,
+        # Backward-compatible top-level keys currently read by MemberDashboard.jsx.
+        "reading_minutes": summary_stats["reading_minutes"],
+        "workouts_completed": summary_stats["workouts_completed"],
+        "shares": summary_stats["shares"],
+        "streak_days": summary_stats["streak_days"],
     }
 
 
@@ -62,15 +75,24 @@ def get_member_activity(limit: int = 10, db: Session = Depends(get_db)):
         .all()
     )
 
+    # Canonical item shape with compatibility aliases for existing frontend callers.
+    activity_items = [
+        {
+            "id": entry.id,
+            "action": entry.action,
+            "title": entry.action,
+            "type": entry.action,
+            "description": entry.action,
+            "detail": entry.action,
+            "timestamp": entry.timestamp.isoformat() if entry.timestamp else None,
+        }
+        for entry in entries
+    ]
+
     return {
+        "ok": True,
         "status": "ok",
         "user_id": user.id,
-        "activity": [
-            {
-                "id": entry.id,
-                "action": entry.action,
-                "timestamp": entry.timestamp.isoformat() if entry.timestamp else None,
-            }
-            for entry in entries
-        ],
+        "activity": activity_items,
+        "items": activity_items,
     }
