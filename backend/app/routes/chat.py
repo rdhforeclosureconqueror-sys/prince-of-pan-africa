@@ -65,9 +65,19 @@ def build_audio_url(request: Request, audio_file: Path) -> str:
     return str(request.url_for("static", path=f"audio/{audio_file.name}"))
 
 
-def request_aivoice_tts(*, text: str, voice: str, timeout: int = 45):
-    payload = {"text": text, "format": "mp3", "voice": voice}
-    provider_url = f"{AIVOICE_BASE_URL.rstrip('/')}/tts"
+def request_aivoice_tts(
+    *,
+    text: str,
+    voice: str | None = None,
+    format: str | None = "mp3",
+    timeout: int = 45,
+):
+    payload = {"text": text}
+    if voice:
+        payload["voice"] = voice
+    if format:
+        payload["format"] = format
+    provider_url = f"{AIVOICE_BASE_URL.rstrip('/')}/speak"
     headers = aivoice_headers()
     logged_headers = dict(headers)
     logged_headers["X-AIVOICE-KEY"] = _masked_key(headers.get("X-AIVOICE-KEY"))
@@ -113,7 +123,7 @@ def request_aivoice_tts(*, text: str, voice: str, timeout: int = 45):
         detail = response.text[:200]
         reason = _tts_error_reason(response.status_code, detail)
         logger.error(
-            "aiVoice /tts rejected url=%s headers=%s status=%s reason=%s body=%s",
+            "aiVoice /speak rejected url=%s headers=%s status=%s reason=%s body=%s",
             provider_url,
             logged_headers,
             response.status_code,
@@ -134,7 +144,7 @@ def request_aivoice_tts(*, text: str, voice: str, timeout: int = 45):
         )
 
     logger.info(
-        "aiVoice /tts success url=%s status=%s content_type=%s",
+        "aiVoice /speak success url=%s status=%s content_type=%s",
         provider_url,
         response.status_code,
         response.headers.get("content-type"),
