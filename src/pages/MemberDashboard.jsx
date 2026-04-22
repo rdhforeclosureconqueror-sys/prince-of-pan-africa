@@ -39,7 +39,7 @@ export default function MemberDashboard() {
   const summary = overview?.summary_stats || overview || {};
 
   return (
-    <div className="admin-dashboard">
+    <div className="admin-dashboard cosmic-readable-shell">
       <h1>🌟 Member Experience Dashboard</h1>
 
       <div className="dashboard-grid">

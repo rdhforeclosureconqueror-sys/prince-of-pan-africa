@@ -1,5 +1,6 @@
 import React from "react";
 import { Link } from "react-router-dom";
+import "../styles/library.css";
 
 const PHASES = [
   {
@@ -31,92 +32,36 @@ const PHASES = [
 
 export default function LibraryDecolonize() {
   return (
-    <div style={{ padding: 18, color: "#f4f1e8" }}>
-      <div style={{ maxWidth: 1100, margin: "0 auto" }}>
-        <h1 style={{ margin: 0, color: "#f5e6b3" }}>Decolonization Library</h1>
-        <p style={{ marginTop: 8, opacity: 0.85 }}>
-          5 phases → click into the portal when you’re ready to run the process.
-        </p>
+    <main className="library-shell">
+      <div className="library-inner cosmic-readable-shell">
+        <h1>Decolonization Library</h1>
+        <p>5 phases → click into the portal when you’re ready to run the process.</p>
 
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 10 }}>
-          <Link
-            to="/portal/decolonize"
-            style={{
-              padding: "10px 14px",
-              borderRadius: 999,
-              border: "1px solid rgba(16,185,129,.55)",
-              background: "rgba(0,0,0,.25)",
-              color: "#f4f1e8",
-              textDecoration: "none",
-              fontWeight: 800,
-            }}
-          >
+        <div className="library-actions">
+          <Link to="/portal/decolonize" className="library-pill library-pill--green">
             ▶ Start Decolonization Portal
           </Link>
 
-          <Link
-            to="/membership"
-            style={{
-              padding: "10px 14px",
-              borderRadius: 999,
-              border: "1px solid rgba(214,178,94,.55)",
-              background: "rgba(0,0,0,.25)",
-              color: "#f4f1e8",
-              textDecoration: "none",
-              fontWeight: 800,
-            }}
-          >
+          <Link to="/membership" className="library-pill library-pill--gold">
             📅 View 30-Day Plan
           </Link>
         </div>
 
-        <div
-          style={{
-            marginTop: 16,
-            display: "grid",
-            gap: 12,
-            gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-          }}
-        >
-          {PHASES.map((p) => (
-            <div
-              key={p.id}
-              style={{
-                textAlign: "left",
-                padding: 14,
-                borderRadius: 16,
-                border: "1px solid rgba(214,178,94,.35)",
-                background: "rgba(0,0,0,.35)",
-              }}
-            >
-              <div style={{ fontWeight: 900 }}>{p.title}</div>
-              <div style={{ marginTop: 6, opacity: 0.85, fontSize: 13 }}>
-                {p.desc}
-              </div>
+        <div className="phase-grid">
+          {PHASES.map((phase) => (
+            <article key={phase.id} className="phase-card">
+              <div className="phase-title">{phase.title}</div>
+              <div className="phase-desc">{phase.desc}</div>
 
-              <div style={{ marginTop: 10 }}>
-                <Link
-                  to="/portal/decolonize"
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 8,
-                    padding: "9px 12px",
-                    borderRadius: 999,
-                    border: "1px solid rgba(214,178,94,.35)",
-                    color: "#f4f1e8",
-                    textDecoration: "none",
-                    fontWeight: 800,
-                    background: "rgba(0,0,0,.25)",
-                  }}
-                >
+              <div className="phase-link-wrap">
+                <Link to="/portal/decolonize" className="library-pill phase-link">
                   Open Portal →
                 </Link>
               </div>
-            </div>
+            </article>
           ))}
         </div>
       </div>
-    </div>
+    </main>
   );
 }

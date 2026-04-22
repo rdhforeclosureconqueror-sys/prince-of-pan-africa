@@ -47,7 +47,7 @@ export default function AdminOperationsDashboard() {
   if (error) return <div className="admin-error">⚠️ {error}</div>;
 
   return (
-    <div className="admin-dashboard">
+    <div className="admin-dashboard cosmic-readable-shell">
       <h1>🛰️ Operations Deck — Unified Admin Dashboard</h1>
       <p className="admin-subtext">
         Connected to <code>/admin/ai/overview</code>, <code>/admin/ai/members</code>, <code>/admin/ai/profiles</code>, and <code>/admin/holistic/overview</code>.

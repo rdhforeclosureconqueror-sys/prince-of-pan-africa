@@ -1,0 +1,35 @@
+.languages-shell {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 5.2rem 1rem 2rem;
+}
+
+.languages-panel {
+  border-radius: 20px;
+  padding: 1.2rem;
+}
+
+.languages-panel h1 {
+  color: #f5c542;
+  margin: 0;
+}
+
+.languages-panel p {
+  color: #f5e6b3;
+}
+
+.languages-grid {
+  display: grid;
+  gap: 0.75rem;
+  max-width: 460px;
+}
+
+.language-card {
+  display: block;
+  padding: 0.9rem;
+  border-radius: 14px;
+  border: 1px solid rgba(252, 211, 77, 0.5);
+  background: rgba(3, 8, 24, 0.62);
+  color: #f5e6b3;
+  text-decoration: none;
+}
