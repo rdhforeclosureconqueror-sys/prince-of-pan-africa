@@ -72,6 +72,28 @@ def build_audio_url(request: Request, audio_file: Path) -> str:
     return str(request.url_for("static", path=f"audio/{audio_file.name}"))
 
 
+
+
+def normalize_tts_text(text: str) -> str:
+    normalized = " ".join((text or "").split())
+    return normalized.strip()
+
+
+def generate_tts_audio_url(*, request: Request, text: str, voice: str = "alloy") -> tuple[str, bool]:
+    normalized_text = normalize_tts_text(text)
+    if not normalized_text:
+        raise HTTPException(status_code=400, detail="No text provided for TTS.")
+
+    cached_file = cache_audio_filename(text=normalized_text, voice=voice)
+    cached = cached_file.exists()
+
+    if not cached:
+        audio_bytes = request_aivoice_tts(text=normalized_text, voice=voice)
+        with open(cached_file, "wb") as f:
+            f.write(audio_bytes)
+
+    audio_url = build_audio_url(request, cached_file)
+    return audio_url, cached
 def request_aivoice_tts(
     *,
     text: str,
@@ -216,25 +238,11 @@ async def generate_openai_response(payload: dict, request: Request):
 
 @router.post("/tts")
 async def text_to_speech(payload: dict, request: Request):
-    text = payload.get("text", "").strip()
+    text = payload.get("text", "")
     voice = payload.get("voice_model") or payload.get("voice") or "alloy"
 
-    if not text:
-        raise HTTPException(status_code=400, detail="No text provided for TTS.")
-
     started = time.perf_counter()
-    cached_file = cache_audio_filename(text=text, voice=voice)
-    cached = cached_file.exists()
-
-    if cached:
-        audio_file = cached_file
-    else:
-        audio_bytes = request_aivoice_tts(text=text, voice=voice)
-        with open(cached_file, "wb") as f:
-            f.write(audio_bytes)
-        audio_file = cached_file
-
-    audio_url = build_audio_url(request, audio_file)
+    audio_url, cached = generate_tts_audio_url(request=request, text=text, voice=voice)
     elapsed_ms = round((time.perf_counter() - started) * 1000, 2)
     return {"audio_url": audio_url, "voice": voice, "cached": cached, "latency_ms": elapsed_ms}
 
