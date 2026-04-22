@@ -2,7 +2,7 @@ import hashlib
 import threading
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -281,9 +281,9 @@ def create_audiobook(payload: AudiobookCreateRequest, request: Request, db: Sess
 @router.post("/upload")
 async def upload_audiobook(
     request: Request,
-    title: str,
-    author: str = "Unknown",
-    voice: str = "alloy",
+    title: str = Form(...),
+    author: str = Form("Unknown"),
+    voice: str = Form("alloy"),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
