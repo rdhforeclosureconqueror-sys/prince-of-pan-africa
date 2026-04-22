@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
+import { API_BASE_URL } from "../config";
 
-const API = import.meta.env.VITE_API_BASE_URL || "";
+const API = API_BASE_URL;
 
 const CATEGORY_FIXES = {
   database: "Check DATABASE_URL, DB connectivity, and ensure migrations/init ran.",
@@ -32,7 +33,7 @@ export default function SystemVerificationPage() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`${API}/system/verification/full`);
+      const res = await fetch(`${API}/system/verification/full`, { credentials: "include" });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.detail || `Verification failed (${res.status})`);
       setReport(data);

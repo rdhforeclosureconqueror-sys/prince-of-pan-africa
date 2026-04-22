@@ -182,6 +182,7 @@ export async function submitLeadershipAssessment(payload) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(requestPayload),
+      credentials: "include",
     });
     if (!res.ok) {
       throw new Error(`Assessment API failed (${res.status})`);
@@ -207,7 +208,9 @@ export async function fetchLeadershipResultByUserId(userId) {
   if (!userId) return null;
 
   if (API_BASE) {
-    const res = await fetch(`${API_BASE}/assessment/results/${encodeURIComponent(userId)}`);
+    const res = await fetch(`${API_BASE}/assessment/results/${encodeURIComponent(userId)}`, {
+      credentials: "include",
+    });
     if (res.ok) {
       const data = await res.json();
       const normalized = normalizeResponse(data, userId);
@@ -226,7 +229,9 @@ export async function fetchLeadershipDashboard(userId) {
   if (!userId) return null;
 
   if (API_BASE) {
-    const res = await fetch(`${API_BASE}/assessment/dashboard/${encodeURIComponent(userId)}`);
+    const res = await fetch(`${API_BASE}/assessment/dashboard/${encodeURIComponent(userId)}`, {
+      credentials: "include",
+    });
     if (!res.ok) return null;
     const payload = await res.json();
     const latest = normalizeResponse(payload.latest, userId);
