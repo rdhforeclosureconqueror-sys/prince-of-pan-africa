@@ -9,7 +9,7 @@
 .hero-panel,
 .panel {
   border: 1px solid rgba(170, 212, 255, 0.25);
-  background: radial-gradient(circle at top right, rgba(89, 105, 255, 0.18), rgba(4, 10, 22, 0.9));
+  background: radial-gradient(circle at top right, rgba(112, 132, 255, 0.26), rgba(4, 10, 22, 0.72));
   border-radius: 20px;
   padding: 20px;
   box-shadow: 0 20px 40px rgba(2, 7, 20, 0.35);

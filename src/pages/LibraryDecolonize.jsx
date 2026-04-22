@@ -1,5 +1,6 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { api } from "../api/api";
 import "../styles/library.css";
 
 const PHASES = [
@@ -31,28 +32,65 @@ const PHASES = [
 ];
 
 export default function LibraryDecolonize() {
+  const [items, setItems] = useState([]);
+
+  useEffect(() => {
+    async function loadLibrary() {
+      try {
+        const response = await api("/audiobooks", { method: "GET", credentials: "include" });
+        setItems(response.items || []);
+      } catch {
+        setItems([]);
+      }
+    }
+
+    loadLibrary();
+  }, []);
+
   return (
     <main className="library-shell">
       <div className="library-inner cosmic-readable-shell">
-        <h1>Decolonization Library</h1>
-        <p>5 phases → click into the portal when you’re ready to run the process.</p>
+        <h1>Book + Audiobook Library</h1>
+        <p>Your saved manuscripts and audiobooks stay in the system for reading, listening, and resume progress.</p>
 
         <div className="library-actions">
-          <Link to="/portal/decolonize" className="library-pill library-pill--green">
-            ▶ Start Decolonization Portal
+          <Link to="/study" className="library-pill library-pill--green">
+            + Save New Book / Audiobook
           </Link>
-
-          <Link to="/membership" className="library-pill library-pill--gold">
-            📅 View 30-Day Plan
+          <Link to="/portal/decolonize" className="library-pill library-pill--gold">
+            Open Decolonization Portal
           </Link>
         </div>
 
+        <section className="saved-library-grid">
+          {!items.length ? (
+            <p className="saved-empty">No books saved yet. Start in Audiobook Studio to add your first title.</p>
+          ) : (
+            items.map((item) => (
+              <article key={item.id} className="saved-book-card">
+                <h3>{item.title}</h3>
+                <p>{item.author}</p>
+                <div className="saved-meta">
+                  <span>{item.status}</span>
+                  <span>{item.access_level}</span>
+                  <span>{item.audio_chapter_count}/{item.chapter_count} voiced</span>
+                </div>
+                <div className="saved-actions">
+                  <Link to={`/study?book=${item.id}`} className="library-pill phase-link">
+                    Continue Reading/Listening →
+                  </Link>
+                </div>
+              </article>
+            ))
+          )}
+        </section>
+
+        <h2 className="library-section-title">Decolonization Journey</h2>
         <div className="phase-grid">
           {PHASES.map((phase) => (
             <article key={phase.id} className="phase-card">
               <div className="phase-title">{phase.title}</div>
               <div className="phase-desc">{phase.desc}</div>
-
               <div className="phase-link-wrap">
                 <Link to="/portal/decolonize" className="library-pill phase-link">
                   Open Portal →

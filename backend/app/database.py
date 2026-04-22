@@ -77,6 +77,15 @@ def _run_sqlite_compat_migrations() -> None:
                     )
                 )
 
+        audiobook_cols = [row[1] for row in conn.execute(text("PRAGMA table_info(audiobooks)"))]
+        audiobook_compat_columns = {
+            "source_text": "TEXT NOT NULL DEFAULT ''",
+            "access_level": "TEXT NOT NULL DEFAULT 'free'",
+        }
+        for column, column_type in audiobook_compat_columns.items():
+            if audiobook_cols and column not in audiobook_cols:
+                conn.execute(text(f"ALTER TABLE audiobooks ADD COLUMN {column} {column_type}"))
+
 
 # =========================
 # DATABASE TYPE DETECTION

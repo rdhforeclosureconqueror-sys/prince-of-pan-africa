@@ -1,17 +1,21 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../api/api";
 import { API_BASE_URL } from "../config";
 import "../styles/studyPage.css";
 
 const SPEED_OPTIONS = [0.75, 1, 1.25, 1.5, 2];
+const ACCESS_OPTIONS = ["free", "member", "subscriber", "purchased"];
 
 function splitIntoSentences(text = "") {
-  return text
-    .replace(/\s+/g, " ")
-    .trim()
-    .match(/[^.!?]+[.!?]+|[^.!?]+$/g)
-    ?.map((sentence) => sentence.trim())
-    .filter(Boolean) || [];
+  return (
+    text
+      .replace(/\s+/g, " ")
+      .trim()
+      .match(/[^.!?]+[.!?]+|[^.!?]+$/g)
+      ?.map((sentence) => sentence.trim())
+      .filter(Boolean) || []
+  );
 }
 
 function mapSentenceTimings(sentences, duration) {
@@ -31,9 +35,12 @@ function mapSentenceTimings(sentences, duration) {
 }
 
 export default function StudyPage() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [title, setTitle] = useState("");
   const [author, setAuthor] = useState("");
   const [voice, setVoice] = useState("alloy");
+  const [accessLevel, setAccessLevel] = useState("free");
   const [text, setText] = useState("");
   const [file, setFile] = useState(null);
   const [library, setLibrary] = useState([]);
@@ -65,10 +72,7 @@ export default function StudyPage() {
     return splitIntoSentences(activeChapter.text);
   }, [activeChapter?.id, activeChapter?.text]);
 
-  const sentenceTimings = useMemo(
-    () => mapSentenceTimings(chapterSentences, duration),
-    [chapterSentences, duration]
-  );
+  const sentenceTimings = useMemo(() => mapSentenceTimings(chapterSentences, duration), [chapterSentences, duration]);
 
   async function loadLibrary() {
     try {
@@ -102,6 +106,12 @@ export default function StudyPage() {
   }, []);
 
   useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const preselectId = Number(params.get("book") || 0);
+    if (preselectId > 0) setSelectedBookId(preselectId);
+  }, [location.search]);
+
+  useEffect(() => {
     if (selectedBookId) {
       loadBook(selectedBookId);
     }
@@ -131,10 +141,10 @@ export default function StudyPage() {
     if (!isPlaying) return;
     const activeSentence = sentenceRefs.current[activeSentenceIndex];
     if (!activeSentence) return;
-    activeSentence.scrollIntoView({ behavior: "smooth", block: "center" });
+    activeSentence.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
   }, [activeSentenceIndex, isPlaying]);
 
-  async function submitGeneration() {
+  async function submitGeneration({ generateAudio }) {
     setError("");
     setStatus("");
     if (!title.trim()) {
@@ -143,7 +153,7 @@ export default function StudyPage() {
     }
 
     setIsGenerating(true);
-    setStatus("Generating chapters...");
+    setStatus(generateAudio ? "Generating chapters and audio..." : "Saving draft into your library...");
 
     try {
       let response;
@@ -153,6 +163,8 @@ export default function StudyPage() {
         form.append("author", author.trim() || "Unknown");
         form.append("voice", voice);
         form.append("file", file);
+        form.append("generate_audio", generateAudio ? "true" : "false");
+        form.append("access_level", accessLevel);
         const res = await fetch(`${API_BASE_URL}/audiobooks/upload`, {
           method: "POST",
           credentials: "include",
@@ -175,22 +187,39 @@ export default function StudyPage() {
             author: author.trim() || "Unknown",
             text,
             voice,
+            generate_audio: generateAudio,
+            access_level: accessLevel,
           }),
         });
       }
 
       const cachedLabel = response.cached ? " (cache reused)" : "";
-      setStatus(`Audiobook ready${cachedLabel}.`);
+      setStatus(generateAudio ? `Audiobook ready${cachedLabel}.` : `Book draft saved${cachedLabel}.`);
       setSelectedBookId(response.audiobook.id);
+      navigate(`/study?book=${response.audiobook.id}`, { replace: true });
       await loadLibrary();
     } catch (err) {
       if (err?.status === 422) {
         setError("Upload failed. Check file type or missing fields.");
       } else {
-        setError(err.message || "Generation failed.");
+        setError(err.message || "Save/generation failed.");
       }
     } finally {
       setIsGenerating(false);
+    }
+  }
+
+  async function generateAudioForSavedBook() {
+    if (!selectedBook?.id) return;
+    setStatus("Generating chapter audio for this saved book...");
+    setError("");
+    try {
+      const response = await api(`/audiobooks/${selectedBook.id}/generate-audio`, { method: "POST" });
+      setStatus(`Audio generation status: ${response.status}`);
+      await loadBook(selectedBook.id);
+      await loadLibrary();
+    } catch (err) {
+      setError(err.message || "Failed to generate audio.");
     }
   }
 
@@ -231,10 +260,7 @@ export default function StudyPage() {
 
     if (!sentenceTimings.length) {
       if (chapterSentences.length > 1 && duration > 0) {
-        const ratioIndex = Math.min(
-          chapterSentences.length - 1,
-          Math.floor((currentTime / duration) * chapterSentences.length)
-        );
+        const ratioIndex = Math.min(chapterSentences.length - 1, Math.floor((currentTime / duration) * chapterSentences.length));
         setActiveSentenceIndex(ratioIndex);
       }
       return;
@@ -257,14 +283,18 @@ export default function StudyPage() {
     }
   }
 
+  function seekToSentence(index) {
+    if (!audioRef.current || !sentenceTimings[index]) return;
+    const nextStart = sentenceTimings[index].start;
+    audioRef.current.currentTime = nextStart;
+    setProgress(nextStart);
+    setActiveSentenceIndex(index);
+  }
+
   function formatTime(secondsValue) {
     const seconds = Math.max(0, Math.floor(secondsValue || 0));
-    const minutes = Math.floor(seconds / 60)
-      .toString()
-      .padStart(2, "0");
-    const remainder = Math.floor(seconds % 60)
-      .toString()
-      .padStart(2, "0");
+    const minutes = Math.floor(seconds / 60).toString().padStart(2, "0");
+    const remainder = Math.floor(seconds % 60).toString().padStart(2, "0");
     return `${minutes}:${remainder}`;
   }
 
@@ -281,44 +311,53 @@ export default function StudyPage() {
         {!isFocusMode && (
           <>
             <header className="study-header">
-              <h1>Text to Audiobook</h1>
-              <p>Create, listen, and read in sync with immersive sentence highlighting.</p>
+              <h1>Audiobook Studio + Library</h1>
+              <p>Save manuscripts, generate chapter audio when ready, and read/listen in sync with sentence tracking.</p>
             </header>
 
             <section className="study-generator">
               <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Book title" />
               <input value={author} onChange={(e) => setAuthor(e.target.value)} placeholder="Author" />
-              <select value={voice} onChange={(e) => setVoice(e.target.value)}>
-                <option value="alloy">alloy</option>
-                <option value="echo">echo</option>
-                <option value="fable">fable</option>
-                <option value="onyx">onyx</option>
-              </select>
-              <textarea
-                rows={8}
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                placeholder="Paste text here (or upload .txt)."
-              />
+              <div className="generator-grid-row">
+                <select value={voice} onChange={(e) => setVoice(e.target.value)}>
+                  <option value="alloy">alloy</option>
+                  <option value="echo">echo</option>
+                  <option value="fable">fable</option>
+                  <option value="onyx">onyx</option>
+                </select>
+                <select value={accessLevel} onChange={(e) => setAccessLevel(e.target.value)}>
+                  {ACCESS_OPTIONS.map((option) => (
+                    <option value={option} key={option}>
+                      Access: {option}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <textarea rows={8} value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste text here (or upload .txt)." />
               <input type="file" accept=".txt" onChange={(e) => setFile(e.target.files?.[0] || null)} />
-              <button onClick={submitGeneration} disabled={isGenerating || (!text.trim() && !file)}>
-                {isGenerating ? "Generating..." : "Generate Audiobook"}
-              </button>
+              <div className="generator-cta-row">
+                <button onClick={() => submitGeneration({ generateAudio: false })} disabled={isGenerating || (!text.trim() && !file)}>
+                  {isGenerating ? "Saving..." : "Save Draft Book"}
+                </button>
+                <button onClick={() => submitGeneration({ generateAudio: true })} disabled={isGenerating || (!text.trim() && !file)}>
+                  {isGenerating ? "Generating..." : "Generate Audiobook"}
+                </button>
+              </div>
               {status && <p className="study-status">{status}</p>}
               {error && <p className="study-error">{error}</p>}
             </section>
 
             <section className="study-library">
               <h2>Saved Library</h2>
-              {!library.length && <p>No audiobooks yet.</p>}
+              {!library.length && <p>No saved books yet.</p>}
               <ul>
                 {library.map((book) => (
                   <li key={book.id}>
-                    <button
-                      className={selectedBookId === book.id ? "is-active" : ""}
-                      onClick={() => setSelectedBookId(book.id)}
-                    >
-                      {book.title} — {book.author}
+                    <button className={selectedBookId === book.id ? "is-active" : ""} onClick={() => setSelectedBookId(book.id)}>
+                      <strong>{book.title}</strong> — {book.author}
+                      <span>
+                        {book.status} • {book.access_level} • {book.audio_chapter_count}/{book.chapter_count} chapters voiced
+                      </span>
                     </button>
                   </li>
                 ))}
@@ -332,11 +371,20 @@ export default function StudyPage() {
             <div className="reader-topbar">
               <div>
                 <h2>{selectedBook.title}</h2>
-                <p>{selectedBook.author}</p>
+                <p>
+                  {selectedBook.author} • {selectedBook.status} • access: {selectedBook.access_level}
+                </p>
               </div>
-              <button className="focus-toggle" onClick={() => setIsFocusMode((prev) => !prev)}>
-                {isFocusMode ? "Exit Focus" : "Focus Mode"}
-              </button>
+              <div className="reader-actions">
+                {selectedBook.audio_chapter_count < selectedBook.chapter_count && (
+                  <button className="focus-toggle" onClick={generateAudioForSavedBook}>
+                    Generate Missing Audio
+                  </button>
+                )}
+                <button className="focus-toggle" onClick={() => setIsFocusMode((prev) => !prev)}>
+                  {isFocusMode ? "Exit Focus" : "Focus Mode"}
+                </button>
+              </div>
             </div>
 
             <div className="reader-grid">
@@ -347,11 +395,9 @@ export default function StudyPage() {
                 <ul className={showChapterMenu ? "is-open" : ""}>
                   {selectedBook.chapters.map((chapter, idx) => (
                     <li key={chapter.id}>
-                      <button
-                        className={idx === activeChapterIndex ? "is-current" : ""}
-                        onClick={() => switchChapter(idx)}
-                      >
+                      <button className={idx === activeChapterIndex ? "is-current" : ""} onClick={() => switchChapter(idx)}>
                         {chapter.title}
+                        <small>{chapter.status}</small>
                       </button>
                     </li>
                   ))}
@@ -359,17 +405,20 @@ export default function StudyPage() {
               </aside>
 
               <article className="reader-panel" aria-live="polite">
+                <p className="reader-context">Sentence {activeSentenceIndex + 1} of {Math.max(chapterSentences.length, 1)}</p>
                 {chapterSentences.length ? (
                   chapterSentences.map((sentence, idx) => (
-                    <span
+                    <button
+                      type="button"
                       key={`${activeChapter?.id}-${idx}`}
                       ref={(node) => {
                         sentenceRefs.current[idx] = node;
                       }}
                       className={`reader-sentence ${idx === activeSentenceIndex ? "is-highlighted" : ""}`}
+                      onClick={() => seekToSentence(idx)}
                     >
-                      {sentence}{" "}
-                    </span>
+                      {sentence}
+                    </button>
                   ))
                 ) : (
                   <p>No chapter text available for reading mode.</p>
@@ -396,14 +445,7 @@ export default function StudyPage() {
 
               <div className="progress-shell">
                 <span>{formatTime(progress)}</span>
-                <input
-                  type="range"
-                  min={0}
-                  max={duration || 0}
-                  step={1}
-                  value={Math.min(progress, duration || 0)}
-                  onChange={handleSeek}
-                />
+                <input type="range" min={0} max={duration || 0} step={1} value={Math.min(progress, duration || 0)} onChange={handleSeek} />
                 <span>{formatTime(duration)}</span>
               </div>
 
@@ -432,7 +474,7 @@ export default function StudyPage() {
                   style={{ width: "100%" }}
                 />
               ) : (
-                <p>Chapter audio is still generating.</p>
+                <p>Chapter audio is not generated yet. Use “Generate Missing Audio”.</p>
               )}
             </div>
           </section>

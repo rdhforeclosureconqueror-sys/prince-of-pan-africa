@@ -55,7 +55,8 @@ function AppRoutes({ user, isAdmin, refreshAuth, dashboardElement }) {
         <Route path="/leadership" element={<LeadershipAssessmentPage />} />
         <Route path="/results" element={<LeadershipResultsPage />} />
         <Route path="/ops/verification" element={<SystemVerificationPage />} />
-        <Route path="/decolonize" element={<LibraryDecolonize />} />
+        <Route path="/decolonize" element={<Navigate to="/library" replace />} />
+        <Route path="/library" element={<LibraryDecolonize />} />
         <Route path="/portal/decolonize" element={<PortalDecolonize />} />
         <Route path="/holistic" element={<Navigate to="/dashboard" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
