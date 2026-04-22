@@ -5,6 +5,7 @@ export async function requestAiVoice(text, voiceModel = "alloy") {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text, voice_model: voiceModel }),
+    credentials: "include",
   });
 
   if (!res.ok) {

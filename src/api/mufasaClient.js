@@ -1,6 +1,7 @@
 // src/api/mufasaClient.js
+import { API_BASE_URL } from "../config";
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
+const API_BASE = API_BASE_URL;
 
 /**
  * Generic helper for calling the Mufasa Knowledge Bank API
@@ -13,6 +14,7 @@ async function callMufasaAPI(endpoint, payload = {}, method = "POST") {
         "Content-Type": "application/json",
       },
       body: method === "POST" ? JSON.stringify(payload) : undefined,
+      credentials: "include",
     });
 
     if (!res.ok) {
@@ -94,6 +96,7 @@ export async function sendVoiceMessage(audioFile) {
 
     const res = await fetch(`${API_BASE}/chat/voice`, {
       method: "POST",
+      credentials: "include",
       body: formData,
     });
 

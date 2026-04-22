@@ -180,6 +180,7 @@ export default function VoiceControls({ latestMessage, onVoiceSend }) {
           text: latestMessage,
           voice_model: voice,
         }),
+        credentials: "include",
       });
 
       const data = await res.json();

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -37,8 +37,9 @@ def _set_session_cookie(response: Response, user_id: int) -> None:
         key=SESSION_COOKIE,
         value=str(user_id),
         httponly=True,
-        samesite="lax",
-        secure=False,
+        samesite="none",
+        secure=True,
+        path="/",
         max_age=60 * 60 * 24 * 30,
     )
 
@@ -82,7 +83,7 @@ def auth_me(request: Request, db: Session = Depends(get_db)):
     }
 
 
-@router.post("/join", status_code=status.HTTP_201_CREATED)
+@router.post("/join")
 def auth_join(payload: AuthPayload, response: Response, db: Session = Depends(get_db)):
     normalized_email = _normalize_email(payload.email)
     if "@" not in normalized_email:
@@ -90,7 +91,8 @@ def auth_join(payload: AuthPayload, response: Response, db: Session = Depends(ge
 
     existing = _find_user_by_email(db, normalized_email)
     if existing:
-        raise HTTPException(status_code=409, detail="Email already exists")
+        _set_session_cookie(response, existing.id)
+        return {"ok": True, "joined": False, "existing": True, "user": _serialize_user(existing)}
 
     user = User(email=normalized_email, password_hash=hash_password(payload.password), role="member")
     db.add(user)
@@ -122,5 +124,11 @@ def auth_login(payload: AuthPayload, response: Response, db: Session = Depends(g
 
 @router.post("/logout")
 def auth_logout(response: Response):
-    response.delete_cookie(SESSION_COOKIE)
+    response.delete_cookie(
+        SESSION_COOKIE,
+        path="/",
+        httponly=True,
+        samesite="none",
+        secure=True,
+    )
     return {"ok": True, "logged_out": True}
