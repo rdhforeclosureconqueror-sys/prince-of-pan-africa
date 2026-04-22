@@ -19,7 +19,7 @@ const BACKGROUND_POOLS = {
 const GROUP_ROUTES = [
   { key: "home", match: (path) => path === "/" },
   { key: "languages", match: (path) => path.startsWith("/languages") || path.startsWith("/language") },
-  { key: "library", match: (path) => path.startsWith("/decolonize") || path.startsWith("/portal/decolonize") },
+  { key: "library", match: (path) => path.startsWith("/library") || path.startsWith("/study") || path.startsWith("/decolonize") || path.startsWith("/portal/decolonize") },
   { key: "leadership", match: (path) => path.startsWith("/leadership") || path.startsWith("/results") },
   { key: "operations", match: (path) => path.startsWith("/dashboard") || path.startsWith("/ops") },
 ];
