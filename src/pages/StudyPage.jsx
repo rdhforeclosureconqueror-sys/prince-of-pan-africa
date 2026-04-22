@@ -206,9 +206,6 @@ export default function StudyPage() {
         });
         const data = await res.json();
         if (!res.ok) {
-          if (res.status === 422) {
-            throw new Error("Upload failed. Check file type or missing fields.");
-          }
           throw new Error(data?.detail || "Upload failed.");
         }
         response = data;
@@ -233,11 +230,7 @@ export default function StudyPage() {
       navigate(`/study?book=${response.audiobook.id}`, { replace: true });
       await loadLibrary();
     } catch (err) {
-      if (err?.status === 422) {
-        setError("Upload failed. Check file type or missing fields.");
-      } else {
-        setError(err.message || "Save/generation failed.");
-      }
+      setError(err.message || "Save/generation failed.");
     } finally {
       setIsGenerating(false);
     }
@@ -452,8 +445,9 @@ export default function StudyPage() {
                   ))}
                 </select>
               </div>
-              <textarea rows={8} value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste text here (or upload .txt)." />
-              <input type="file" accept=".txt" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+              <textarea rows={8} value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste text here (or upload .txt/.pdf)." />
+              <input type="file" accept=".txt,.pdf" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+              <p className="study-status">Supported upload types: .txt, .pdf</p>
               <div className="generator-cta-row">
                 <button onClick={() => submitGeneration({ generateAudio: false })} disabled={isGenerating || (!text.trim() && !file)}>
                   {isGenerating ? "Saving..." : "Save Draft Book"}
