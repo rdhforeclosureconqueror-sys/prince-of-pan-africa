@@ -30,7 +30,7 @@ export default function UniverseOverlay() {
 
     let frameId;
     function animate() {
-      ctx.fillStyle = "rgba(2, 6, 18, 0.22)";
+      ctx.fillStyle = "rgba(2, 6, 18, 0.1)";
       ctx.fillRect(0, 0, width, height);
 
       for (let i = 0; i < stars.length; i += 1) {

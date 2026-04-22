@@ -5,18 +5,18 @@
   height: 100%;
   z-index: -1;
   pointer-events: none;
-  opacity: 0.88;
-  mix-blend-mode: screen;
+  opacity: 0.56;
+  mix-blend-mode: normal;
 }
 
 @media (max-width: 900px) {
   #universe-canvas {
-    opacity: 0.7;
+    opacity: 0.46;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   #universe-canvas {
-    opacity: 0.38;
+    opacity: 0.3;
   }
 }
