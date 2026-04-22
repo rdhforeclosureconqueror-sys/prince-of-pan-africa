@@ -166,6 +166,20 @@
     .en{ color: var(--muted); font-size: 13px; }
     .mini{ color: var(--muted); font-size: 12px; line-height: 1.45; }
 
+
+    .tabbar{ display:flex; gap:10px; flex-wrap:wrap; margin-top:14px; }
+    .tab-btn.active{ background: rgba(214,178,94,.14); border-color: rgba(214,178,94,.75); }
+    .tab-panel{ display:none; margin-top:14px; }
+    .tab-panel.is-active{ display:block; }
+
+    .match-shell{ border:1px solid rgba(214,178,94,.24); border-radius:14px; padding:12px; background: rgba(0,0,0,.3); }
+    .match-head{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px; flex-wrap:wrap; }
+    .match-grid{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+    .match-card{ min-height:66px; border-radius:12px; border:1px solid rgba(214,178,94,.35); background: rgba(0,0,0,.4); color:var(--text); font-weight:700; cursor:pointer; }
+    .match-card.is-visible{ border-color: rgba(214,178,94,.8); background: rgba(214,178,94,.16); }
+    .match-card.is-matched{ border-color: rgba(16,185,129,.8); background: rgba(16,185,129,.2); }
+    .match-footer{ margin-top:10px; display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+    @media (max-width:700px){ .match-grid{ grid-template-columns:repeat(2,minmax(0,1fr)); } }
     .controls{ display:flex; gap:10px; flex-wrap:wrap; margin-top: 12px; }
     .controls .btn { flex: 1 1 140px; justify-content: center; }
     .status{ margin-top: 10px; font-size: 12px; color: var(--muted); }
@@ -316,7 +330,13 @@
             <div class="pill">Mode: <b id="mode">Text + AI Audio</b></div>
           </div>
 
-          <div class="row">
+          <div class="tabbar" role="tablist" aria-label="Yoruba tabs">
+            <button class="btn gold tab-btn active" id="yorubaLessonTab" type="button">📘 Lesson</button>
+            <button class="btn gold tab-btn" id="yorubaMatchTab" type="button">🧩 Match</button>
+          </div>
+
+          <div id="yorubaLessonPanel" class="tab-panel is-active">
+            <div class="row" style="margin-top:0">
             <div class="panel">
               <div class="section-title">Words</div>
               <div id="words"></div>
@@ -344,6 +364,14 @@
               </div>
 
               <div id="fatal" class="note danger" style="display:none;margin-top:12px"></div>
+            </div>
+          </div>
+          </div>
+
+          <div id="yorubaMatchPanel" class="tab-panel">
+            <div class="panel">
+              <div class="section-title">Match Challenge</div>
+              <div id="yorubaMatchGame"></div>
             </div>
           </div>
         </div>
@@ -376,6 +404,7 @@
   <audio id="aiTtsPlayer" preload="auto"></audio>
 
 <script src="/languages/lessonTts.js"></script>
+<script src="/languages/matchGame.js"></script>
 <script>
   const DATA_URL = "yoruba_30days.json";
   const TTS_ENDPOINT = "https://prince-of-pan-africa-backend.onrender.com/chat/tts";
@@ -399,6 +428,43 @@
 
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   let rec = null;
+  let activeTab = "lesson";
+  let yorubaMatchSession = null;
+
+  function triggerLessonUnlock(){
+    setStatus("✅ Match complete. Lesson progression unlocked.", "ready");
+  }
+
+  function getCurrentMatchWords(){
+    return (PACK?.days?.[idx]?.words || []).map((w) => ({
+      swahili: w.word || w.yoruba || "",
+      english: w.meaning || w.english || "",
+    }));
+  }
+
+  function renderMatchGame(){
+    const words = getCurrentMatchWords();
+    if(!window.initMatchGame) return;
+    if(yorubaMatchSession){
+      yorubaMatchSession.refresh(words);
+      return;
+    }
+    yorubaMatchSession = window.initMatchGame({
+      containerId: "yorubaMatchGame",
+      words,
+      onComplete: triggerLessonUnlock,
+    });
+  }
+
+  function setActiveTab(tab){
+    activeTab = tab;
+    const isLesson = tab === "lesson";
+    document.getElementById("yorubaLessonPanel").classList.toggle("is-active", isLesson);
+    document.getElementById("yorubaMatchPanel").classList.toggle("is-active", !isLesson);
+    document.getElementById("yorubaLessonTab").classList.toggle("active", isLesson);
+    document.getElementById("yorubaMatchTab").classList.toggle("active", !isLesson);
+    if(!isLesson) renderMatchGame();
+  }
 
   function initRec(){
     if(!SpeechRecognition){
@@ -499,6 +565,7 @@
     });
 
     setStatus("Lesson loaded. Tap Speak Lesson or Speak Sentence.", "ready");
+    if(activeTab === "match") renderMatchGame();
   }
 
   async function speakAll(){
@@ -541,6 +608,9 @@
     ttsPlayer.addEventListener("ended", () => setStatus("Done. Tap Speak again anytime.", "ready"));
     ttsPlayer.addEventListener("error", () => setStatus("Audio playback error.", "ready"));
   }
+
+  document.getElementById("yorubaLessonTab").addEventListener("click", () => setActiveTab("lesson"));
+  document.getElementById("yorubaMatchTab").addEventListener("click", () => setActiveTab("match"));
 
   document.getElementById("btnTestVoice").addEventListener("click", () =>
     speak("Hello. This is the Mufasa AI voice test in Yoruba mode.")
