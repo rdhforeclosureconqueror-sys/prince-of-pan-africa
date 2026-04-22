@@ -5,6 +5,7 @@ export const PILOT_INCLUDED_ROUTES = [
   "/history",
   "/languages",
   "/decolonize",
+  "/library",
   "/portal/decolonize",
   "/leadership",
   "/results",
@@ -27,7 +28,7 @@ export const PILOT_NAV_LINKS = [
   { label: "Operations Deck", to: "/dashboard" },
   { label: "Timeline", to: "/timeline" },
   { label: "Languages Hub", to: "/languages" },
-  { label: "Decolonized Library", to: "/decolonize" },
+  { label: "Library", to: "/library" },
   { label: "Leadership", to: "/leadership" },
   { label: "Audiobooks", to: "/study" },
 ];

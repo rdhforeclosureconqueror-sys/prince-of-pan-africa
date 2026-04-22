@@ -125,7 +125,7 @@ export default function Home({ user, isAdmin, onAuthChange }) {
           A focused home for member onboarding, admin operations, decolonized learning, and leadership training.
         </p>
         <div className="hero-cta-row">
-          <Link to="/decolonize" className="hero-btn">Decolonized Library</Link>
+          <Link to="/library" className="hero-btn">Books & Audiobooks Library</Link>
           <Link to="/dashboard" className="hero-btn hero-btn--secondary">Operations Deck</Link>
           <Link to="/leadership" className="hero-btn hero-btn--ghost">Leadership Assessment</Link>
         </div>

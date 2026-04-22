@@ -17,6 +17,7 @@ MAX_CHARS_PER_CHAPTER = 3500
 MAX_TOTAL_CHARS = 35000
 MAX_TOTAL_UPLOAD_BYTES = 200_000
 MAX_CONCURRENT_GENERATIONS = 2
+ALLOWED_ACCESS_LEVELS = {"free", "member", "subscriber", "purchased"}
 
 _generation_lock = threading.Lock()
 _generation_counts: dict[int, int] = {}
@@ -27,6 +28,8 @@ class AudiobookCreateRequest(BaseModel):
     author: str = Field(default="Unknown", max_length=255)
     text: str = Field(min_length=1)
     voice: str = Field(default="alloy", max_length=64)
+    generate_audio: bool = True
+    access_level: str = Field(default="free", max_length=32)
 
 
 class ProgressUpdateRequest(BaseModel):
@@ -36,6 +39,13 @@ class ProgressUpdateRequest(BaseModel):
 
 
 GUEST_EMAIL = "pilot.audiobook.guest@local"
+
+
+def _normalize_access_level(value: str) -> str:
+    normalized = (value or "free").strip().lower()
+    if normalized not in ALLOWED_ACCESS_LEVELS:
+        raise HTTPException(status_code=422, detail=f"Invalid access_level. Expected one of: {sorted(ALLOWED_ACCESS_LEVELS)}")
+    return normalized
 
 
 def _resolve_session_user(request: Request, db: Session) -> User | None:
@@ -57,17 +67,11 @@ def _resolve_audiobook_user(request: Request, db: Session) -> tuple[User, bool]:
     if user:
         return user, False
 
-    # Temporary pilot/testing fallback: allow audiobook flows without a login.
-    # This will be replaced by Garvey-based auth/membership gating in a future phase.
     guest_user = db.query(User).filter(User.email == GUEST_EMAIL).first()
     if guest_user:
         return guest_user, True
 
-    guest_user = User(
-        email=GUEST_EMAIL,
-        password_hash="pilot-guest",
-        role="guest",
-    )
+    guest_user = User(email=GUEST_EMAIL, password_hash="pilot-guest", role="guest")
     db.add(guest_user)
     db.commit()
     db.refresh(guest_user)
@@ -144,22 +148,23 @@ def _ensure_generation_slot(user_id: int) -> None:
     with _generation_lock:
         current = _generation_counts.get(user_id, 0)
         if current >= MAX_CONCURRENT_GENERATIONS:
-            raise HTTPException(
-                status_code=429,
-                detail=f"Generation limit reached. Max concurrent runs: {MAX_CONCURRENT_GENERATIONS}.",
-            )
+            raise HTTPException(status_code=429, detail=f"Generation limit reached. Max concurrent runs: {MAX_CONCURRENT_GENERATIONS}.")
         _generation_counts[user_id] = current + 1
 
 
 def _serialize_audiobook(book: Audiobook, include_text: bool = False) -> dict:
     ordered_chapters = sorted(book.chapters, key=lambda chapter: chapter.chapter_index)
+    completed_audio = sum(1 for chapter in ordered_chapters if chapter.audio_url)
     return {
         "id": book.id,
         "title": book.title,
         "author": book.author,
         "voice": book.voice,
+        "source_type": book.source_type,
+        "access_level": book.access_level,
         "status": book.status,
         "chapter_count": book.chapter_count,
+        "audio_chapter_count": completed_audio,
         "total_characters": book.total_characters,
         "created_at": book.created_at.isoformat() if book.created_at else None,
         "chapters": [
@@ -177,78 +182,21 @@ def _serialize_audiobook(book: Audiobook, include_text: bool = False) -> dict:
     }
 
 
-def _create_or_reuse_audiobook(
-    *, request: Request, db: Session, user: User, title: str, author: str, text: str, voice: str, source_type: str
-) -> dict:
-    normalized_text = normalize_tts_text(text)
-    if not normalized_text:
-        raise HTTPException(status_code=400, detail="Text is required.")
-    if len(normalized_text) > MAX_TOTAL_CHARS:
-        raise HTTPException(status_code=413, detail=f"Total characters exceed limit ({MAX_TOTAL_CHARS}).")
-
-    content_hash = _hash_text(f"{title.strip()}|{author.strip()}|{normalized_text}")
-    existing = (
-        db.query(Audiobook)
-        .filter(Audiobook.user_id == user.id, Audiobook.content_hash == content_hash, Audiobook.voice == voice)
-        .first()
-    )
-    if existing:
-        return {"cached": True, "audiobook": _serialize_audiobook(existing)}
-
-    chapters = _split_into_chapters(normalized_text)
-    if not chapters:
-        raise HTTPException(status_code=400, detail="Unable to generate chapters from text.")
-
-    book = Audiobook(
-        user_id=user.id,
-        title=title.strip(),
-        author=author.strip() or "Unknown",
-        source_type=source_type,
-        content_hash=content_hash,
-        voice=voice,
-        status="generating",
-        total_characters=len(normalized_text),
-        chapter_count=len(chapters),
-    )
-    db.add(book)
-    db.flush()
-
-    for index, chapter in enumerate(chapters, start=1):
-        text_value = chapter["text"].strip()
-        db.add(
-            AudiobookChapter(
-                audiobook_id=book.id,
-                chapter_index=index,
-                title=chapter["title"],
-                text=text_value,
-                text_hash=_hash_text(text_value),
-                character_count=len(text_value),
-                status="queued",
-            )
-        )
-
-    db.add(
-        AudiobookProgress(
-            audiobook_id=book.id,
-            user_id=user.id,
-            chapter_index=0,
-            position_seconds=0,
-            playback_rate="1.0",
-            updated_at=datetime.utcnow(),
-        )
-    )
-    db.commit()
-    db.refresh(book)
+def _generate_audio_for_book(*, request: Request, db: Session, user: User, book: Audiobook) -> None:
+    if book.status in {"completed", "audio-generated", "ready"}:
+        return
 
     try:
         _ensure_generation_slot(user.id)
         ordered_chapters = sorted(book.chapters, key=lambda chapter: chapter.chapter_index)
         for chapter in ordered_chapters:
-            existing_asset = (
-                db.query(AudioAsset)
-                .filter(AudioAsset.text_hash == chapter.text_hash, AudioAsset.voice == voice)
-                .first()
-            )
+            if chapter.audio_url:
+                if chapter.status != "completed":
+                    chapter.status = "completed"
+                    db.commit()
+                continue
+
+            existing_asset = db.query(AudioAsset).filter(AudioAsset.text_hash == chapter.text_hash, AudioAsset.voice == book.voice).first()
             if existing_asset:
                 chapter.audio_url = existing_asset.audio_url
                 chapter.status = "completed"
@@ -259,8 +207,8 @@ def _create_or_reuse_audiobook(
             chapter.status = "generating"
             db.commit()
 
-            audio_url, _ = generate_tts_audio_url(request=request, text=chapter.text, voice=voice)
-            asset = AudioAsset(text_hash=chapter.text_hash, voice=voice, audio_url=audio_url)
+            audio_url, _ = generate_tts_audio_url(request=request, text=chapter.text, voice=book.voice)
+            asset = AudioAsset(text_hash=chapter.text_hash, voice=book.voice, audio_url=audio_url)
             db.add(asset)
             db.flush()
 
@@ -269,7 +217,7 @@ def _create_or_reuse_audiobook(
             chapter.status = "completed"
             db.commit()
 
-        book.status = "completed"
+        book.status = "audio-generated"
         db.commit()
     except HTTPException:
         book.status = "failed"
@@ -281,6 +229,69 @@ def _create_or_reuse_audiobook(
         raise HTTPException(status_code=500, detail=f"Audiobook generation failed: {exc}") from exc
     finally:
         _track_generation(user.id, -1)
+
+
+def _create_or_reuse_audiobook(
+    *, request: Request, db: Session, user: User, title: str, author: str, text: str, voice: str, source_type: str,
+    generate_audio: bool, access_level: str,
+) -> dict:
+    normalized_text = normalize_tts_text(text)
+    if not normalized_text:
+        raise HTTPException(status_code=400, detail="Text is required.")
+    if len(normalized_text) > MAX_TOTAL_CHARS:
+        raise HTTPException(status_code=413, detail=f"Total characters exceed limit ({MAX_TOTAL_CHARS}).")
+
+    normalized_access = _normalize_access_level(access_level)
+    content_hash = _hash_text(f"{title.strip()}|{author.strip()}|{normalized_text}")
+    existing = db.query(Audiobook).filter(Audiobook.user_id == user.id, Audiobook.content_hash == content_hash, Audiobook.voice == voice).first()
+    if existing:
+        if generate_audio and existing.status in {"draft", "queued", "failed"}:
+            existing.status = "generating"
+            db.commit()
+            _generate_audio_for_book(request=request, db=db, user=user, book=existing)
+            db.refresh(existing)
+        return {"cached": True, "audiobook": _serialize_audiobook(existing)}
+
+    chapters = _split_into_chapters(normalized_text)
+    if not chapters:
+        raise HTTPException(status_code=400, detail="Unable to generate chapters from text.")
+
+    initial_status = "generating" if generate_audio else "draft"
+    chapter_status = "queued" if generate_audio else "draft"
+    book = Audiobook(
+        user_id=user.id,
+        title=title.strip(),
+        author=author.strip() or "Unknown",
+        source_type=source_type,
+        source_text=normalized_text,
+        content_hash=content_hash,
+        voice=voice,
+        access_level=normalized_access,
+        status=initial_status,
+        total_characters=len(normalized_text),
+        chapter_count=len(chapters),
+    )
+    db.add(book)
+    db.flush()
+
+    for index, chapter in enumerate(chapters, start=1):
+        text_value = chapter["text"].strip()
+        db.add(AudiobookChapter(
+            audiobook_id=book.id,
+            chapter_index=index,
+            title=chapter["title"],
+            text=text_value,
+            text_hash=_hash_text(text_value),
+            character_count=len(text_value),
+            status=chapter_status,
+        ))
+
+    db.add(AudiobookProgress(audiobook_id=book.id, user_id=user.id, chapter_index=0, position_seconds=0, playback_rate="1.0", updated_at=datetime.utcnow()))
+    db.commit()
+    db.refresh(book)
+
+    if generate_audio:
+        _generate_audio_for_book(request=request, db=db, user=user, book=book)
 
     db.refresh(book)
     return {"cached": False, "audiobook": _serialize_audiobook(book)}
@@ -298,6 +309,8 @@ def create_audiobook(payload: AudiobookCreateRequest, request: Request, db: Sess
         text=payload.text,
         voice=payload.voice,
         source_type="paste",
+        generate_audio=payload.generate_audio,
+        access_level=payload.access_level,
     )
 
 
@@ -307,6 +320,8 @@ async def upload_audiobook(
     title: str = Form(...),
     author: str = Form("Unknown"),
     voice: str = Form("alloy"),
+    access_level: str = Form("free"),
+    generate_audio: bool = Form(True),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
@@ -333,6 +348,8 @@ async def upload_audiobook(
         text=text,
         voice=voice,
         source_type="upload",
+        generate_audio=generate_audio,
+        access_level=access_level,
     )
 
 
@@ -350,19 +367,32 @@ def get_audiobook(audiobook_id: int, request: Request, db: Session = Depends(get
     if not book:
         raise HTTPException(status_code=404, detail="Audiobook not found.")
 
-    progress = (
-        db.query(AudiobookProgress)
-        .filter(AudiobookProgress.audiobook_id == audiobook_id, AudiobookProgress.user_id == user.id)
-        .first()
-    )
+    progress = db.query(AudiobookProgress).filter(AudiobookProgress.audiobook_id == audiobook_id, AudiobookProgress.user_id == user.id).first()
     return {
-        **_serialize_audiobook(book),
+        **_serialize_audiobook(book, include_text=True),
         "progress": {
             "chapter_index": progress.chapter_index if progress else 0,
             "position_seconds": progress.position_seconds if progress else 0,
             "playback_rate": progress.playback_rate if progress else "1.0",
         },
     }
+
+
+@router.post("/{audiobook_id}/generate-audio")
+def generate_audio_for_saved_book(audiobook_id: int, request: Request, db: Session = Depends(get_db)):
+    user, _ = _resolve_audiobook_user(request, db)
+    book = db.query(Audiobook).filter(Audiobook.id == audiobook_id, Audiobook.user_id == user.id).first()
+    if not book:
+        raise HTTPException(status_code=404, detail="Audiobook not found.")
+
+    if book.status in {"generating"}:
+        return {"ok": True, "status": book.status, "audiobook": _serialize_audiobook(book)}
+
+    book.status = "generating"
+    db.commit()
+    _generate_audio_for_book(request=request, db=db, user=user, book=book)
+    db.refresh(book)
+    return {"ok": True, "status": book.status, "audiobook": _serialize_audiobook(book)}
 
 
 @router.post("/{audiobook_id}/progress")
@@ -372,11 +402,7 @@ def update_progress(audiobook_id: int, payload: ProgressUpdateRequest, request: 
     if not book:
         raise HTTPException(status_code=404, detail="Audiobook not found.")
 
-    progress = (
-        db.query(AudiobookProgress)
-        .filter(AudiobookProgress.audiobook_id == audiobook_id, AudiobookProgress.user_id == user.id)
-        .first()
-    )
+    progress = db.query(AudiobookProgress).filter(AudiobookProgress.audiobook_id == audiobook_id, AudiobookProgress.user_id == user.id).first()
     if not progress:
         progress = AudiobookProgress(audiobook_id=audiobook_id, user_id=user.id)
         db.add(progress)
