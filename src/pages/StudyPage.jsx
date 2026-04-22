@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api/api";
+import { API_BASE_URL } from "../config";
 import "../styles/studyPage.css";
 
 const SPEED_OPTIONS = [0.75, 1, 1.25, 1.5, 2];
@@ -152,8 +153,7 @@ export default function StudyPage() {
         form.append("author", author.trim() || "Unknown");
         form.append("voice", voice);
         form.append("file", file);
-        const apiBase = import.meta.env.VITE_API_BASE_URL || "";
-        const res = await fetch(`${apiBase}/audiobooks/upload`, {
+        const res = await fetch(`${API_BASE_URL}/audiobooks/upload`, {
           method: "POST",
           credentials: "include",
           body: form,

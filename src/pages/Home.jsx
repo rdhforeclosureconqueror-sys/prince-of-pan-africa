@@ -2,9 +2,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import VoiceControls from "../components/VoiceControls";
 import { sendChatMessage, sendVoiceMessage } from "../api/mufasaClient";
+import { API_BASE_URL } from "../config";
 import "../styles/home.css";
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
+const API_BASE = API_BASE_URL;
 
 export default function Home({ user, isAdmin, onAuthChange }) {
   const [messages, setMessages] = useState([]);

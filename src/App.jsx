@@ -15,9 +15,10 @@ import SystemVerificationPage from "./pages/SystemVerificationPage";
 import PilotDeferredPage from "./pages/PilotDeferredPage";
 import StudyPage from "./pages/StudyPage";
 import { getBackgroundForPath } from "./utils/backgroundSystem";
+import { API_BASE_URL } from "./config";
 import "./styles/backgroundSystem.css";
 
-const API = import.meta.env.VITE_API_BASE_URL || "";
+const API = API_BASE_URL;
 
 function AppRoutes({ user, isAdmin, refreshAuth, dashboardElement }) {
   return (

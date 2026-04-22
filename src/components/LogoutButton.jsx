@@ -1,9 +1,10 @@
 import React from "react";
+import { API_BASE_URL } from "../config";
 
 export default function LogoutButton() {
   const handleLogout = async () => {
     try {
-      const res = await fetch("/auth/logout", {
+      const res = await fetch(`${API_BASE_URL}/auth/logout`, {
         method: "POST",
         credentials: "include",
       });
