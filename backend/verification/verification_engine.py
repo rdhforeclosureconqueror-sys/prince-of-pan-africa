@@ -154,17 +154,27 @@ def _fitness_check() -> dict[str, Any]:
 
 
 def _env_check() -> dict[str, Any]:
-    check_vars = [
+    required_vars = [
         "DATABASE_URL",
+        "AIVOICE_BASE_URL",
+        "VITE_API_BASE_URL",
+    ]
+    optional_vars = [
         "ALLOWED_ORIGINS",
         "CORS_ALLOWED_ORIGINS",
         "OPENAI_API_KEY",
         "AIVOICE_API_KEY",
-        "AIVOICE_BASE_URL",
-        "VITE_API_BASE_URL",
+        "VITE_ADMIN_EMAILS",
     ]
-    status = {name: _bool_env(name) for name in check_vars}
-    return {"ok": all(status.values()), "variables": status}
+    required = {name: _bool_env(name) for name in required_vars}
+    optional = {name: _bool_env(name) for name in optional_vars}
+    missing_required = [name for name, is_set in required.items() if not is_set]
+    return {
+        "ok": len(missing_required) == 0,
+        "required": required,
+        "optional": optional,
+        "missing_required": missing_required,
+    }
 
 
 def _cors_and_routes_check(app) -> dict[str, Any]:

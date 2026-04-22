@@ -49,6 +49,9 @@ export default function AdminOperationsDashboard() {
   return (
     <div className="admin-dashboard">
       <h1>🛰️ Operations Deck — Unified Admin Dashboard</h1>
+      <p className="admin-subtext">
+        Connected to <code>/admin/ai/overview</code>, <code>/admin/ai/members</code>, <code>/admin/ai/profiles</code>, and <code>/admin/holistic/overview</code>.
+      </p>
 
       <div className="dashboard-grid">
         <div className="stat-card"><h2>{totals?.motions ?? 0}</h2><p>Motion Samples</p></div>
@@ -132,7 +135,7 @@ export default function AdminOperationsDashboard() {
           <tbody>
             {members.length === 0 ? (
               <tr>
-                <td colSpan={7}>No member AI metrics yet.</td>
+                <td colSpan={7}>No member AI metrics yet. Data appears here after member activity and scoring routes write records.</td>
               </tr>
             ) : (
               members.map((m, i) => (
@@ -167,7 +170,7 @@ export default function AdminOperationsDashboard() {
           <tbody>
             {profiles.length === 0 ? (
               <tr>
-                <td colSpan={6}>No adaptive profiles have been generated yet.</td>
+                <td colSpan={6}>No adaptive profiles have been generated yet. Profiles are populated when adaptive scoring jobs publish results.</td>
               </tr>
             ) : (
               profiles.map((p, i) => (
@@ -188,7 +191,7 @@ export default function AdminOperationsDashboard() {
       <section className="cosmic-section">
         <h2>🌍 Holistic Health Overview</h2>
         {holistic.length === 0 ? (
-          <p>No holistic data available yet.</p>
+          <p>No holistic data available yet. This section depends on /admin/holistic/overview data feeds.</p>
         ) : (
           <table className="admin-table">
             <thead>
