@@ -223,6 +223,7 @@
     .match-head{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px; flex-wrap:wrap; }
     .match-grid{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
     .match-card{ min-height:66px; border-radius:12px; border:1px solid rgba(214,178,94,.35); background: rgba(0,0,0,.4); color:var(--text); font-weight:700; cursor:pointer; }
+    .match-card span{ display:block; padding:8px; line-height:1.25; word-break:break-word; text-wrap:balance; }
     .match-card.is-visible{ border-color: rgba(214,178,94,.8); background: rgba(214,178,94,.16); }
     .match-card.is-matched{ border-color: rgba(16,185,129,.8); background: rgba(16,185,129,.2); }
     .match-footer{ margin-top:10px; display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
@@ -485,6 +486,7 @@
   let rec = null;
   let activeTab = "lesson";
   let swahiliMatchSession = null;
+  let swahiliMatchSeed = "";
 
   function triggerLessonUnlock(){
     setStatus("✅ Match complete. Lesson progression unlocked.", "ready");
@@ -499,9 +501,13 @@
 
   function renderMatchGame(){
     const words = getCurrentMatchWords();
+    const nextSeed = JSON.stringify(words);
     if(!window.initMatchGame) return;
     if(swahiliMatchSession){
-      swahiliMatchSession.refresh(words);
+      if(nextSeed !== swahiliMatchSeed){
+        swahiliMatchSession.refresh(words);
+        swahiliMatchSeed = nextSeed;
+      }
       return;
     }
     swahiliMatchSession = window.initMatchGame({
@@ -509,6 +515,7 @@
       words,
       onComplete: triggerLessonUnlock,
     });
+    swahiliMatchSeed = nextSeed;
   }
 
   function setActiveTab(tab){
