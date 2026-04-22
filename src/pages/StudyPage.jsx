@@ -160,9 +160,6 @@ export default function StudyPage() {
         });
         const data = await res.json();
         if (!res.ok) {
-          if (res.status === 401) {
-            throw new Error("You must be logged in to use audiobooks.");
-          }
           if (res.status === 422) {
             throw new Error("Upload failed. Check file type or missing fields.");
           }
@@ -187,9 +184,7 @@ export default function StudyPage() {
       setSelectedBookId(response.audiobook.id);
       await loadLibrary();
     } catch (err) {
-      if (err?.status === 401) {
-        setError("You must be logged in to use audiobooks.");
-      } else if (err?.status === 422) {
+      if (err?.status === 422) {
         setError("Upload failed. Check file type or missing fields.");
       } else {
         setError(err.message || "Generation failed.");

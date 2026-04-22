@@ -35,20 +35,43 @@ class ProgressUpdateRequest(BaseModel):
     playback_rate: str = Field(default="1.0", max_length=16)
 
 
-def _require_user(request: Request, db: Session) -> User:
+GUEST_EMAIL = "pilot.audiobook.guest@local"
+
+
+def _resolve_session_user(request: Request, db: Session) -> User | None:
     raw_user_id = request.cookies.get(SESSION_COOKIE)
     if not raw_user_id:
-        raise HTTPException(status_code=401, detail="Authentication required.")
+        return None
 
     try:
         user_id = int(raw_user_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=401, detail="Invalid session.") from exc
+    except ValueError:
+        return None
 
     user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=401, detail="Session user not found.")
     return user
+
+
+def _resolve_audiobook_user(request: Request, db: Session) -> tuple[User, bool]:
+    user = _resolve_session_user(request, db)
+    if user:
+        return user, False
+
+    # Temporary pilot/testing fallback: allow audiobook flows without a login.
+    # This will be replaced by Garvey-based auth/membership gating in a future phase.
+    guest_user = db.query(User).filter(User.email == GUEST_EMAIL).first()
+    if guest_user:
+        return guest_user, True
+
+    guest_user = User(
+        email=GUEST_EMAIL,
+        password_hash="pilot-guest",
+        role="guest",
+    )
+    db.add(guest_user)
+    db.commit()
+    db.refresh(guest_user)
+    return guest_user, True
 
 
 def _hash_text(text: str) -> str:
@@ -265,7 +288,7 @@ def _create_or_reuse_audiobook(
 
 @router.post("/create")
 def create_audiobook(payload: AudiobookCreateRequest, request: Request, db: Session = Depends(get_db)):
-    user = _require_user(request, db)
+    user, _ = _resolve_audiobook_user(request, db)
     return _create_or_reuse_audiobook(
         request=request,
         db=db,
@@ -287,7 +310,7 @@ async def upload_audiobook(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
-    user = _require_user(request, db)
+    user, _ = _resolve_audiobook_user(request, db)
     filename = (file.filename or "").lower()
     if not filename.endswith(".txt"):
         raise HTTPException(status_code=415, detail="Only .txt uploads are supported in V1.")
@@ -315,14 +338,14 @@ async def upload_audiobook(
 
 @router.get("")
 def list_audiobooks(request: Request, db: Session = Depends(get_db)):
-    user = _require_user(request, db)
+    user, _ = _resolve_audiobook_user(request, db)
     books = db.query(Audiobook).filter(Audiobook.user_id == user.id).order_by(Audiobook.created_at.desc()).all()
     return {"items": [_serialize_audiobook(book) for book in books]}
 
 
 @router.get("/{audiobook_id}")
 def get_audiobook(audiobook_id: int, request: Request, db: Session = Depends(get_db)):
-    user = _require_user(request, db)
+    user, _ = _resolve_audiobook_user(request, db)
     book = db.query(Audiobook).filter(Audiobook.id == audiobook_id, Audiobook.user_id == user.id).first()
     if not book:
         raise HTTPException(status_code=404, detail="Audiobook not found.")
@@ -344,7 +367,7 @@ def get_audiobook(audiobook_id: int, request: Request, db: Session = Depends(get
 
 @router.post("/{audiobook_id}/progress")
 def update_progress(audiobook_id: int, payload: ProgressUpdateRequest, request: Request, db: Session = Depends(get_db)):
-    user = _require_user(request, db)
+    user, _ = _resolve_audiobook_user(request, db)
     book = db.query(Audiobook).filter(Audiobook.id == audiobook_id, Audiobook.user_id == user.id).first()
     if not book:
         raise HTTPException(status_code=404, detail="Audiobook not found.")
