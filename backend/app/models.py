@@ -48,6 +48,10 @@ class LeadershipAssessment(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    account_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    parent_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    child_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    submission_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
     responses: Mapped[str] = mapped_column(Text, nullable=False)
     scores: Mapped[str] = mapped_column(Text, nullable=False)
     version: Mapped[str] = mapped_column(String(32), nullable=False, default="v1")

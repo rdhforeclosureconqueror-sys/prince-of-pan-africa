@@ -1,16 +1,12 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import LeadershipForm from "../components/leadership/LeadershipForm";
 import { submitLeadershipAssessment } from "../services/leadershipService";
 import "../styles/leadership.css";
 
-function generateUserId() {
-  if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
-  return `leader-${Date.now()}`;
-}
-
 export default function LeadershipAssessmentPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -18,10 +14,22 @@ export default function LeadershipAssessmentPage() {
     setLoading(true);
     setError("");
     try {
-      const userId = generateUserId();
-      const result = await submitLeadershipAssessment({ userId, answers });
+      const result = await submitLeadershipAssessment({
+        answers,
+        userId: searchParams.get("userId") || undefined,
+        accountId: searchParams.get("accountId") || undefined,
+        parentId: searchParams.get("parentId") || undefined,
+        childId: searchParams.get("childId") || undefined,
+      });
+
+      console.info("[leadership-trace] route transition", {
+        to: "/results",
+        userId: result.userId,
+        assessmentId: result.assessmentId,
+      });
+
       navigate(`/results?userId=${encodeURIComponent(result.userId)}`, {
-        state: { result },
+        state: { assessmentId: result.assessmentId, submissionId: result.submissionId },
       });
     } catch (err) {
       setError(err.message || "We could not submit your assessment. Please try again.");
