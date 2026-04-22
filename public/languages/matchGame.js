@@ -8,15 +8,20 @@
     return copy;
   }
 
+  function extractSourceWord(word){
+    if(!word || typeof word !== 'object') return '';
+    return word.swahili || word.yoruba || word.word || '';
+  }
+
   function buildMatchRound(words){
     const usable = (Array.isArray(words) ? words : [])
-      .filter((w) => w && w.swahili && w.english)
+      .filter((w) => w && extractSourceWord(w) && w.english)
       .slice(0, 6);
 
     const cards = usable.flatMap((w, index) => {
       const pairId = `pair-${index}`;
       return [
-        { id: `${pairId}-a`, pairId, text: w.swahili, type: 'source' },
+        { id: `${pairId}-a`, pairId, text: extractSourceWord(w), type: 'source' },
         { id: `${pairId}-b`, pairId, text: w.english, type: 'target' },
       ];
     });
@@ -70,7 +75,7 @@
             }).join('')}
           </div>
           <div class="match-footer">
-            <div class="status" data-state="${state.completed ? 'playing' : 'ready'}">
+            <div class="status" data-state="${state.completed ? 'ready' : 'playing'}">
               ${state.completed ? '✅ Match complete. Lesson unlocked.' : 'Flip two cards to find a pair.'}
             </div>
             <button type="button" class="btn gold" data-match-reset>↻ New Round</button>
