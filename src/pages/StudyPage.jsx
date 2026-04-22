@@ -58,6 +58,12 @@ export default function StudyPage() {
   const [isFocusMode, setIsFocusMode] = useState(false);
   const [showChapterMenu, setShowChapterMenu] = useState(false);
   const [resumePositionSeconds, setResumePositionSeconds] = useState(0);
+  const [completedChapters, setCompletedChapters] = useState([]);
+  const [reflections, setReflections] = useState([]);
+  const [showReflectionPrompt, setShowReflectionPrompt] = useState(false);
+  const [reflectionNote, setReflectionNote] = useState("");
+  const [reflectionPrompt, setReflectionPrompt] = useState("");
+  const [reflectionSummary, setReflectionSummary] = useState("");
 
   const audioRef = useRef(null);
   const sentenceRefs = useRef([]);
@@ -95,7 +101,12 @@ export default function StudyPage() {
       setActiveChapterIndex(safeChapterIndex);
       setPlaybackRate(Number(response.progress?.playback_rate || 1));
       setResumePositionSeconds(Number(response.progress?.position_seconds || 0));
+      setCompletedChapters(response.progress?.completed_chapters || []);
       setActiveSentenceIndex(0);
+
+      const reflectionRes = await api(`/audiobooks/${id}/reflections`, { method: "GET", credentials: "include" });
+      setReflections(reflectionRes.items || []);
+      setReflectionSummary("");
     } catch (err) {
       setError(err.message || "Failed to load audiobook.");
     }
@@ -233,6 +244,7 @@ export default function StudyPage() {
         chapter_index: activeChapterIndex + 1,
         position_seconds: currentTime,
         playback_rate: String(playbackRate),
+        completed_chapters: completedChapters,
       }),
     });
   }
@@ -252,6 +264,65 @@ export default function StudyPage() {
 
   async function playPrev() {
     await switchChapter(activeChapterIndex - 1);
+  }
+
+  function chapterReflectionByIndex(chapterIndex) {
+    return reflections.find((item) => item.chapter_index === chapterIndex) || null;
+  }
+
+  async function completeCurrentChapterAndPrompt() {
+    const chapterNumber = activeChapterIndex + 1;
+    const nextCompleted = Array.from(new Set([...completedChapters, chapterNumber])).sort((a, b) => a - b);
+    setCompletedChapters(nextCompleted);
+
+    const basePrompt = `After Chapter ${chapterNumber} (${activeChapter?.title || `Chapter ${chapterNumber}`}), what one idea felt most transformative, and how will you apply it this week?`;
+    setReflectionPrompt(basePrompt);
+    setReflectionNote(chapterReflectionByIndex(chapterNumber)?.notes || "");
+    setShowReflectionPrompt(true);
+
+    await api(`/audiobooks/${selectedBook.id}/progress`, {
+      method: "POST",
+      credentials: "include",
+      body: JSON.stringify({
+        chapter_index: chapterNumber,
+        position_seconds: 0,
+        playback_rate: String(playbackRate),
+        completed_chapters: nextCompleted,
+      }),
+    });
+  }
+
+  async function saveReflection({ skipped }) {
+    if (!selectedBook?.id) return;
+    const chapterNumber = activeChapterIndex + 1;
+    const payload = { notes: skipped ? "" : reflectionNote, skipped };
+    const res = await api(`/audiobooks/${selectedBook.id}/chapters/${chapterNumber}/reflection`, {
+      method: "PUT",
+      credentials: "include",
+      body: JSON.stringify(payload),
+    });
+    const updated = {
+      chapter_index: chapterNumber,
+      prompt: res.prompt || reflectionPrompt,
+      notes: payload.notes,
+      skipped,
+      updated_at: new Date().toISOString(),
+    };
+    setReflections((prev) => {
+      const filtered = prev.filter((item) => item.chapter_index !== chapterNumber);
+      return [...filtered, updated].sort((a, b) => a.chapter_index - b.chapter_index);
+    });
+    setShowReflectionPrompt(false);
+  }
+
+  async function generateReflectionSummary() {
+    if (!selectedBook?.id) return;
+    const res = await api(`/audiobooks/${selectedBook.id}/reflections/summary`, {
+      method: "POST",
+      credentials: "include",
+      body: JSON.stringify({ include_skipped: false }),
+    });
+    setReflectionSummary(res.summary || "");
   }
 
   function handleTimeUpdate() {
@@ -312,7 +383,7 @@ export default function StudyPage() {
           <>
             <header className="study-header">
               <h1>Audiobook Studio + Library</h1>
-              <p>Save manuscripts, generate chapter audio when ready, and read/listen in sync with sentence tracking.</p>
+              <p>Save full manuscripts, auto-segment into chapters, generate chapter audio when ready, and read/listen in sync with sentence tracking.</p>
             </header>
 
             <section className="study-generator">
@@ -372,7 +443,7 @@ export default function StudyPage() {
               <div>
                 <h2>{selectedBook.title}</h2>
                 <p>
-                  {selectedBook.author} • {selectedBook.status} • access: {selectedBook.access_level}
+                  {selectedBook.author} • {selectedBook.status} • access: {selectedBook.access_level} • {selectedBook.segmentation_strategy}
                 </p>
               </div>
               <div className="reader-actions">
@@ -397,7 +468,7 @@ export default function StudyPage() {
                     <li key={chapter.id}>
                       <button className={idx === activeChapterIndex ? "is-current" : ""} onClick={() => switchChapter(idx)}>
                         {chapter.title}
-                        <small>{chapter.status}</small>
+                        <small>{chapter.status} {completedChapters.includes(idx + 1) ? "• completed" : ""}</small>
                       </button>
                     </li>
                   ))}
@@ -431,6 +502,7 @@ export default function StudyPage() {
                 <button onClick={playPrev}>Prev</button>
                 <button onClick={togglePlayPause}>{isPlaying ? "Pause" : "Play"}</button>
                 <button onClick={playNext}>Next</button>
+                <button onClick={completeCurrentChapterAndPrompt}>Complete Chapter</button>
                 <label>
                   Speed
                   <select value={playbackRate} onChange={(e) => setPlaybackRate(Number(e.target.value))}>
@@ -464,12 +536,8 @@ export default function StudyPage() {
                   }}
                   onTimeUpdate={handleTimeUpdate}
                   onEnded={async () => {
-                    await persistProgress(0);
-                    if (activeChapterIndex < selectedBook.chapters.length - 1) {
-                      await playNext();
-                    } else {
-                      setIsPlaying(false);
-                    }
+                    await completeCurrentChapterAndPrompt();
+                    setIsPlaying(false);
                   }}
                   style={{ width: "100%" }}
                 />
@@ -477,6 +545,43 @@ export default function StudyPage() {
                 <p>Chapter audio is not generated yet. Use “Generate Missing Audio”.</p>
               )}
             </div>
+
+            {showReflectionPrompt && (
+              <section className="reflection-shell">
+                <h3>Chapter Reflection</h3>
+                <p>{reflectionPrompt}</p>
+                <textarea
+                  rows={5}
+                  value={reflectionNote}
+                  onChange={(e) => setReflectionNote(e.target.value)}
+                  placeholder="Write your notes for this chapter..."
+                />
+                <div className="reflection-actions">
+                  <button onClick={() => saveReflection({ skipped: false })}>Save Reflection</button>
+                  <button onClick={() => saveReflection({ skipped: true })}>Skip</button>
+                </div>
+              </section>
+            )}
+
+            <section className="reflection-history">
+              <div className="reflection-history-header">
+                <h3>Chapter Reflections</h3>
+                <button onClick={generateReflectionSummary}>Generate Combined Summary</button>
+              </div>
+              {!reflections.length ? (
+                <p>No reflections saved yet.</p>
+              ) : (
+                <ul>
+                  {reflections.map((item) => (
+                    <li key={`reflection-${item.chapter_index}`}>
+                      <strong>Chapter {item.chapter_index}</strong>
+                      <p>{item.skipped ? "Skipped reflection." : item.notes || "No notes."}</p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {reflectionSummary && <pre className="reflection-summary">{reflectionSummary}</pre>}
+            </section>
           </section>
         )}
       </div>
