@@ -11,11 +11,15 @@ export default function VoiceControls({ latestMessage, onVoiceSend }) {
   const [audioUrl, setAudioUrl] = useState(null);
   const [playing, setPlaying] = useState(false);
   const [recording, setRecording] = useState(false);
+  const [ttsState, setTtsState] = useState("idle");
+  const [ttsInfo, setTtsInfo] = useState("");
   const [audioTime, setAudioTime] = useState({ current: 0, total: 0 });
 
   const audioRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
+  const requestSeqRef = useRef(0);
+  const ttsCacheRef = useRef(new Map());
 
   // ✅ Keep mic stream reference so we can STOP it (critical fix)
   const streamRef = useRef(null);
@@ -100,6 +104,15 @@ export default function VoiceControls({ latestMessage, onVoiceSend }) {
     };
   }, [audioUrl]);
 
+  useEffect(() => {
+    requestSeqRef.current += 1;
+    stopAudio();
+    setAudioUrl(null);
+    setTtsState("idle");
+    setTtsInfo("Lesson text updated. Tap Generate Voice.");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [latestMessage]);
+
   // ✅ RELIABLE autoplay when audioUrl changes (no setTimeout guessing)
   useEffect(() => {
     const audio = audioRef.current;
@@ -145,6 +158,21 @@ export default function VoiceControls({ latestMessage, onVoiceSend }) {
     }
 
     try {
+      const key = `${voice}::${latestMessage.trim()}`;
+      const cached = ttsCacheRef.current.get(key);
+      if (cached) {
+        stopAudio();
+        setAudioUrl(cached);
+        setTtsState("ready");
+        setTtsInfo("Ready from cache.");
+        return;
+      }
+
+      const requestSeq = ++requestSeqRef.current;
+      const started = performance.now();
+      setTtsState("generating");
+      setTtsInfo("Generating audio…");
+
       const res = await fetch(`${baseURL}/chat/tts`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -155,6 +183,7 @@ export default function VoiceControls({ latestMessage, onVoiceSend }) {
       });
 
       const data = await res.json();
+      if (requestSeq !== requestSeqRef.current) return;
 
       if (data.audio_url) {
         const fullUrl = data.audio_url.startsWith("http")
@@ -166,11 +195,19 @@ export default function VoiceControls({ latestMessage, onVoiceSend }) {
 
         // Set new audio
         setAudioUrl(fullUrl);
+        ttsCacheRef.current.set(key, fullUrl);
+        const elapsed = Math.round(performance.now() - started);
+        setTtsState("ready");
+        setTtsInfo(`Audio ready in ${elapsed}ms${data.cached ? " • backend cache hit" : ""}.`);
       } else {
+        setTtsState("error");
+        setTtsInfo("Voice generation failed.");
         alert("Mufasa could not generate voice.");
       }
     } catch (err) {
       console.error("TTS Error:", err);
+      setTtsState("error");
+      setTtsInfo("Voice generation failed.");
       alert("There was a problem generating Mufasa’s voice.");
     }
   };
@@ -255,6 +292,9 @@ export default function VoiceControls({ latestMessage, onVoiceSend }) {
   return (
     <div className="p-4 bg-black/50 rounded-2xl border border-yellow-600 shadow-md text-center mt-4">
       <h2 className="text-xl font-bold mb-3 text-yellow-400">🦁 Mufasa Voice</h2>
+      <p className="text-xs text-yellow-200/90 mb-3">
+        {ttsInfo || "Generate audio, then play/pause or record."}
+      </p>
 
       {/* Voice Selector */}
       <div className="flex items-center justify-center gap-2 mb-3">
@@ -278,16 +318,16 @@ export default function VoiceControls({ latestMessage, onVoiceSend }) {
         <button
           type="button"
           onClick={handleGenerateVoice}
-          className="bg-yellow-600 hover:bg-yellow-500 text-black px-4 py-2 rounded font-semibold"
+          className="bg-yellow-600 hover:bg-yellow-500 text-black px-4 py-3 min-h-11 rounded font-semibold"
         >
-          Generate Voice
+          {ttsState === "generating" ? "Generating…" : "Generate Voice"}
         </button>
 
         <button
           type="button"
           onClick={handlePlayPause}
           disabled={!audioUrl}
-          className="bg-green-600 hover:bg-green-500 text-black px-4 py-2 rounded font-semibold flex items-center gap-2"
+          className="bg-green-600 hover:bg-green-500 text-black px-4 py-3 min-h-11 rounded font-semibold flex items-center gap-2"
         >
           {playing ? <FaPause /> : <FaPlay />}
           {playing ? "Pause" : "Play"}
@@ -297,7 +337,7 @@ export default function VoiceControls({ latestMessage, onVoiceSend }) {
           type="button"
           onClick={handleStop}
           disabled={!audioUrl}
-          className="bg-red-600 hover:bg-red-500 text-black px-4 py-2 rounded font-semibold flex items-center gap-2"
+          className="bg-red-600 hover:bg-red-500 text-black px-4 py-3 min-h-11 rounded font-semibold flex items-center gap-2"
         >
           <FaStop /> Stop
         </button>
@@ -307,7 +347,7 @@ export default function VoiceControls({ latestMessage, onVoiceSend }) {
           onClick={handleRecord}
           className={`${
             recording ? "bg-red-600 hover:bg-red-500" : "bg-blue-600 hover:bg-blue-500"
-          } text-black px-4 py-2 rounded font-semibold flex items-center gap-2`}
+          } text-black px-4 py-3 min-h-11 rounded font-semibold flex items-center gap-2`}
         >
           <FaMicrophone />
           {recording ? "Stop Recording" : "Speak"}
