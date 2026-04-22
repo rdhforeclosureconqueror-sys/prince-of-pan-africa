@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -19,6 +19,7 @@ class User(Base):
     activities: Mapped[list["ActivityLog"]] = relationship(back_populates="user")
     assessments: Mapped[list["LeadershipAssessment"]] = relationship(back_populates="user")
     audiobooks: Mapped[list["Audiobook"]] = relationship(back_populates="user")
+    chapter_reflections: Mapped[list["AudiobookChapterReflection"]] = relationship(back_populates="user")
 
 
 class MemberProfile(Base):
@@ -95,6 +96,7 @@ class Audiobook(Base):
     user: Mapped[User] = relationship(back_populates="audiobooks")
     chapters: Mapped[list["AudiobookChapter"]] = relationship(back_populates="audiobook")
     progress: Mapped[list["AudiobookProgress"]] = relationship(back_populates="audiobook")
+    reflections: Mapped[list["AudiobookChapterReflection"]] = relationship(back_populates="audiobook")
 
 
 class AudiobookChapter(Base):
@@ -126,8 +128,28 @@ class AudiobookProgress(Base):
     chapter_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     position_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     playback_rate: Mapped[str] = mapped_column(String(16), nullable=False, default="1.0")
+    completed_chapters: Mapped[list[int]] = mapped_column(JSON, nullable=False, default=list)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
     __table_args__ = (UniqueConstraint("audiobook_id", "user_id", name="uq_audiobook_user_progress"),)
 
     audiobook: Mapped[Audiobook] = relationship(back_populates="progress")
+
+
+class AudiobookChapterReflection(Base):
+    __tablename__ = "audiobook_chapter_reflections"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    audiobook_id: Mapped[int] = mapped_column(ForeignKey("audiobooks.id"), nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    chapter_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    prompt: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    skipped: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    __table_args__ = (UniqueConstraint("audiobook_id", "user_id", "chapter_index", name="uq_reflection_scope"),)
+
+    audiobook: Mapped[Audiobook] = relationship(back_populates="reflections")
+    user: Mapped[User] = relationship(back_populates="chapter_reflections")

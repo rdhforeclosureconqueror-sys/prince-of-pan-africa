@@ -1,7 +1,7 @@
 :root {
   --cosmic-bg-image: url('/images/backgroundunity.png');
-  --cosmic-bg-vignette: radial-gradient(circle at 50% 12%, rgba(6, 16, 45, 0.14), rgba(2, 6, 18, 0.66) 65%, rgba(0, 0, 0, 0.82) 100%);
-  --cosmic-bg-tint: linear-gradient(130deg, rgba(8, 34, 58, 0.38), rgba(10, 8, 26, 0.55));
+  --cosmic-bg-vignette: radial-gradient(circle at 50% 16%, rgba(26, 58, 116, 0.12), rgba(6, 16, 42, 0.38) 62%, rgba(0, 0, 0, 0.58) 100%);
+  --cosmic-bg-tint: linear-gradient(130deg, rgba(15, 66, 108, 0.24), rgba(17, 12, 44, 0.3));
 }
 
 body::before {
@@ -21,16 +21,16 @@ body::after {
   content: "";
   position: fixed;
   inset: 0;
-  background: linear-gradient(180deg, rgba(1, 4, 11, 0.08), rgba(1, 2, 7, 0.34));
+  background: linear-gradient(180deg, rgba(1, 4, 11, 0.03), rgba(1, 2, 7, 0.18));
   z-index: -2;
   pointer-events: none;
 }
 
 .cosmic-readable-shell {
   border: 1px solid rgba(156, 214, 255, 0.22);
-  background: linear-gradient(145deg, rgba(4, 10, 25, 0.6), rgba(3, 9, 20, 0.44));
+  background: linear-gradient(145deg, rgba(4, 10, 25, 0.46), rgba(3, 9, 20, 0.34));
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
-  backdrop-filter: blur(9px);
+  backdrop-filter: blur(7px);
 }
 
 @media (max-width: 900px) {

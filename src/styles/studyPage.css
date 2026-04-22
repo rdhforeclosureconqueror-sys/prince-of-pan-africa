@@ -21,7 +21,7 @@
   padding: 1rem;
   border: 1px solid rgba(243, 205, 114, 0.3);
   border-radius: 16px;
-  background: linear-gradient(160deg, rgba(0, 0, 0, 0.42), rgba(13, 28, 17, 0.35));
+  background: linear-gradient(160deg, rgba(3, 14, 36, 0.3), rgba(10, 28, 34, 0.22));
 }
 
 .generator-grid-row,
@@ -38,7 +38,7 @@
   width: 100%;
   border-radius: 10px;
   border: 1px solid rgba(243, 205, 114, 0.24);
-  background: rgba(0, 0, 0, 0.36);
+  background: rgba(0, 0, 0, 0.25);
   color: #f5efe2;
   padding: 0.6rem;
 }
@@ -51,7 +51,7 @@
 .chapter-sidebar button {
   border-radius: 10px;
   border: 1px solid rgba(243, 205, 114, 0.42);
-  background: rgba(0, 0, 0, 0.34);
+  background: rgba(0, 0, 0, 0.23);
   color: #f5efe2;
   padding: 0.58rem 0.85rem;
 }
@@ -77,7 +77,7 @@
   margin-top: 1rem;
   border-radius: 20px;
   border: 1px solid rgba(243, 205, 114, 0.34);
-  background: radial-gradient(circle at top right, rgba(255, 211, 122, 0.14), rgba(0, 0, 0, 0.58) 48%);
+  background: radial-gradient(circle at top right, rgba(255, 211, 122, 0.2), rgba(0, 0, 0, 0.44) 48%);
   padding: 1rem;
 }
 
@@ -96,7 +96,7 @@
   border: 1px solid rgba(243, 205, 114, 0.3);
   border-radius: 14px;
   padding: 1.1rem;
-  background: rgba(0, 0, 0, 0.3);
+  background: rgba(0, 0, 0, 0.23);
   line-height: 1.95;
   font-size: clamp(1.05rem, 2.2vw, 1.2rem);
   max-height: 58vh;
@@ -140,6 +140,70 @@
 
 .study-shell.is-focus { padding-top: 1.8rem; }
 .study-shell.is-focus .study-inner { max-width: 920px; }
+
+.reflection-shell,
+.reflection-history {
+  margin-top: 1rem;
+  border: 1px solid rgba(243, 205, 114, 0.26);
+  border-radius: 14px;
+  padding: 0.9rem;
+  background: rgba(3, 8, 21, 0.3);
+}
+
+.reflection-shell h3,
+.reflection-history h3 {
+  margin: 0 0 0.55rem;
+  color: #f3cd72;
+}
+
+.reflection-shell textarea {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid rgba(243, 205, 114, 0.24);
+  background: rgba(0, 0, 0, 0.3);
+  color: #f5efe2;
+  padding: 0.6rem;
+}
+
+.reflection-actions,
+.reflection-history-header {
+  margin-top: 0.65rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.reflection-history ul {
+  list-style: none;
+  margin: 0.7rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.reflection-history li {
+  padding: 0.6rem;
+  border: 1px solid rgba(243, 205, 114, 0.2);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.reflection-history li p {
+  margin: 0.35rem 0 0;
+  white-space: pre-wrap;
+}
+
+.reflection-summary {
+  margin-top: 0.75rem;
+  border: 1px solid rgba(243, 205, 114, 0.22);
+  border-radius: 10px;
+  padding: 0.75rem;
+  background: rgba(0, 0, 0, 0.22);
+  white-space: pre-wrap;
+  color: #f5efe2;
+}
 
 @media (max-width: 920px) {
   .generator-grid-row,

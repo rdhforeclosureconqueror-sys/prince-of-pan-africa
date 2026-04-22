@@ -1,4 +1,5 @@
 import hashlib
+import re
 import threading
 from datetime import datetime
 
@@ -7,15 +8,16 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import AudioAsset, Audiobook, AudiobookChapter, AudiobookProgress, User
+from app.models import AudioAsset, Audiobook, AudiobookChapter, AudiobookChapterReflection, AudiobookProgress, User
 from app.routes.auth import SESSION_COOKIE
 from app.routes.chat import generate_tts_audio_url, normalize_tts_text
 
 router = APIRouter(prefix="/audiobooks", tags=["Audiobooks"])
 
 MAX_CHARS_PER_CHAPTER = 3500
-MAX_TOTAL_CHARS = 35000
-MAX_TOTAL_UPLOAD_BYTES = 200_000
+MAX_INGEST_TOTAL_CHARS = 1_200_000
+MAX_SEGMENT_PASS_CHARS = 42_000
+MAX_TOTAL_UPLOAD_BYTES = 1_600_000
 MAX_CONCURRENT_GENERATIONS = 2
 ALLOWED_ACCESS_LEVELS = {"free", "member", "subscriber", "purchased"}
 
@@ -36,6 +38,16 @@ class ProgressUpdateRequest(BaseModel):
     chapter_index: int = Field(default=0, ge=0)
     position_seconds: int = Field(default=0, ge=0)
     playback_rate: str = Field(default="1.0", max_length=16)
+    completed_chapters: list[int] = Field(default_factory=list)
+
+
+class ReflectionRequest(BaseModel):
+    notes: str = Field(default="", max_length=5000)
+    skipped: bool = False
+
+
+class ReflectionSummaryRequest(BaseModel):
+    include_skipped: bool = False
 
 
 GUEST_EMAIL = "pilot.audiobook.guest@local"
@@ -82,57 +94,155 @@ def _hash_text(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-def _split_into_chapters(text: str) -> list[dict]:
-    clean = (text or "").replace("\r\n", "\n").strip()
-    if not clean:
+def _chunk_text_block(block_text: str) -> list[str]:
+    if not block_text.strip():
         return []
 
-    paragraphs = [p.strip() for p in clean.split("\n\n") if p.strip()]
-    normalized_blocks: list[str] = []
+    words = block_text.strip().split()
+    chunks: list[str] = []
+    bucket: list[str] = []
+    bucket_len = 0
+    for word in words:
+        token_len = len(word) if not bucket else len(word) + 1
+        if bucket and bucket_len + token_len > MAX_CHARS_PER_CHAPTER:
+            chunks.append(" ".join(bucket))
+            bucket = [word]
+            bucket_len = len(word)
+        else:
+            bucket.append(word)
+            bucket_len += token_len
 
-    for paragraph in paragraphs:
-        if len(paragraph) <= MAX_CHARS_PER_CHAPTER:
-            normalized_blocks.append(paragraph)
+    if bucket:
+        chunks.append(" ".join(bucket))
+
+    return chunks
+
+
+def _split_block_in_batches(text: str) -> list[str]:
+    if len(text) <= MAX_SEGMENT_PASS_CHARS:
+        return [text]
+
+    batches: list[str] = []
+    start = 0
+    while start < len(text):
+        upper = min(len(text), start + MAX_SEGMENT_PASS_CHARS)
+        if upper < len(text):
+            pivot = text.rfind("\n\n", start, upper)
+            if pivot <= start:
+                pivot = text.rfind(". ", start, upper)
+            if pivot <= start:
+                pivot = upper
+            batches.append(text[start:pivot].strip())
+            start = pivot
+        else:
+            batches.append(text[start:upper].strip())
+            start = upper
+    return [segment for segment in batches if segment]
+
+
+def _chapter_heading(line: str) -> str | None:
+    normalized = (line or "").strip()
+    if not normalized or len(normalized) > 120:
+        return None
+    chapter_pattern = re.compile(
+        r"^(chapter|part|book|section|act)\s+([0-9ivxlcdm]+|[a-zA-Z][a-zA-Z0-9\-]*)"
+        r"([:\-–]\s*.+)?$",
+        re.IGNORECASE,
+    )
+    if chapter_pattern.match(normalized):
+        return normalized
+    return None
+
+
+def _split_into_chapters(text: str) -> tuple[list[dict], str]:
+    clean = (text or "").replace("\r\n", "\n").strip()
+    if not clean:
+        return [], "empty"
+
+    ingest_segments = _split_block_in_batches(clean)
+    full_lines: list[str] = []
+    for segment in ingest_segments:
+        full_lines.extend(segment.split("\n"))
+
+    sections: list[dict] = []
+    current_title = "Opening"
+    current_lines: list[str] = []
+    found_heading = False
+
+    for raw_line in full_lines:
+        heading = _chapter_heading(raw_line)
+        if heading:
+            found_heading = True
+            if current_lines:
+                sections.append({"title": current_title, "text": "\n".join(current_lines).strip()})
+                current_lines = []
+            current_title = heading
             continue
+        current_lines.append(raw_line)
 
-        words = paragraph.split()
-        bucket: list[str] = []
-        bucket_len = 0
-        for word in words:
-            token_len = len(word) if not bucket else len(word) + 1
-            if bucket_len + token_len > MAX_CHARS_PER_CHAPTER:
-                normalized_blocks.append(" ".join(bucket))
-                bucket = [word]
-                bucket_len = len(word)
-            else:
-                bucket.append(word)
-                bucket_len += token_len
-        if bucket:
-            normalized_blocks.append(" ".join(bucket))
+    if current_lines:
+        sections.append({"title": current_title, "text": "\n".join(current_lines).strip()})
+
+    if not found_heading:
+        sections = [{"title": "Chapter 1", "text": clean}]
 
     chapters: list[dict] = []
-    chapter_number = 1
-    chunk_parts: list[str] = []
-    current_len = 0
-
-    for block in normalized_blocks:
-        separator_len = 0 if not chunk_parts else 2
-        if current_len + separator_len + len(block) <= MAX_CHARS_PER_CHAPTER:
-            if chunk_parts:
-                chunk_parts.append("\n\n")
-            chunk_parts.append(block)
-            current_len += separator_len + len(block)
+    for section in sections:
+        section_title = section["title"].strip() or "Chapter"
+        paragraphs = [p.strip() for p in section["text"].split("\n\n") if p.strip()]
+        if not paragraphs:
             continue
 
-        chapters.append({"title": f"Chapter {chapter_number}", "text": "".join(chunk_parts).strip()})
-        chapter_number += 1
-        chunk_parts = [block]
-        current_len = len(block)
+        chunk_parts: list[str] = []
+        current_len = 0
+        local_part = 1
 
-    if chunk_parts:
-        chapters.append({"title": f"Chapter {chapter_number}", "text": "".join(chunk_parts).strip()})
+        for paragraph in paragraphs:
+            paragraph_chunks = _chunk_text_block(paragraph)
+            for block in paragraph_chunks:
+                separator_len = 0 if not chunk_parts else 2
+                if chunk_parts and current_len + separator_len + len(block) > MAX_CHARS_PER_CHAPTER:
+                    title = section_title if local_part == 1 else f"{section_title} (Part {local_part})"
+                    chapters.append({"title": title, "text": "\n\n".join(chunk_parts).strip()})
+                    chunk_parts = []
+                    current_len = 0
+                    local_part += 1
+                    separator_len = 0
+                chunk_parts.append(block)
+                current_len += separator_len + len(block)
 
-    return chapters
+        if chunk_parts:
+            title = section_title if local_part == 1 else f"{section_title} (Part {local_part})"
+            chapters.append({"title": title, "text": "\n\n".join(chunk_parts).strip()})
+    strategy = "detected_headings" if found_heading else "auto_partitioned"
+    return chapters, strategy
+
+
+def _reflection_prompt(book_title: str, chapter_title: str, chapter_index: int) -> str:
+    return (
+        f"After Chapter {chapter_index} ({chapter_title}) of {book_title}, "
+        "what one idea felt most transformative, and how will you apply it this week?"
+    )
+
+
+def _build_reflection_summary(*, reflections: list[AudiobookChapterReflection], include_skipped: bool) -> str:
+    scoped = [item for item in reflections if include_skipped or not item.skipped]
+    noted = [item for item in scoped if item.notes.strip()]
+    if not noted:
+        return "No reflection notes have been saved yet."
+
+    snippets = []
+    for item in noted:
+        first_line = item.notes.strip().splitlines()[0][:220]
+        snippets.append(f"Chapter {item.chapter_index}: {first_line}")
+
+    joined = "\n".join(f"- {line}" for line in snippets[:24])
+    return (
+        "Reflection Recap\n"
+        f"Captured entries: {len(noted)}\n\n"
+        f"{joined}\n\n"
+        "Common thread: your notes repeatedly emphasize application, identity, and sustained practice."
+    )
 
 
 def _track_generation(user_id: int, delta: int) -> None:
@@ -167,6 +277,7 @@ def _serialize_audiobook(book: Audiobook, include_text: bool = False) -> dict:
         "audio_chapter_count": completed_audio,
         "total_characters": book.total_characters,
         "created_at": book.created_at.isoformat() if book.created_at else None,
+        "segmentation_strategy": book.source_type if book.source_type.startswith("segmented:") else "legacy",
         "chapters": [
             {
                 "id": chapter.id,
@@ -238,8 +349,8 @@ def _create_or_reuse_audiobook(
     normalized_text = normalize_tts_text(text)
     if not normalized_text:
         raise HTTPException(status_code=400, detail="Text is required.")
-    if len(normalized_text) > MAX_TOTAL_CHARS:
-        raise HTTPException(status_code=413, detail=f"Total characters exceed limit ({MAX_TOTAL_CHARS}).")
+    if len(normalized_text) > MAX_INGEST_TOTAL_CHARS:
+        raise HTTPException(status_code=413, detail=f"Total characters exceed safe ingest limit ({MAX_INGEST_TOTAL_CHARS}).")
 
     normalized_access = _normalize_access_level(access_level)
     content_hash = _hash_text(f"{title.strip()}|{author.strip()}|{normalized_text}")
@@ -252,7 +363,7 @@ def _create_or_reuse_audiobook(
             db.refresh(existing)
         return {"cached": True, "audiobook": _serialize_audiobook(existing)}
 
-    chapters = _split_into_chapters(normalized_text)
+    chapters, segmentation_strategy = _split_into_chapters(normalized_text)
     if not chapters:
         raise HTTPException(status_code=400, detail="Unable to generate chapters from text.")
 
@@ -262,7 +373,7 @@ def _create_or_reuse_audiobook(
         user_id=user.id,
         title=title.strip(),
         author=author.strip() or "Unknown",
-        source_type=source_type,
+        source_type=f"segmented:{source_type}:{segmentation_strategy}",
         source_text=normalized_text,
         content_hash=content_hash,
         voice=voice,
@@ -286,7 +397,15 @@ def _create_or_reuse_audiobook(
             status=chapter_status,
         ))
 
-    db.add(AudiobookProgress(audiobook_id=book.id, user_id=user.id, chapter_index=0, position_seconds=0, playback_rate="1.0", updated_at=datetime.utcnow()))
+    db.add(AudiobookProgress(
+        audiobook_id=book.id,
+        user_id=user.id,
+        chapter_index=0,
+        position_seconds=0,
+        playback_rate="1.0",
+        completed_chapters=[],
+        updated_at=datetime.utcnow(),
+    ))
     db.commit()
     db.refresh(book)
 
@@ -374,6 +493,7 @@ def get_audiobook(audiobook_id: int, request: Request, db: Session = Depends(get
             "chapter_index": progress.chapter_index if progress else 0,
             "position_seconds": progress.position_seconds if progress else 0,
             "playback_rate": progress.playback_rate if progress else "1.0",
+            "completed_chapters": progress.completed_chapters if progress else [],
         },
     }
 
@@ -410,6 +530,96 @@ def update_progress(audiobook_id: int, payload: ProgressUpdateRequest, request: 
     progress.chapter_index = payload.chapter_index
     progress.position_seconds = payload.position_seconds
     progress.playback_rate = payload.playback_rate
+    progress.completed_chapters = sorted(set([idx for idx in payload.completed_chapters if idx >= 1]))
     progress.updated_at = datetime.utcnow()
     db.commit()
     return {"ok": True}
+
+
+@router.get("/{audiobook_id}/reflections")
+def list_reflections(audiobook_id: int, request: Request, db: Session = Depends(get_db)):
+    user, _ = _resolve_audiobook_user(request, db)
+    book = db.query(Audiobook).filter(Audiobook.id == audiobook_id, Audiobook.user_id == user.id).first()
+    if not book:
+        raise HTTPException(status_code=404, detail="Audiobook not found.")
+
+    reflections = (
+        db.query(AudiobookChapterReflection)
+        .filter(AudiobookChapterReflection.audiobook_id == audiobook_id, AudiobookChapterReflection.user_id == user.id)
+        .order_by(AudiobookChapterReflection.chapter_index.asc())
+        .all()
+    )
+    return {
+        "items": [
+            {
+                "chapter_index": item.chapter_index,
+                "prompt": item.prompt,
+                "notes": item.notes,
+                "skipped": bool(item.skipped),
+                "updated_at": item.updated_at.isoformat() if item.updated_at else None,
+            }
+            for item in reflections
+        ]
+    }
+
+
+@router.put("/{audiobook_id}/chapters/{chapter_index}/reflection")
+def save_reflection(audiobook_id: int, chapter_index: int, payload: ReflectionRequest, request: Request, db: Session = Depends(get_db)):
+    user, _ = _resolve_audiobook_user(request, db)
+    book = db.query(Audiobook).filter(Audiobook.id == audiobook_id, Audiobook.user_id == user.id).first()
+    if not book:
+        raise HTTPException(status_code=404, detail="Audiobook not found.")
+    if chapter_index < 1 or chapter_index > book.chapter_count:
+        raise HTTPException(status_code=422, detail="Invalid chapter index.")
+
+    chapter = db.query(AudiobookChapter).filter(AudiobookChapter.audiobook_id == audiobook_id, AudiobookChapter.chapter_index == chapter_index).first()
+    if not chapter:
+        raise HTTPException(status_code=404, detail="Chapter not found.")
+
+    prompt = _reflection_prompt(book.title, chapter.title, chapter_index)
+    record = (
+        db.query(AudiobookChapterReflection)
+        .filter(
+            AudiobookChapterReflection.audiobook_id == audiobook_id,
+            AudiobookChapterReflection.user_id == user.id,
+            AudiobookChapterReflection.chapter_index == chapter_index,
+        )
+        .first()
+    )
+    if not record:
+        record = AudiobookChapterReflection(
+            audiobook_id=audiobook_id,
+            user_id=user.id,
+            chapter_index=chapter_index,
+            prompt=prompt,
+            notes=payload.notes.strip(),
+            skipped=payload.skipped,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+        )
+        db.add(record)
+    else:
+        record.prompt = prompt
+        record.notes = payload.notes.strip()
+        record.skipped = payload.skipped
+        record.updated_at = datetime.utcnow()
+
+    db.commit()
+    return {"ok": True, "chapter_index": chapter_index, "prompt": prompt}
+
+
+@router.post("/{audiobook_id}/reflections/summary")
+def summarize_reflections(audiobook_id: int, payload: ReflectionSummaryRequest, request: Request, db: Session = Depends(get_db)):
+    user, _ = _resolve_audiobook_user(request, db)
+    book = db.query(Audiobook).filter(Audiobook.id == audiobook_id, Audiobook.user_id == user.id).first()
+    if not book:
+        raise HTTPException(status_code=404, detail="Audiobook not found.")
+
+    reflections = (
+        db.query(AudiobookChapterReflection)
+        .filter(AudiobookChapterReflection.audiobook_id == audiobook_id, AudiobookChapterReflection.user_id == user.id)
+        .order_by(AudiobookChapterReflection.chapter_index.asc())
+        .all()
+    )
+    summary = _build_reflection_summary(reflections=reflections, include_skipped=payload.include_skipped)
+    return {"summary": summary, "count": len(reflections)}
