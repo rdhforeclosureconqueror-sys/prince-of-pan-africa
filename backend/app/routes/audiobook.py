@@ -1,4 +1,5 @@
 import hashlib
+import io
 import logging
 import re
 import threading
@@ -6,6 +7,7 @@ import time
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from pypdf import PdfReader
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -223,6 +225,44 @@ def _split_into_chapters(text: str) -> tuple[list[dict], str]:
             chapters.append({"title": title, "text": "\n\n".join(chunk_parts).strip()})
     strategy = "detected_headings" if found_heading else "auto_partitioned"
     return chapters, strategy
+
+
+def _extract_text_from_pdf(payload: bytes) -> str:
+    try:
+        reader = PdfReader(io.BytesIO(payload))
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail="This PDF could not be parsed as text.") from exc
+
+    raw_segments: list[str] = []
+    empty_pages = 0
+    for page in reader.pages:
+        page_text = (page.extract_text() or "").strip()
+        if not page_text:
+            empty_pages += 1
+            continue
+        raw_segments.append(page_text)
+
+    if not raw_segments:
+        raise HTTPException(status_code=422, detail="This PDF appears to be image-based or unsupported.")
+
+    raw_text = "\n\n".join(raw_segments)
+    non_whitespace = [char for char in raw_text if not char.isspace()]
+    if not non_whitespace:
+        raise HTTPException(status_code=422, detail="This PDF appears to be image-based or unsupported.")
+
+    alnum_ratio = sum(1 for char in non_whitespace if char.isalnum()) / len(non_whitespace)
+    printable_ratio = sum(1 for char in non_whitespace if char.isprintable()) / len(non_whitespace)
+    if len(non_whitespace) < 30 or alnum_ratio < 0.35 or printable_ratio < 0.85:
+        raise HTTPException(status_code=422, detail="This PDF could not be parsed as text.")
+
+    normalized_text = normalize_tts_text(raw_text)
+    if not normalized_text:
+        raise HTTPException(status_code=422, detail="This PDF could not be parsed as text.")
+
+    if empty_pages == len(reader.pages):
+        raise HTTPException(status_code=422, detail="This PDF appears to be image-based or unsupported.")
+
+    return normalized_text
 
 
 def _reflection_prompt(book_title: str, chapter_title: str, chapter_index: int) -> str:
@@ -576,17 +616,20 @@ async def upload_audiobook(
 ):
     user, _ = _resolve_audiobook_user(request, db)
     filename = (file.filename or "").lower()
-    if not filename.endswith(".txt"):
-        raise HTTPException(status_code=415, detail="Only .txt uploads are supported in V1.")
+    if not (filename.endswith(".txt") or filename.endswith(".pdf")):
+        raise HTTPException(status_code=415, detail="Supported upload types are .txt and .pdf.")
 
     payload = await file.read()
     if len(payload) > MAX_TOTAL_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail=f"Upload size exceeds limit ({MAX_TOTAL_UPLOAD_BYTES} bytes).")
 
-    try:
-        text = payload.decode("utf-8")
-    except UnicodeDecodeError as exc:
-        raise HTTPException(status_code=422, detail="Text file must be UTF-8 encoded.") from exc
+    if filename.endswith(".txt"):
+        try:
+            text = payload.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise HTTPException(status_code=422, detail="Text file must be UTF-8 encoded.") from exc
+    else:
+        text = _extract_text_from_pdf(payload)
 
     return _create_or_reuse_audiobook(
         request=request,
