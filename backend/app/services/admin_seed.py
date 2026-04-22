@@ -1,14 +1,26 @@
 import os
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
 from app.models import ActivityLog, MemberProfile, User
 from app.security import hash_password
 
-SUPERADMIN_EMAIL = os.getenv("SUPERADMIN_EMAIL", "rdhforeclosurconqueror@gmail.com").strip().lower()
+
+DEFAULT_SUPERADMIN_EMAIL = "rdhforeclosurconqueror@gmail.com"
+SUPERADMIN_EMAIL = os.getenv("SUPERADMIN_EMAIL", DEFAULT_SUPERADMIN_EMAIL).strip().lower()
 ADMIN_EMAIL = SUPERADMIN_EMAIL  # backward compatibility for verification checks
 SUPERADMIN_ROLE = "superadmin"
+
+
+def _find_users_by_normalized_email(db: Session, normalized_email: str) -> list[User]:
+    return (
+        db.query(User)
+        .filter(func.lower(func.trim(User.email)) == normalized_email)
+        .order_by(User.id.asc())
+        .all()
+    )
 
 
 def _ensure_profile_and_activity(db: Session, user: User) -> None:
@@ -46,17 +58,19 @@ def _resolve_password_hash() -> str | None:
 
 def seed_admin() -> dict:
     """
-    Ensure the configured superadmin user exists with role=superadmin.
-    - Existing users are role-upgraded without changing password_hash.
+    Ensure the configured superadmin user exists with role=superadmin and canonical email.
+    - Existing users are role-upgraded and can have password_hash synchronized when
+      SUPERADMIN_PASSWORD_HASH or SUPERADMIN_PASSWORD is provided.
     - New users are only created when SUPERADMIN_PASSWORD_HASH or
       SUPERADMIN_PASSWORD is provided at runtime.
     """
     db = SessionLocal()
     try:
-        user = db.query(User).filter(User.email == SUPERADMIN_EMAIL).first()
         password_hash = _resolve_password_hash()
+        matches = _find_users_by_normalized_email(db, SUPERADMIN_EMAIL)
+        duplicate_user_ids = [user.id for user in matches[1:]] if len(matches) > 1 else []
 
-        if not user:
+        if not matches:
             if not password_hash:
                 return {
                     "created": False,
@@ -65,6 +79,8 @@ def seed_admin() -> dict:
                     "role": SUPERADMIN_ROLE,
                     "skipped": True,
                     "reason": "missing SUPERADMIN_PASSWORD_HASH or SUPERADMIN_PASSWORD",
+                    "duplicates_detected": False,
+                    "duplicate_user_ids": [],
                 }
             user = User(
                 email=SUPERADMIN_EMAIL,
@@ -76,10 +92,20 @@ def seed_admin() -> dict:
             created = True
             updated = False
         else:
+            user = matches[0]
             created = False
             updated = False
+
+            if user.email != SUPERADMIN_EMAIL:
+                user.email = SUPERADMIN_EMAIL
+                updated = True
+
             if user.role != SUPERADMIN_ROLE:
                 user.role = SUPERADMIN_ROLE
+                updated = True
+
+            if password_hash and user.password_hash != password_hash:
+                user.password_hash = password_hash
                 updated = True
 
         _ensure_profile_and_activity(db, user)
@@ -92,6 +118,9 @@ def seed_admin() -> dict:
             "role": user.role,
             "user_id": user.id,
             "skipped": False,
+            "duplicates_detected": bool(duplicate_user_ids),
+            "duplicate_user_ids": duplicate_user_ids,
+            "password_from_env": bool(password_hash),
         }
     finally:
         db.close()

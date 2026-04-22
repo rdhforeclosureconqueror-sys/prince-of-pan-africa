@@ -4,7 +4,8 @@ from contextlib import contextmanager
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./mufasa.db")
+DEFAULT_SQLITE_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "mufasa.db"))
+DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DEFAULT_SQLITE_PATH}")
 
 
 def _normalize_database_url(raw_url: str) -> str:

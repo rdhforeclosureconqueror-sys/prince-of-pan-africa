@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -15,6 +16,21 @@ class AuthPayload(BaseModel):
     email: str
     password: str = Field(min_length=6, max_length=128)
 
+
+
+
+def _normalize_email(email: str) -> str:
+    return email.strip().lower()
+
+
+def _find_user_by_email(db: Session, email: str) -> User | None:
+    normalized_email = _normalize_email(email)
+    return (
+        db.query(User)
+        .filter(func.lower(func.trim(User.email)) == normalized_email)
+        .order_by(User.id.asc())
+        .first()
+    )
 
 def _set_session_cookie(response: Response, user_id: int) -> None:
     response.set_cookie(
@@ -68,11 +84,11 @@ def auth_me(request: Request, db: Session = Depends(get_db)):
 
 @router.post("/join", status_code=status.HTTP_201_CREATED)
 def auth_join(payload: AuthPayload, response: Response, db: Session = Depends(get_db)):
-    normalized_email = payload.email.strip().lower()
+    normalized_email = _normalize_email(payload.email)
     if "@" not in normalized_email:
         raise HTTPException(status_code=422, detail="Valid email is required")
 
-    existing = db.query(User).filter(User.email == normalized_email).first()
+    existing = _find_user_by_email(db, normalized_email)
     if existing:
         raise HTTPException(status_code=409, detail="Email already exists")
 
@@ -95,8 +111,8 @@ def auth_join(payload: AuthPayload, response: Response, db: Session = Depends(ge
 
 @router.post("/login")
 def auth_login(payload: AuthPayload, response: Response, db: Session = Depends(get_db)):
-    normalized_email = payload.email.strip().lower()
-    user = db.query(User).filter(User.email == normalized_email).first()
+    normalized_email = _normalize_email(payload.email)
+    user = _find_user_by_email(db, normalized_email)
     if not user or user.password_hash != hash_password(payload.password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
