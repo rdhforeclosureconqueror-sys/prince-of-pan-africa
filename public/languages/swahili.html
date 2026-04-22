@@ -223,7 +223,9 @@
     .match-head{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px; flex-wrap:wrap; }
     .match-grid{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
     .match-card{ min-height:66px; border-radius:12px; border:1px solid rgba(214,178,94,.35); background: rgba(0,0,0,.4); color:var(--text); font-weight:700; cursor:pointer; }
-    .match-card span{ display:block; padding:8px; line-height:1.25; word-break:break-word; text-wrap:balance; }
+    .match-card span{ display:block; padding:0 8px; line-height:1.25; word-break:break-word; text-wrap:balance; }
+    .match-card .match-primary{ padding-top:10px; font-size:15px; font-weight:800; }
+    .match-card .match-secondary{ padding-bottom:10px; margin-top:4px; font-size:12px; color: var(--muted); font-weight:500; }
     .match-card.is-visible{ border-color: rgba(214,178,94,.8); background: rgba(214,178,94,.16); }
     .match-card.is-matched{ border-color: rgba(16,185,129,.8); background: rgba(16,185,129,.2); }
     .match-footer{ margin-top:10px; display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
@@ -442,16 +444,25 @@
         <div class="panel">
           <div class="section-title">Quick Practice Flow</div>
           <div class="note">
-            1) Listen to each word (🔊).<br/>
-            2) Repeat it 3 times (🎙).<br/>
-            3) Say the full sentence once.<br/><br/>
-            <b>Goal:</b> consistency + confidence — every day.
+            1) Press Speak on each word.<br/>
+            2) Repeat it 3 times.<br/>
+            3) Match cards to unlock Next day.<br/><br/>
+            <b>Goal:</b> clear mouth-muscle memory.
           </div>
 
           <div style="height:12px"></div>
 
           <div class="section-title">Today’s Sentence</div>
           <div class="note" id="sentenceBox">—</div>
+
+          <div style="height:12px"></div>
+
+          <div class="section-title">Unlock Progress</div>
+          <div class="note">
+            Heard words: <b id="unlockHeard">0/3</b><br/>
+            Match grid: <b id="unlockMatch">Not yet</b><br/>
+            Next day: <b id="unlockNext">Locked</b>
+          </div>
 
           <div class="controls" style="margin-top:12px">
             <button class="btn" id="btnTestVoice" type="button">✨ Test AI Voice</button>
@@ -487,16 +498,47 @@
   let activeTab = "lesson";
   let swahiliMatchSession = null;
   let swahiliMatchSeed = "";
+  const swahiliProgress = { heardWords: new Set(), matchComplete: false };
 
   function triggerLessonUnlock(){
+    swahiliProgress.matchComplete = true;
+    renderUnlockProgress();
     setStatus("✅ Match complete. Lesson progression unlocked.", "ready");
   }
 
+  function renderUnlockProgress(){
+    const heardCount = Math.min(3, swahiliProgress.heardWords.size);
+    const nextUnlocked = heardCount >= 3 && swahiliProgress.matchComplete;
+    document.getElementById("unlockHeard").textContent = `${heardCount}/3`;
+    document.getElementById("unlockMatch").textContent = swahiliProgress.matchComplete ? "Complete" : "Not yet";
+    document.getElementById("unlockNext").textContent = nextUnlocked ? "Unlocked" : "Locked";
+  }
+
+  function onMatchFeedback({ type }){
+    if(type === "match"){
+      setStatus("✅ Good job — correct pair.", "ready");
+      return;
+    }
+    if(type === "mismatch"){
+      setStatus("❌ Try again — cards reset.", "loading");
+    }
+  }
+
   function getCurrentMatchWords(){
-    return (PACK?.days?.[idx]?.words || []).map((w) => ({
-      swahili: w.swahili,
-      english: w.english,
-    }));
+    if(!PACK?.days?.length) return [];
+    const rows = [];
+    for(let offset = 0; offset < PACK.days.length; offset += 1){
+      const day = PACK.days[(idx + offset) % PACK.days.length];
+      (day?.words || []).forEach((w) => {
+        rows.push({
+          swahili: w.swahili,
+          english: w.english,
+          helper: `Pronunciation: ${w.pronunciation || "—"}`,
+        });
+      });
+      if(rows.length >= 12) break;
+    }
+    return rows;
   }
 
   function renderMatchGame(){
@@ -513,7 +555,11 @@
     swahiliMatchSession = window.initMatchGame({
       containerId: "swahiliMatchGame",
       words,
+      title: "Swahili ↔ English Match (Complete ONE grid to unlock)",
+      instructions: "Tap cards to reveal. If the Swahili word matches its English meaning, they stay flipped. Finish the grid to complete the day’s Match requirement.",
       onComplete: triggerLessonUnlock,
+      onBackToLesson: () => setActiveTab("lesson"),
+      onFeedback: onMatchFeedback,
     });
     swahiliMatchSeed = nextSeed;
   }
@@ -579,6 +625,8 @@
 
   function render(){
     const d = PACK.days[idx];
+    swahiliProgress.heardWords.clear();
+    swahiliProgress.matchComplete = false;
     const dayLabel = `Day ${d.day} • ${d.theme}`;
     document.getElementById("todayLabel").textContent = dayLabel;
     document.getElementById("lessonTitle").textContent = `Swahili Lesson • Day ${d.day}`;
@@ -616,7 +664,10 @@
 
     wordsWrap.querySelectorAll("[data-speak]").forEach(btn => {
       btn.addEventListener("click", async () => {
-        const w = d.words[Number(btn.getAttribute("data-speak"))];
+        const wordIdx = Number(btn.getAttribute("data-speak"));
+        const w = d.words[wordIdx];
+        swahiliProgress.heardWords.add(wordIdx);
+        renderUnlockProgress();
         await speak(`${w.swahili}. ${w.english}. Pronunciation: ${w.pronunciation}.`);
       });
     });
@@ -631,6 +682,7 @@
     });
 
     setStatus("Lesson loaded. Tap Speak Lesson or Speak Sentence.", "ready");
+    renderUnlockProgress();
     if(activeTab === "match") renderMatchGame();
   }
 
