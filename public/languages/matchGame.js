@@ -69,6 +69,11 @@
       matched: new Set(),
       locked: false,
       completed: false,
+      streak: 0,
+      bestStreak: 0,
+      focusMode: false,
+      pulseCardId: '',
+      shakeCardIds: [],
       statusMessage: 'Flip two cards to find a pair.',
       statusTone: 'playing',
     };
@@ -97,6 +102,10 @@
       state.matched.clear();
       state.locked = false;
       state.completed = false;
+      state.streak = 0;
+      state.bestStreak = 0;
+      state.pulseCardId = '';
+      state.shakeCardIds = [];
       updateStatus('Flip two cards to find a pair.', 'playing');
       emitProgress();
     }
@@ -110,9 +119,12 @@
         <div class="match-shell">
           <div class="match-head">
             <h3 class="section-title" style="margin:0">${title}</h3>
-            <div class="pill">Progress: <b>${progress}</b></div>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <div class="pill">Progress: <b>${progress}</b></div>
+              <div class="pill">Streak: <b>${state.streak}</b></div>
+            </div>
           </div>
-          <div class="note" style="margin-bottom:12px">${instructions}</div>
+          ${state.focusMode ? '' : `<div class="note" style="margin-bottom:12px">${instructions}</div>`}
           <div class="match-head" style="margin-bottom:12px">
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
               <span class="mini" style="font-size:12px;color:var(--muted)">Grid size:</span>
@@ -120,19 +132,26 @@
                 <button type="button" class="btn ${state.gridSize === opt.value ? 'gold' : ''}" data-grid-size="${opt.value}" style="padding:8px 12px;min-height:36px">${opt.label}</button>
               `).join('')}
             </div>
+            <button type="button" class="btn ${state.focusMode ? 'green' : ''}" data-match-focus>
+              ${state.focusMode ? '🎯 Focus Mode: On' : '🎯 Focus Mode'}
+            </button>
           </div>
-          <div class="note" style="margin-bottom:12px">
-            Tap cards to reveal. Main label appears first, helper line appears below for clarity.
-          </div>
+          ${state.focusMode ? '' : `
+            <div class="note" style="margin-bottom:12px">
+              Tap cards to reveal. Main label appears first, helper line appears below for clarity.
+            </div>
+          `}
           <div class="match-grid" role="list" style="grid-template-columns:repeat(${state.config.columns},minmax(0,1fr));">
             ${state.cards.map((card) => {
               const isMatched = state.matched.has(card.pairId);
               const isFlipped = state.flipped.includes(card.id);
               const visible = isMatched || isFlipped;
+              const isPulse = state.pulseCardId === card.id;
+              const isShake = state.shakeCardIds.includes(card.id);
               return `
                 <button
                   type="button"
-                  class="match-card ${visible ? 'is-visible' : ''} ${isMatched ? 'is-matched' : ''}"
+                  class="match-card ${visible ? 'is-visible' : ''} ${isMatched ? 'is-matched' : ''} ${isPulse ? 'is-pulse' : ''} ${isShake ? 'is-mismatch' : ''}"
                   data-card-id="${card.id}"
                 >
                   <span class="match-primary">${visible ? card.primary : '• • •'}</span>
@@ -158,7 +177,16 @@
       });
 
       root.querySelector('[data-match-reset]')?.addEventListener('click', resetRound);
+      root.querySelector('[data-match-focus]')?.addEventListener('click', () => {
+        state.focusMode = !state.focusMode;
+        if(typeof onFeedback === 'function') onFeedback({ type: 'focus', enabled: state.focusMode });
+        render();
+      });
       root.querySelector('[data-match-back]')?.addEventListener('click', () => {
+        if(state.focusMode && typeof onFeedback === 'function'){
+          onFeedback({ type: 'focus', enabled: false });
+        }
+        state.focusMode = false;
         if(typeof onBackToLesson === 'function') onBackToLesson();
       });
       root.querySelectorAll('[data-grid-size]').forEach((btn) => {
@@ -199,27 +227,41 @@
 
       if(a.pairId === b.pairId){
         state.matched.add(a.pairId);
+        state.streak += 1;
+        state.bestStreak = Math.max(state.bestStreak, state.streak);
+        state.pulseCardId = b.id;
+        state.shakeCardIds = [];
         state.flipped = [];
-        updateStatus(`✅ Good job! Match found: ${a.hint}`, 'ready');
-        if(typeof onFeedback === 'function') onFeedback({ type: 'match', text: 'Good job' });
+        const streakLabel = state.streak >= 3 ? 'On fire' : state.streak === 2 ? 'Nice' : 'Good job';
+        updateStatus(`✅ ${streakLabel}! Match found: ${a.hint}`, 'ready');
+        if(typeof onFeedback === 'function') onFeedback({ type: 'match', text: 'Good job', streak: state.streak, comboLabel: streakLabel });
 
         if(state.matched.size === state.cards.length / 2){
           state.completed = true;
-          updateStatus('✅ Match complete. Lesson unlocked.', 'ready');
+          updateStatus('✅ Perfect round! Match complete. Lesson unlocked.', 'ready');
+          if(typeof onFeedback === 'function') onFeedback({ type: 'perfect', text: 'Perfect', streak: state.streak });
           if(typeof onComplete === 'function') onComplete();
         }
         emitProgress();
         render();
+        setTimeout(() => {
+          state.pulseCardId = '';
+          render();
+        }, 220);
         return;
       }
 
       state.locked = true;
+      state.streak = 0;
+      state.shakeCardIds = [a.id, b.id];
+      state.pulseCardId = '';
       updateStatus('❌ Try again — those cards do not match.', 'loading');
-      if(typeof onFeedback === 'function') onFeedback({ type: 'mismatch', text: 'Try again' });
+      if(typeof onFeedback === 'function') onFeedback({ type: 'mismatch', text: 'Try again', streak: 0 });
       render();
       setTimeout(() => {
         state.flipped = [];
         state.locked = false;
+        state.shakeCardIds = [];
         updateStatus('Flip two cards to find a pair.', 'playing');
         render();
       }, 650);
