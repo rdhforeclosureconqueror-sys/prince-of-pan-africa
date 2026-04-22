@@ -53,6 +53,7 @@ def test_routes(request: Request):
         "/tts",
         "/assessment/submit",
         "/assessment/results/{user_id}",
+        "/assessment/dashboard/{user_id}",
         "/assessment/analytics/roles",
         "/admin/ai/overview",
         "/admin/ai/members",

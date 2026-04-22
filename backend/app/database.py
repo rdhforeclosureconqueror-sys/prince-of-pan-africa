@@ -62,6 +62,21 @@ def _run_sqlite_compat_migrations() -> None:
                 )
             )
 
+        sqlite_compat_columns = {
+            "account_id": "TEXT",
+            "parent_id": "TEXT",
+            "child_id": "TEXT",
+            "submission_id": "TEXT NOT NULL DEFAULT ''",
+        }
+        for column, column_type in sqlite_compat_columns.items():
+            if cols and column not in cols:
+                conn.execute(
+                    text(
+                        "ALTER TABLE leadership_assessments "
+                        f"ADD COLUMN {column} {column_type}"
+                    )
+                )
+
 
 # =========================
 # DATABASE TYPE DETECTION

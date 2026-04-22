@@ -1,25 +1,38 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import ResultsDashboard from "../components/leadership/ResultsDashboard";
-import { fetchLeadershipResultByUserId } from "../services/leadershipService";
+import { fetchLeadershipDashboard } from "../services/leadershipService";
 import "../styles/leadership.css";
 
 export default function LeadershipResultsPage() {
   const [searchParams] = useSearchParams();
   const location = useLocation();
-  const [result, setResult] = useState(location.state?.result || null);
-  const [loading, setLoading] = useState(!location.state?.result);
+  const [dashboard, setDashboard] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   const userId = searchParams.get("userId") || "";
 
   useEffect(() => {
-    if (!userId || location.state?.result) return;
-
     let mounted = true;
+
+    if (!userId) {
+      setLoading(false);
+      return () => {
+        mounted = false;
+      };
+    }
+
     setLoading(true);
-    fetchLeadershipResultByUserId(userId)
+    fetchLeadershipDashboard(userId)
       .then((loaded) => {
-        if (mounted) setResult(loaded);
+        if (mounted) {
+          setDashboard(loaded);
+          console.info("[leadership-trace] result render source", {
+            userId,
+            submissionId: location.state?.submissionId || loaded?.latest?.submissionId,
+            historyCount: loaded?.history?.length || 0,
+          });
+        }
       })
       .finally(() => {
         if (mounted) setLoading(false);
@@ -28,7 +41,9 @@ export default function LeadershipResultsPage() {
     return () => {
       mounted = false;
     };
-  }, [userId, location.state]);
+  }, [location.state?.submissionId, userId]);
+
+  const result = dashboard?.latest || null;
 
   const pathway = useMemo(() => {
     if (!result?.roles) return null;
@@ -71,8 +86,17 @@ export default function LeadershipResultsPage() {
     <main className="leadership-page">
       <header>
         <h1>Leadership Results Dashboard</h1>
-        <p>User ID: {result.userId}</p>
+        <p>
+          Saved assessment {result.assessmentId} for user {result.userId}.
+        </p>
       </header>
+
+      <section className="pathway-panel">
+        <h3>Save Status</h3>
+        <p>
+          {dashboard.saved ? "Assessment saved and loaded from dashboard history." : "Assessment status unknown."}
+        </p>
+      </section>
 
       <ResultsDashboard result={result} />
 
@@ -86,7 +110,32 @@ export default function LeadershipResultsPage() {
           </ul>
         </section>
       ) : null}
-      <ResultsDashboard result={result} />
+
+      <section className="pathway-panel">
+        <h3>Assessment History</h3>
+        {dashboard.history.length ? (
+          <ul>
+            {dashboard.history.map((entry) => (
+              <li key={entry.assessmentId}>
+                {entry.assessmentId} · {entry.roles?.primary || "Unknown"} · {entry.createdAt || "No timestamp"}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p>No saved history found.</p>
+        )}
+      </section>
+
+      <section className="pathway-panel">
+        <h3>Start Program</h3>
+        <p>Continue with the current saved assessment context.</p>
+        <Link
+          className="leadership-submit"
+          to={`/dashboard?userId=${encodeURIComponent(result.userId)}&assessmentId=${encodeURIComponent(result.assessmentId || "")}`}
+        >
+          Start Program
+        </Link>
+      </section>
     </main>
   );
 }
