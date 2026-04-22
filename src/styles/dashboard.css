@@ -39,6 +39,16 @@ body {
   font-weight: 400;
 }
 
+
+.admin-subtext {
+  max-width: 900px;
+  margin: 10px auto 0;
+  color: rgba(219, 234, 254, 0.9);
+}
+
+.admin-subtext code {
+  color: #fde68a;
+}
 /* 🧱 GRID — Core Stats */
 .dashboard-grid {
   display: grid;

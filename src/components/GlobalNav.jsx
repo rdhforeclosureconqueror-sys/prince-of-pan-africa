@@ -32,67 +32,30 @@ export default function GlobalNav({ isAdmin }) {
           ☰ Menu
         </button>
 
-        <nav
-          id="global-nav-menu"
-          className={`global-nav__links ${open ? "is-open" : ""}`}
-        >
+        <nav id="global-nav-menu" className={`global-nav__links ${open ? "is-open" : ""}`}>
           {PILOT_NAV_LINKS.map((link) => (
             <Link
               key={link.to}
               to={link.to}
               onClick={closeMenu}
-              className={
-                location.pathname === link.to ? "global-nav__link is-active" : "global-nav__link"
-              }
+              className={location.pathname === link.to ? "global-nav__link is-active" : "global-nav__link"}
             >
               {link.label}
             </Link>
           ))}
+
           {isAdmin ? (
-            <>
-              <Link
-                to="/dashboard"
-                onClick={closeMenu}
-                className={
-                  location.pathname === "/dashboard"
-                    ? "global-nav__link is-active"
-                    : "global-nav__link"
-                }
-              >
-                Operations Deck
-              </Link>
-              <Link
-                to="/ops/verification"
-                onClick={closeMenu}
-                className={
-                  location.pathname === "/ops/verification"
-                    ? "global-nav__link is-active"
-                    : "global-nav__link"
-                }
-              >
-                Verification Center
-              </Link>
-            </>
-          ) : (
             <Link
-              to="/dashboard"
+              to="/ops/verification"
               onClick={closeMenu}
-              className={
-                location.pathname === "/dashboard"
-                  ? "global-nav__link is-active"
-                  : "global-nav__link"
-              }
+              className={location.pathname === "/ops/verification" ? "global-nav__link is-active" : "global-nav__link"}
             >
-              My Dashboard
+              Verification Center
             </Link>
-          )}
+          ) : null}
+
           {EXTERNAL_LINKS.map((link) => (
-            <a
-              key={link.href}
-              href={link.href}
-              className="global-nav__link"
-              onClick={closeMenu}
-            >
+            <a key={link.href} href={link.href} className="global-nav__link" onClick={closeMenu}>
               {link.label}
             </a>
           ))}

@@ -24,10 +24,9 @@ export const PILOT_DEFERRED_ROUTES = [
 
 export const PILOT_NAV_LINKS = [
   { label: "Home", to: "/" },
-  { label: "My Dashboard", to: "/dashboard" },
+  { label: "Operations Deck", to: "/dashboard" },
   { label: "Timeline", to: "/timeline" },
   { label: "Languages Hub", to: "/languages" },
-  { label: "Decolonize Library", to: "/decolonize" },
-  { label: "Decolonize Portal", to: "/portal/decolonize" },
+  { label: "Decolonized Library", to: "/decolonize" },
   { label: "Leadership", to: "/leadership" },
 ];

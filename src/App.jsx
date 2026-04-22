@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import GlobalNav from "./components/GlobalNav";
 import UniverseOverlay from "./components/UniverseOverlay";
@@ -14,6 +14,8 @@ import LeadershipResultsPage from "./pages/LeadershipResultsPage";
 import SystemVerificationPage from "./pages/SystemVerificationPage";
 import PilotDeferredPage from "./pages/PilotDeferredPage";
 
+const API = import.meta.env.VITE_API_BASE_URL || "";
+
 export default function App() {
   const [user, setUser] = useState(null);
 
@@ -25,21 +27,23 @@ export default function App() {
       .filter(Boolean);
   }, []);
 
-  useEffect(() => {
-    const API = import.meta.env.VITE_API_BASE_URL || "";
-    fetch(`${API}/auth/me`, {
-      method: "GET",
-      credentials: "include",
-      headers: { Accept: "application/json" },
-    })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data?.user) setUser(data.user);
-      })
-      .catch(() => {
-        // no-auth mode: app must render even if this request fails
+  const refreshAuth = useCallback(async () => {
+    try {
+      const res = await fetch(`${API}/auth/me`, {
+        method: "GET",
+        credentials: "include",
+        headers: { Accept: "application/json" },
       });
+      const data = res.ok ? await res.json() : null;
+      setUser(data?.user || null);
+    } catch {
+      setUser(null);
+    }
   }, []);
+
+  useEffect(() => {
+    refreshAuth();
+  }, [refreshAuth]);
 
   const isAdmin = useMemo(() => {
     if (!user) return false;
@@ -53,9 +57,9 @@ export default function App() {
   return (
     <Router>
       <UniverseOverlay />
-      <GlobalNav isAdmin={isAdmin} />
+      <GlobalNav isAdmin={isAdmin} isAuthed={!!user} />
       <Routes>
-        <Route path="/" element={<Home />} />
+        <Route path="/" element={<Home user={user} isAdmin={isAdmin} onAuthChange={refreshAuth} />} />
         <Route path="/dashboard" element={dashboardElement} />
         <Route path="/admin-legacy" element={<Navigate to="/dashboard" replace />} />
         <Route
@@ -72,42 +76,14 @@ export default function App() {
         <Route path="/languages" element={<LanguagesHub />} />
         <Route
           path="/language-practice"
-          element={
-            <PilotDeferredPage
-              title="Language Practice is deferred for pilot"
-              detail="Practice logging remains disabled until backend write endpoints are finalized."
-            />
-          }
+          element={<PilotDeferredPage title="Language Practice is deferred for pilot" />}
         />
-        <Route
-          path="/calendar"
-          element={<PilotDeferredPage title="Calendar is deferred for pilot" />}
-        />
-        <Route
-          path="/journal"
-          element={<PilotDeferredPage title="Journal is deferred for pilot" />}
-        />
-        <Route
-          path="/ledger"
-          element={<PilotDeferredPage title="Ledger is deferred for pilot" />}
-        />
-        <Route
-          path="/study"
-          element={
-            <PilotDeferredPage
-              title="Study is deferred for pilot"
-              detail="Study submission and sharing are intentionally held outside pilot scope."
-            />
-          }
-        />
-        <Route
-          path="/pagt"
-          element={<PilotDeferredPage title="Pan-Africa’s Got Talent is deferred for pilot" />}
-        />
-        <Route
-          path="/membership"
-          element={<PilotDeferredPage title="Membership plan is deferred for pilot" />}
-        />
+        <Route path="/calendar" element={<PilotDeferredPage title="Calendar is deferred for pilot" />} />
+        <Route path="/journal" element={<PilotDeferredPage title="Journal is deferred for pilot" />} />
+        <Route path="/ledger" element={<PilotDeferredPage title="Ledger is deferred for pilot" />} />
+        <Route path="/study" element={<PilotDeferredPage title="Study is deferred for pilot" />} />
+        <Route path="/pagt" element={<PilotDeferredPage title="Pan-Africa’s Got Talent is deferred for pilot" />} />
+        <Route path="/membership" element={<PilotDeferredPage title="Membership plan is deferred for pilot" />} />
         <Route path="/leadership" element={<LeadershipAssessmentPage />} />
         <Route path="/results" element={<LeadershipResultsPage />} />
         <Route path="/ops/verification" element={<SystemVerificationPage />} />
