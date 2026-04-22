@@ -39,7 +39,7 @@ export default function LeadershipAssessmentPage() {
   }
 
   return (
-    <main className="leadership-page">
+    <main className="leadership-page cosmic-readable-shell">
       <header>
         <h1>Leadership Assessment</h1>
         <p>Complete 30 prompts to reveal your primary, secondary, growth, and shadow leadership roles.</p>

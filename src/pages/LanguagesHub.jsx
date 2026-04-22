@@ -1,22 +1,17 @@
+import "../styles/languages.css";
+
 export default function LanguagesHub() {
   return (
-    <div style={{ padding: 24 }}>
-      <h1 style={{ color: "#f5c542" }}>Languages</h1>
-      <p style={{ color: "#f5e6b3" }}>Choose a language module:</p>
+    <main className="languages-shell">
+      <section className="languages-panel cosmic-readable-shell">
+        <h1>Languages</h1>
+        <p>Choose a language module:</p>
 
-      <div style={{ display: "grid", gap: 12, maxWidth: 460 }}>
-        <a href="/languages/swahili.html" style={cardStyle}>Swahili • Lesson of the Day →</a>
-        <a href="/languages/yoruba.html" style={cardStyle}>Yoruba • Lesson of the Day →</a>
-      </div>
-    </div>
+        <div className="languages-grid">
+          <a href="/languages/swahili.html" className="language-card">Swahili • Lesson of the Day →</a>
+          <a href="/languages/yoruba.html" className="language-card">Yoruba • Lesson of the Day →</a>
+        </div>
+      </section>
+    </main>
   );
 }
-
-const cardStyle = {
-  padding: 14,
-  borderRadius: 14,
-  border: "1px solid #b7791f",
-  background: "rgba(0,0,0,0.5)",
-  color: "#f5e6b3",
-  textDecoration: "none",
-};

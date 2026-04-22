@@ -117,7 +117,7 @@ export default function Home({ user, isAdmin, onAuthChange }) {
 
   return (
     <div className="home-shell">
-      <section className="hero-panel">
+      <section className="hero-panel cosmic-readable-shell">
         <p className="hero-kicker">Pan-African Intelligence Platform</p>
         <h1>Mufasa The Decolonizer</h1>
         <p className="hero-subtitle">
@@ -131,7 +131,7 @@ export default function Home({ user, isAdmin, onAuthChange }) {
       </section>
 
       <section className="home-grid">
-        <article className="panel account-panel">
+        <article className="panel account-panel cosmic-readable-shell">
           <h2>{authTitle}</h2>
           {user ? (
             <>
@@ -157,7 +157,7 @@ export default function Home({ user, isAdmin, onAuthChange }) {
           {authStatus ? <p className="status-line">{authStatus}</p> : null}
         </article>
 
-        <article className="panel">
+        <article className="panel cosmic-readable-shell">
           <h2>Platform focus</h2>
           <ul className="focus-list">
             <li>Admin oversight and member onboarding are active now.</li>
@@ -168,7 +168,7 @@ export default function Home({ user, isAdmin, onAuthChange }) {
         </article>
       </section>
 
-      <section className="panel chat-panel">
+      <section className="panel chat-panel cosmic-readable-shell">
         <h2>Talk to Mufasa</h2>
         <div className="chat-window" id="chat-output">
           {messages.map((msg, i) => (

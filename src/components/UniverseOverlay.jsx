@@ -1,42 +1,60 @@
-// ✅ src/components/UniverseOverlay.jsx
 import React, { useEffect } from "react";
 import "../styles/universe.css";
 
 export default function UniverseOverlay() {
   useEffect(() => {
     const canvas = document.getElementById("universe-canvas");
-    const ctx = canvas.getContext("2d");
+    if (!canvas) return () => {};
+
+    const ctx = canvas.getContext("2d", { alpha: true });
+    if (!ctx) return () => {};
+
+    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const memoryClass = Number(navigator.deviceMemory || 4);
+    const cpuClass = Number(navigator.hardwareConcurrency || 4);
+
     let width = (canvas.width = window.innerWidth);
     let height = (canvas.height = window.innerHeight);
+    const maxDim = Math.max(width, height);
 
-    const stars = Array.from({ length: 200 }, () => ({
-      x: Math.random() * width,
-      y: Math.random() * height,
-      z: Math.random() * width,
+    const performanceFactor = prefersReducedMotion ? 0.3 : Math.min(1, (memoryClass + cpuClass / 4) / 4);
+    const baseStars = width < 768 ? 90 : 170;
+    const starCount = Math.max(50, Math.floor(baseStars * performanceFactor));
+    const speed = prefersReducedMotion ? 0.4 : 1.25;
+
+    const stars = Array.from({ length: starCount }, () => ({
+      x: (Math.random() - 0.5) * maxDim,
+      y: (Math.random() - 0.5) * maxDim,
+      z: Math.random() * maxDim,
     }));
 
+    let frameId;
     function animate() {
-      ctx.fillStyle = "rgba(0, 0, 15, 0.8)";
+      ctx.fillStyle = "rgba(2, 6, 18, 0.22)";
       ctx.fillRect(0, 0, width, height);
-      ctx.fillStyle = "rgba(255, 215, 0, 0.8)";
 
-      for (let i = 0; i < stars.length; i++) {
+      for (let i = 0; i < stars.length; i += 1) {
         const s = stars[i];
-        s.z -= 2;
-        if (s.z <= 0) s.z = width;
+        s.z -= speed;
+        if (s.z <= 1) s.z = maxDim;
 
-        const k = 128.0 / s.z;
-        const px = s.x * k + width / 2;
-        const py = s.y * k + height / 2;
+        const perspective = 160 / s.z;
+        const px = s.x * perspective + width / 2;
+        const py = s.y * perspective + height / 2;
 
         if (px >= 0 && px <= width && py >= 0 && py <= height) {
-          const size = (1 - s.z / width) * 2;
+          const glow = 1 - s.z / maxDim;
+          const size = Math.max(0.4, glow * 2.1);
+          const alpha = Math.min(0.75, 0.12 + glow * 0.7);
+
+          ctx.fillStyle = `rgba(255, 231, 160, ${alpha})`;
           ctx.beginPath();
           ctx.arc(px, py, size, 0, Math.PI * 2);
           ctx.fill();
         }
       }
-      requestAnimationFrame(animate);
+
+      frameId = requestAnimationFrame(animate);
     }
 
     animate();
@@ -45,9 +63,13 @@ export default function UniverseOverlay() {
       width = canvas.width = window.innerWidth;
       height = canvas.height = window.innerHeight;
     };
+
     window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      if (frameId) cancelAnimationFrame(frameId);
+    };
   }, []);
 
-  return <canvas id="universe-canvas"></canvas>;
+  return <canvas id="universe-canvas" aria-hidden="true"></canvas>;
 }

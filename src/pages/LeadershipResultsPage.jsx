@@ -60,7 +60,7 @@ export default function LeadershipResultsPage() {
 
   if (loading) {
     return (
-      <main className="leadership-page">
+      <main className="leadership-page cosmic-readable-shell">
         <header>
           <h1>Loading leadership dashboard…</h1>
         </header>
@@ -70,7 +70,7 @@ export default function LeadershipResultsPage() {
 
   if (!result) {
     return (
-      <main className="leadership-page">
+      <main className="leadership-page cosmic-readable-shell">
         <header>
           <h1>Results unavailable</h1>
           <p>We could not find a saved dashboard for this user. Start a new assessment.</p>
@@ -83,7 +83,7 @@ export default function LeadershipResultsPage() {
   }
 
   return (
-    <main className="leadership-page">
+    <main className="leadership-page cosmic-readable-shell">
       <header>
         <h1>Leadership Results Dashboard</h1>
         <p>
