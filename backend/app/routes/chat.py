@@ -68,8 +68,12 @@ def cache_audio_filename(text: str, voice: str, ext: str = "mp3") -> Path:
     return STATIC_AUDIO_DIR / f"{digest}.{ext}"
 
 
-def build_audio_url(request: Request, audio_file: Path) -> str:
-    return str(request.url_for("static", path=f"audio/{audio_file.name}"))
+def build_audio_url(request: Request | None, audio_file: Path, base_url: str | None = None) -> str:
+    if request is not None:
+        return str(request.url_for("static", path=f"audio/{audio_file.name}"))
+    if base_url:
+        return f"{base_url.rstrip('/')}/static/audio/{audio_file.name}"
+    raise HTTPException(status_code=500, detail="Cannot build audio URL without request/base URL context.")
 
 
 
@@ -79,7 +83,7 @@ def normalize_tts_text(text: str) -> str:
     return normalized.strip()
 
 
-def generate_tts_audio_url(*, request: Request, text: str, voice: str = "alloy") -> tuple[str, bool]:
+def generate_tts_audio_url(*, request: Request | None, text: str, voice: str = "alloy", base_url: str | None = None) -> tuple[str, bool]:
     normalized_text = normalize_tts_text(text)
     if not normalized_text:
         raise HTTPException(status_code=400, detail="No text provided for TTS.")
@@ -92,7 +96,7 @@ def generate_tts_audio_url(*, request: Request, text: str, voice: str = "alloy")
         with open(cached_file, "wb") as f:
             f.write(audio_bytes)
 
-    audio_url = build_audio_url(request, cached_file)
+    audio_url = build_audio_url(request, cached_file, base_url=base_url)
     return audio_url, cached
 def request_aivoice_tts(
     *,

@@ -1,13 +1,15 @@
 import hashlib
+import logging
 import re
 import threading
+import time
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.database import get_db
+from app.database import SessionLocal, get_db
 from app.models import AudioAsset, Audiobook, AudiobookChapter, AudiobookChapterReflection, AudiobookProgress, User
 from app.routes.auth import SESSION_COOKIE
 from app.routes.chat import generate_tts_audio_url, normalize_tts_text
@@ -19,10 +21,15 @@ MAX_INGEST_TOTAL_CHARS = 1_200_000
 MAX_SEGMENT_PASS_CHARS = 42_000
 MAX_TOTAL_UPLOAD_BYTES = 1_600_000
 MAX_CONCURRENT_GENERATIONS = 2
+MAX_GENERATION_JOB_SECONDS = 900
 ALLOWED_ACCESS_LEVELS = {"free", "member", "subscriber", "purchased"}
 
 _generation_lock = threading.Lock()
 _generation_counts: dict[int, int] = {}
+_book_generation_threads: dict[int, threading.Thread] = {}
+_book_generation_state: dict[int, dict] = {}
+
+logger = logging.getLogger("mufasa-audiobook")
 
 
 class AudiobookCreateRequest(BaseModel):
@@ -265,6 +272,7 @@ def _ensure_generation_slot(user_id: int) -> None:
 def _serialize_audiobook(book: Audiobook, include_text: bool = False) -> dict:
     ordered_chapters = sorted(book.chapters, key=lambda chapter: chapter.chapter_index)
     completed_audio = sum(1 for chapter in ordered_chapters if chapter.audio_url)
+    progress = _build_generation_progress(book)
     return {
         "id": book.id,
         "title": book.title,
@@ -275,6 +283,7 @@ def _serialize_audiobook(book: Audiobook, include_text: bool = False) -> dict:
         "status": book.status,
         "chapter_count": book.chapter_count,
         "audio_chapter_count": completed_audio,
+        "generation_progress": progress,
         "total_characters": book.total_characters,
         "created_at": book.created_at.isoformat() if book.created_at else None,
         "segmentation_strategy": book.source_type if book.source_type.startswith("segmented:") else "legacy",
@@ -293,59 +302,171 @@ def _serialize_audiobook(book: Audiobook, include_text: bool = False) -> dict:
     }
 
 
-def _generate_audio_for_book(*, request: Request, db: Session, user: User, book: Audiobook) -> None:
-    if book.status in {"completed", "audio-generated", "ready"}:
-        return
+def _build_generation_progress(book: Audiobook) -> dict:
+    ordered_chapters = sorted(book.chapters, key=lambda chapter: chapter.chapter_index)
+    total_chapters = len(ordered_chapters)
+    completed_chapters = sum(1 for chapter in ordered_chapters if chapter.status == "completed")
+    failed_chapters = sum(1 for chapter in ordered_chapters if chapter.status == "failed")
+    generating_chapters = sum(1 for chapter in ordered_chapters if chapter.status == "generating")
+    queued_chapters = sum(1 for chapter in ordered_chapters if chapter.status in {"queued", "draft"})
+    current_chapter = next((chapter.chapter_index for chapter in ordered_chapters if chapter.status == "generating"), None)
 
+    with _generation_lock:
+        runtime_state = dict(_book_generation_state.get(book.id, {}))
+
+    current_step = runtime_state.get("current_step") or book.status
+    if book.status in {"queued", "draft"}:
+        current_step = "pending"
+    elif book.status in {"generating", "audio-generated", "ready", "complete"}:
+        current_step = "generating_chapters"
+
+    return {
+        "status": book.status,
+        "current_step": current_step,
+        "total_chapters": total_chapters,
+        "completed_chapters": completed_chapters,
+        "failed_chapters": failed_chapters,
+        "generating_chapters": generating_chapters,
+        "queued_chapters": queued_chapters,
+        "current_chapter_index": runtime_state.get("current_chapter_index") or current_chapter,
+        "message": runtime_state.get("message", ""),
+        "updated_at": runtime_state.get("updated_at"),
+    }
+
+
+def _update_runtime_generation_state(audiobook_id: int, **state) -> None:
+    with _generation_lock:
+        current = dict(_book_generation_state.get(audiobook_id, {}))
+        current.update(state)
+        current["updated_at"] = datetime.utcnow().isoformat()
+        _book_generation_state[audiobook_id] = current
+
+
+def _clear_runtime_generation_state(audiobook_id: int) -> None:
+    with _generation_lock:
+        _book_generation_state.pop(audiobook_id, None)
+        _book_generation_threads.pop(audiobook_id, None)
+
+
+def _generate_audio_for_book_job(*, audiobook_id: int, user_id: int, base_url: str) -> None:
+    started_at = time.monotonic()
+    db = SessionLocal()
+    _update_runtime_generation_state(audiobook_id, current_step="generating_chapters", message="Job started")
     try:
-        _ensure_generation_slot(user.id)
+        _ensure_generation_slot(user_id)
+        book = db.query(Audiobook).filter(Audiobook.id == audiobook_id, Audiobook.user_id == user_id).first()
+        if not book:
+            return
+
+        book.status = "generating_chapters"
+        db.commit()
+
         ordered_chapters = sorted(book.chapters, key=lambda chapter: chapter.chapter_index)
         for chapter in ordered_chapters:
-            if chapter.audio_url:
-                if chapter.status != "completed":
+            if (time.monotonic() - started_at) > MAX_GENERATION_JOB_SECONDS:
+                raise TimeoutError(f"Generation exceeded {MAX_GENERATION_JOB_SECONDS} seconds")
+
+            if chapter.audio_url and chapter.status == "completed":
+                continue
+
+            _update_runtime_generation_state(
+                audiobook_id,
+                current_step="generating_chapters",
+                current_chapter_index=chapter.chapter_index,
+                message=f"Generating chapter {chapter.chapter_index} of {len(ordered_chapters)}",
+            )
+            chapter_started = time.monotonic()
+            logger.info("audiobook_generation chapter_start book_id=%s chapter=%s", audiobook_id, chapter.chapter_index)
+
+            try:
+                if chapter.audio_url:
                     chapter.status = "completed"
                     db.commit()
-                continue
+                    continue
 
-            existing_asset = db.query(AudioAsset).filter(AudioAsset.text_hash == chapter.text_hash, AudioAsset.voice == book.voice).first()
-            if existing_asset:
-                chapter.audio_url = existing_asset.audio_url
-                chapter.status = "completed"
-                chapter.audio_asset_id = existing_asset.id
+                existing_asset = db.query(AudioAsset).filter(AudioAsset.text_hash == chapter.text_hash, AudioAsset.voice == book.voice).first()
+                if existing_asset:
+                    chapter.audio_url = existing_asset.audio_url
+                    chapter.status = "completed"
+                    chapter.audio_asset_id = existing_asset.id
+                    db.commit()
+                    continue
+
+                chapter.status = "generating"
                 db.commit()
-                continue
 
-            chapter.status = "generating"
-            db.commit()
+                audio_url, _ = generate_tts_audio_url(request=None, text=chapter.text, voice=book.voice, base_url=base_url)
+                asset = AudioAsset(text_hash=chapter.text_hash, voice=book.voice, audio_url=audio_url)
+                db.add(asset)
+                db.flush()
 
-            audio_url, _ = generate_tts_audio_url(request=request, text=chapter.text, voice=book.voice)
-            asset = AudioAsset(text_hash=chapter.text_hash, voice=book.voice, audio_url=audio_url)
-            db.add(asset)
-            db.flush()
+                chapter.audio_url = audio_url
+                chapter.audio_asset_id = asset.id
+                chapter.status = "completed"
+                db.commit()
+                logger.info(
+                    "audiobook_generation chapter_complete book_id=%s chapter=%s duration_seconds=%.2f",
+                    audiobook_id,
+                    chapter.chapter_index,
+                    time.monotonic() - chapter_started,
+                )
+            except Exception as chapter_error:
+                chapter.status = "failed"
+                db.commit()
+                logger.exception(
+                    "audiobook_generation chapter_failed book_id=%s chapter=%s error=%s",
+                    audiobook_id,
+                    chapter.chapter_index,
+                    chapter_error,
+                )
 
-            chapter.audio_url = audio_url
-            chapter.audio_asset_id = asset.id
-            chapter.status = "completed"
-            db.commit()
-
-        book.status = "audio-generated"
+        db.refresh(book)
+        failed_count = sum(1 for chapter in book.chapters if chapter.status == "failed")
+        book.status = "partially_complete" if failed_count else "complete"
         db.commit()
-    except HTTPException:
-        book.status = "failed"
-        db.commit()
-        raise
+        _update_runtime_generation_state(
+            audiobook_id,
+            current_step=book.status,
+            message="Generation complete" if failed_count == 0 else "Generation complete with some failed chapters",
+            current_chapter_index=None,
+        )
     except Exception as exc:
-        book.status = "failed"
-        db.commit()
-        raise HTTPException(status_code=500, detail=f"Audiobook generation failed: {exc}") from exc
+        logger.exception("audiobook_generation job_failed book_id=%s error=%s", audiobook_id, exc)
+        book = db.query(Audiobook).filter(Audiobook.id == audiobook_id, Audiobook.user_id == user_id).first()
+        if book:
+            book.status = "failed"
+            db.commit()
+        _update_runtime_generation_state(audiobook_id, current_step="failed", message=str(exc), current_chapter_index=None)
     finally:
-        _track_generation(user.id, -1)
+        _track_generation(user_id, -1)
+        db.close()
+        _clear_runtime_generation_state(audiobook_id)
+
+
+def _start_background_generation(*, audiobook_id: int, user_id: int, base_url: str) -> bool:
+    with _generation_lock:
+        active_thread = _book_generation_threads.get(audiobook_id)
+        if active_thread and active_thread.is_alive():
+            return False
+
+        worker = threading.Thread(
+            target=_generate_audio_for_book_job,
+            kwargs={"audiobook_id": audiobook_id, "user_id": user_id, "base_url": base_url},
+            daemon=True,
+            name=f"audiobook-generation-{audiobook_id}",
+        )
+        _book_generation_threads[audiobook_id] = worker
+
+    _update_runtime_generation_state(audiobook_id, current_step="pending", message="Job queued", current_chapter_index=None)
+    worker.start()
+    return True
 
 
 def _create_or_reuse_audiobook(
     *, request: Request, db: Session, user: User, title: str, author: str, text: str, voice: str, source_type: str,
     generate_audio: bool, access_level: str,
 ) -> dict:
+    ingest_started = time.monotonic()
     normalized_text = normalize_tts_text(text)
     if not normalized_text:
         raise HTTPException(status_code=400, detail="Text is required.")
@@ -356,18 +477,27 @@ def _create_or_reuse_audiobook(
     content_hash = _hash_text(f"{title.strip()}|{author.strip()}|{normalized_text}")
     existing = db.query(Audiobook).filter(Audiobook.user_id == user.id, Audiobook.content_hash == content_hash, Audiobook.voice == voice).first()
     if existing:
-        if generate_audio and existing.status in {"draft", "queued", "failed"}:
-            existing.status = "generating"
+        if generate_audio and existing.status in {"draft", "queued", "failed", "pending", "partially_complete"}:
+            existing.status = "pending"
             db.commit()
-            _generate_audio_for_book(request=request, db=db, user=user, book=existing)
+            _start_background_generation(audiobook_id=existing.id, user_id=user.id, base_url=str(request.base_url))
             db.refresh(existing)
         return {"cached": True, "audiobook": _serialize_audiobook(existing)}
 
+    segment_started = time.monotonic()
     chapters, segmentation_strategy = _split_into_chapters(normalized_text)
+    logger.info(
+        "audiobook_generation segmentation_complete title=%s total_chars=%s chapters=%s ingest_seconds=%.2f segment_seconds=%.2f",
+        title,
+        len(normalized_text),
+        len(chapters),
+        segment_started - ingest_started,
+        time.monotonic() - segment_started,
+    )
     if not chapters:
         raise HTTPException(status_code=400, detail="Unable to generate chapters from text.")
 
-    initial_status = "generating" if generate_audio else "draft"
+    initial_status = "pending" if generate_audio else "draft"
     chapter_status = "queued" if generate_audio else "draft"
     book = Audiobook(
         user_id=user.id,
@@ -410,7 +540,7 @@ def _create_or_reuse_audiobook(
     db.refresh(book)
 
     if generate_audio:
-        _generate_audio_for_book(request=request, db=db, user=user, book=book)
+        _start_background_generation(audiobook_id=book.id, user_id=user.id, base_url=str(request.base_url))
 
     db.refresh(book)
     return {"cached": False, "audiobook": _serialize_audiobook(book)}
@@ -505,14 +635,55 @@ def generate_audio_for_saved_book(audiobook_id: int, request: Request, db: Sessi
     if not book:
         raise HTTPException(status_code=404, detail="Audiobook not found.")
 
-    if book.status in {"generating"}:
+    if book.status in {"pending", "generating_chapters"}:
         return {"ok": True, "status": book.status, "audiobook": _serialize_audiobook(book)}
 
-    book.status = "generating"
+    book.status = "pending"
     db.commit()
-    _generate_audio_for_book(request=request, db=db, user=user, book=book)
+    _start_background_generation(audiobook_id=book.id, user_id=user.id, base_url=str(request.base_url))
     db.refresh(book)
     return {"ok": True, "status": book.status, "audiobook": _serialize_audiobook(book)}
+
+
+@router.get("/{audiobook_id}/generation-status")
+def get_generation_status(audiobook_id: int, request: Request, db: Session = Depends(get_db)):
+    user, _ = _resolve_audiobook_user(request, db)
+    book = db.query(Audiobook).filter(Audiobook.id == audiobook_id, Audiobook.user_id == user.id).first()
+    if not book:
+        raise HTTPException(status_code=404, detail="Audiobook not found.")
+    return {"audiobook_id": audiobook_id, "generation_progress": _build_generation_progress(book)}
+
+
+@router.post("/{audiobook_id}/chapters/{chapter_index}/generate")
+def generate_single_chapter(audiobook_id: int, chapter_index: int, request: Request, db: Session = Depends(get_db)):
+    user, _ = _resolve_audiobook_user(request, db)
+    book = db.query(Audiobook).filter(Audiobook.id == audiobook_id, Audiobook.user_id == user.id).first()
+    if not book:
+        raise HTTPException(status_code=404, detail="Audiobook not found.")
+    chapter = db.query(AudiobookChapter).filter(AudiobookChapter.audiobook_id == audiobook_id, AudiobookChapter.chapter_index == chapter_index).first()
+    if not chapter:
+        raise HTTPException(status_code=404, detail="Chapter not found.")
+    if chapter.audio_url:
+        chapter.status = "completed"
+        db.commit()
+        return {"ok": True, "chapter_index": chapter_index, "status": chapter.status, "audio_url": chapter.audio_url}
+
+    chapter.status = "generating"
+    db.commit()
+    try:
+        audio_url, _ = generate_tts_audio_url(request=None, text=chapter.text, voice=book.voice, base_url=str(request.base_url))
+        asset = AudioAsset(text_hash=chapter.text_hash, voice=book.voice, audio_url=audio_url)
+        db.add(asset)
+        db.flush()
+        chapter.audio_asset_id = asset.id
+        chapter.audio_url = audio_url
+        chapter.status = "completed"
+        db.commit()
+        return {"ok": True, "chapter_index": chapter_index, "status": chapter.status, "audio_url": chapter.audio_url}
+    except Exception as exc:
+        chapter.status = "failed"
+        db.commit()
+        raise HTTPException(status_code=500, detail=f"Chapter generation failed: {exc}") from exc
 
 
 @router.post("/{audiobook_id}/progress")

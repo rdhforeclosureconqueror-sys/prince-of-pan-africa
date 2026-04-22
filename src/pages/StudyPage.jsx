@@ -51,6 +51,7 @@ export default function StudyPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
+  const [generationProgress, setGenerationProgress] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [activeSentenceIndex, setActiveSentenceIndex] = useState(0);
@@ -97,6 +98,7 @@ export default function StudyPage() {
     try {
       const response = await api(`/audiobooks/${id}`, { method: "GET", credentials: "include" });
       setSelectedBook(response);
+      setGenerationProgress(response.generation_progress || null);
       const safeChapterIndex = Math.max(0, (response.progress?.chapter_index || 1) - 1);
       setActiveChapterIndex(safeChapterIndex);
       setPlaybackRate(Number(response.progress?.playback_rate || 1));
@@ -127,6 +129,27 @@ export default function StudyPage() {
       loadBook(selectedBookId);
     }
   }, [selectedBookId]);
+
+  useEffect(() => {
+    if (!selectedBook?.id) return undefined;
+    const activeStatuses = new Set(["pending", "chunking", "generating_chapters", "partially_complete"]);
+    if (!activeStatuses.has(selectedBook.status)) return undefined;
+
+    const timer = window.setInterval(async () => {
+      try {
+        const response = await api(`/audiobooks/${selectedBook.id}/generation-status`, { method: "GET", credentials: "include" });
+        setGenerationProgress(response.generation_progress || null);
+        await loadLibrary();
+        if (["complete", "failed", "partially_complete"].includes(response.generation_progress?.status)) {
+          await loadBook(selectedBook.id);
+        }
+      } catch (pollError) {
+        setError(pollError.message || "Unable to poll generation progress.");
+      }
+    }, 3000);
+
+    return () => window.clearInterval(timer);
+  }, [selectedBook?.id, selectedBook?.status]);
 
   useEffect(() => {
     if (!audioRef.current) return;
@@ -164,7 +187,7 @@ export default function StudyPage() {
     }
 
     setIsGenerating(true);
-    setStatus(generateAudio ? "Generating chapters and audio..." : "Saving draft into your library...");
+    setStatus(generateAudio ? "Job queued. Preparing chapter generation..." : "Saving draft into your library...");
 
     try {
       let response;
@@ -205,7 +228,7 @@ export default function StudyPage() {
       }
 
       const cachedLabel = response.cached ? " (cache reused)" : "";
-      setStatus(generateAudio ? `Audiobook ready${cachedLabel}.` : `Book draft saved${cachedLabel}.`);
+      setStatus(generateAudio ? `Generation started${cachedLabel}.` : `Book draft saved${cachedLabel}.`);
       setSelectedBookId(response.audiobook.id);
       navigate(`/study?book=${response.audiobook.id}`, { replace: true });
       await loadLibrary();
@@ -222,15 +245,29 @@ export default function StudyPage() {
 
   async function generateAudioForSavedBook() {
     if (!selectedBook?.id) return;
-    setStatus("Generating chapter audio for this saved book...");
+    setStatus("Queued generation for missing chapter audio...");
     setError("");
     try {
       const response = await api(`/audiobooks/${selectedBook.id}/generate-audio`, { method: "POST" });
-      setStatus(`Audio generation status: ${response.status}`);
+      setStatus(`Audio generation status: ${response.status}. Track progress below.`);
       await loadBook(selectedBook.id);
       await loadLibrary();
     } catch (err) {
       setError(err.message || "Failed to generate audio.");
+    }
+  }
+
+  async function generateActiveChapterAudio() {
+    if (!selectedBook?.id || !activeChapter?.chapter_index) return;
+    setStatus(`Generating chapter ${activeChapter.chapter_index}...`);
+    setError("");
+    try {
+      await api(`/audiobooks/${selectedBook.id}/chapters/${activeChapter.chapter_index}/generate`, { method: "POST", credentials: "include" });
+      setStatus(`Chapter ${activeChapter.chapter_index} generated.`);
+      await loadBook(selectedBook.id);
+      await loadLibrary();
+    } catch (err) {
+      setError(err.message || "Failed to generate this chapter.");
     }
   }
 
@@ -376,6 +413,17 @@ export default function StudyPage() {
     setProgress(nextPosition);
   }
 
+  function statusLabelFromProgress(progressState) {
+    if (!progressState) return "";
+    if (progressState.status === "pending") return "Pending";
+    if (progressState.status === "chunking") return "Chunking";
+    if (progressState.status === "generating_chapters") return "Generating chapters";
+    if (progressState.status === "partially_complete") return "Partially complete";
+    if (progressState.status === "complete") return "Complete";
+    if (progressState.status === "failed") return "Failed";
+    return progressState.status;
+  }
+
   return (
     <main className={`study-shell ${isFocusMode ? "is-focus" : ""}`}>
       <div className="study-inner cosmic-readable-shell">
@@ -415,6 +463,13 @@ export default function StudyPage() {
                 </button>
               </div>
               {status && <p className="study-status">{status}</p>}
+              {generationProgress && (
+                <p className="study-status">
+                  {statusLabelFromProgress(generationProgress)} • {generationProgress.completed_chapters}/{generationProgress.total_chapters} chapters complete
+                  {generationProgress.current_chapter_index ? ` • Generating chapter ${generationProgress.current_chapter_index} of ${generationProgress.total_chapters}` : ""}
+                  {generationProgress.failed_chapters ? ` • ${generationProgress.failed_chapters} failed` : ""}
+                </p>
+              )}
               {error && <p className="study-error">{error}</p>}
             </section>
 
@@ -445,11 +500,23 @@ export default function StudyPage() {
                 <p>
                   {selectedBook.author} • {selectedBook.status} • access: {selectedBook.access_level} • {selectedBook.segmentation_strategy}
                 </p>
+                {generationProgress && (
+                  <p>
+                    {statusLabelFromProgress(generationProgress)} — {generationProgress.completed_chapters}/{generationProgress.total_chapters} complete
+                    {generationProgress.current_chapter_index ? ` — Generating chapter ${generationProgress.current_chapter_index} of ${generationProgress.total_chapters}` : ""}
+                    {generationProgress.message ? ` — ${generationProgress.message}` : ""}
+                  </p>
+                )}
               </div>
               <div className="reader-actions">
                 {selectedBook.audio_chapter_count < selectedBook.chapter_count && (
                   <button className="focus-toggle" onClick={generateAudioForSavedBook}>
                     Generate Missing Audio
+                  </button>
+                )}
+                {!activeChapter?.audio_url && (
+                  <button className="focus-toggle" onClick={generateActiveChapterAudio}>
+                    Generate Next Chapter
                   </button>
                 )}
                 <button className="focus-toggle" onClick={() => setIsFocusMode((prev) => !prev)}>
