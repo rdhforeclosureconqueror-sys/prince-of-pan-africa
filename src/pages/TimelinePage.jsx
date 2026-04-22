@@ -1,9 +1,7 @@
 // src/pages/TimelinePage.jsx
 import React, { useMemo, useState } from "react";
 import { TIMELINE_EVENTS } from "../data/timelineEvents";
-
-const MUFASA_BASE = "https://mufasa-knowledge-bank.onrender.com";
-const TTS_ENDPOINT = `${MUFASA_BASE}/chat/tts`;
+import { generateTTS } from "../api/mufasaClient";
 
 export default function TimelinePage() {
   const [selected, setSelected] = useState(null);
@@ -20,13 +18,7 @@ export default function TimelinePage() {
     setAudioUrl(null);
 
     try {
-      const res = await fetch(TTS_ENDPOINT, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, voice_model: voiceModel }),
-      });
-
-      const data = await res.json();
+      const data = await generateTTS(text, voiceModel);
       const raw = data?.audio_url || data?.audioUrl || null;
 
       if (!raw) {
@@ -34,8 +26,7 @@ export default function TimelinePage() {
         return;
       }
 
-      const full = raw.startsWith("http") ? raw : `${MUFASA_BASE}${raw}`;
-      setAudioUrl(full);
+      setAudioUrl(raw);
       setStatus("Ready ✅ Tap play.");
     } catch (e) {
       console.error(e);

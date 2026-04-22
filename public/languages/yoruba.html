@@ -71,7 +71,8 @@
     .nav{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; justify-content:flex-end; }
     .btn{
       border-radius: 999px;
-      padding:10px 14px;
+      padding:12px 16px;
+      min-height: 44px;
       border: 1px solid rgba(214,178,94,.45);
       background: rgba(0,0,0,.25);
       color: var(--text);
@@ -102,7 +103,7 @@
       cursor:pointer;
     }
 
-    .wrap{ max-width:1100px; margin:0 auto; padding:22px 18px 60px; }
+    .wrap{ max-width:1100px; margin:0 auto; padding:22px 18px 60px; overflow-x: clip; }
     .hero{
       border-radius: var(--radius);
       border: 1px solid rgba(214,178,94,.28);
@@ -166,7 +167,19 @@
     .mini{ color: var(--muted); font-size: 12px; line-height: 1.45; }
 
     .controls{ display:flex; gap:10px; flex-wrap:wrap; margin-top: 12px; }
+    .controls .btn { flex: 1 1 140px; justify-content: center; }
     .status{ margin-top: 10px; font-size: 12px; color: var(--muted); }
+    .status[data-state="loading"]{ color: #f0d489; }
+    .status[data-state="playing"]{ color: #9cf7cb; }
+    .status[data-state="ready"]{ color: #c9c2b3; }
+
+    @media (max-width: 640px){
+      .topbar-inner{ flex-direction: column; align-items: stretch; }
+      .nav{ justify-content: flex-start; }
+      .btn, .select{ width: 100%; justify-content: center; }
+      .title{ font-size: 19px; }
+      .subtitle{ font-size: 13px; }
+    }
 
     .note{
       border-left: 3px solid rgba(214,178,94,.7);
@@ -299,8 +312,7 @@
 <script src="/languages/lessonTts.js"></script>
 <script>
   const DATA_URL = "yoruba_30days.json";
-  const MUFASA_BASE = "https://mufasa-knowledge-bank.onrender.com";
-  const TTS_ENDPOINT = `${MUFASA_BASE}/tts`;
+  const TTS_ENDPOINT = "https://prince-of-pan-africa-backend.onrender.com/chat/tts";
 
   let PACK = null;
   let idx = 0;
@@ -310,7 +322,10 @@
   const ttsPlayer = document.getElementById("aiTtsPlayer");
   const voiceSelect = document.getElementById("voiceModel");
 
-  function setStatus(msg){ statusEl.textContent = msg; }
+  function setStatus(msg, state = "ready"){
+    statusEl.dataset.state = state;
+    statusEl.textContent = msg;
+  }
   function showFatal(msg){
     fatalEl.style.display = "block";
     fatalEl.textContent = msg;
@@ -341,23 +356,22 @@
     try { window.speechSynthesis.cancel(); } catch(e){}
     window.lessonTts.stopPlayer(ttsPlayer);
     if(rec){ try{ rec.abort(); }catch(e){} }
-    setStatus("Stopped.");
+    setStatus("Stopped.", "ready");
   }
 
   async function speak(text){
     if(!text || !text.trim()) return;
-    setStatus("Generating AI voice…");
+    setStatus("Generating AI voice…", "loading");
     try{
       await window.lessonTts.speak({
         text,
         voice: (voiceSelect?.value || "alloy"),
-        style: "strong",
         endpoint: TTS_ENDPOINT,
-        onStatus: setStatus,
+        onStatus: (msg) => setStatus(msg, msg.includes("playing") ? "playing" : "ready"),
       });
     }catch(err){
       console.warn("AI TTS failed, fallback engaged", err);
-      setStatus("AI voice unavailable right now.");
+      setStatus("AI voice unavailable right now.", "ready");
     }
   }
 
@@ -418,7 +432,7 @@
       });
     });
 
-    setStatus("Lesson loaded. Tap Speak Lesson or Speak Sentence.");
+    setStatus("Lesson loaded. Tap Speak Lesson or Speak Sentence.", "ready");
   }
 
   async function speakAll(){
@@ -438,7 +452,7 @@
 
   async function load(){
     try{
-      setStatus("Loading lesson data…");
+      setStatus("Loading lesson data…", "loading");
       const res = await fetch(DATA_URL, { cache: "no-store" });
       if(!res.ok) throw new Error(`HTTP ${res.status}`);
       PACK = await res.json();
@@ -453,13 +467,13 @@
     }catch(e){
       console.error(e);
       showFatal("Could not load Yoruba lesson data.");
-      setStatus("Could not load JSON.");
+      setStatus("Could not load JSON.", "ready");
     }
   }
 
   if(ttsPlayer){
-    ttsPlayer.addEventListener("ended", () => setStatus("Done. Tap Speak again anytime."));
-    ttsPlayer.addEventListener("error", () => setStatus("Audio playback error."));
+    ttsPlayer.addEventListener("ended", () => setStatus("Done. Tap Speak again anytime.", "ready"));
+    ttsPlayer.addEventListener("error", () => setStatus("Audio playback error.", "ready"));
   }
 
   document.getElementById("btnTestVoice").addEventListener("click", () =>
@@ -470,18 +484,22 @@
   document.getElementById("btnPrev").addEventListener("click", () => {
     if(!PACK) return;
     idx = (idx - 1 + PACK.days.length) % PACK.days.length;
+    setStatus("Switching day…", "loading");
     render();
+    prefetchNextDay();
   });
   document.getElementById("btnNext").addEventListener("click", () => {
     if(!PACK) return;
     idx = (idx + 1) % PACK.days.length;
+    setStatus("Switching day…", "loading");
     render();
+    prefetchNextDay();
   });
   document.getElementById("btnMic").addEventListener("click", () => {
     if(!rec) initRec();
     if(!rec) return;
-    setStatus("Listening… say today’s sentence.");
-    try{ rec.start(); }catch(e){ setStatus("Mic busy. Tap Stop and try again."); }
+    setStatus("Listening… say today’s sentence.", "loading");
+    try{ rec.start(); }catch(e){ setStatus("Mic busy. Tap Stop and try again.", "ready"); }
   });
   document.getElementById("btnSpeakSentence").addEventListener("click", async () => {
     if(!PACK) return;
@@ -489,7 +507,21 @@
     if(s) await speak(s);
   });
 
-  load();
+  async function prefetchNextDay(){
+    if(!PACK) return;
+    const next = PACK.days[(idx + 1) % PACK.days.length];
+    if(!next) return;
+    const preview = [`Yoruba lesson, day ${next.day}. Theme: ${next.theme || ""}.`, next?.words?.[0]?.yoruba || ""].filter(Boolean).join(" ");
+    try{
+      await window.lessonTts.prefetch({
+        text: preview,
+        voice: (voiceSelect?.value || "alloy"),
+        endpoint: TTS_ENDPOINT,
+      });
+    }catch(_){}
+  }
+
+  load().then(prefetchNextDay);
 </script>
 </body>
 </html>

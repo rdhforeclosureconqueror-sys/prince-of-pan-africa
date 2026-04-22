@@ -5,6 +5,8 @@ import tempfile
 import os
 import uuid
 import logging
+import hashlib
+import time
 from pathlib import Path
 from app.config import settings
 
@@ -59,6 +61,11 @@ def save_audio_file(audio_bytes, ext="mp3"):
     with open(filename, "wb") as f:
         f.write(audio_bytes)
     return filename
+
+
+def cache_audio_filename(text: str, voice: str, ext: str = "mp3") -> Path:
+    digest = hashlib.sha256(f"{voice}|{(text or '').strip()}".encode("utf-8")).hexdigest()
+    return STATIC_AUDIO_DIR / f"{digest}.{ext}"
 
 
 def build_audio_url(request: Request, audio_file: Path) -> str:
@@ -192,7 +199,11 @@ async def generate_openai_response(payload: dict, request: Request):
     audio_url = None
 
     if make_voice:
-        audio_file = save_audio_file(request_aivoice_tts(text=ai_text, voice=voice_model))
+        cached_file = cache_audio_filename(text=ai_text, voice=voice_model)
+        if not cached_file.exists():
+            with open(cached_file, "wb") as f:
+                f.write(request_aivoice_tts(text=ai_text, voice=voice_model))
+        audio_file = cached_file
         audio_url = build_audio_url(request, audio_file)
 
     return {
@@ -211,9 +222,21 @@ async def text_to_speech(payload: dict, request: Request):
     if not text:
         raise HTTPException(status_code=400, detail="No text provided for TTS.")
 
-    audio_file = save_audio_file(request_aivoice_tts(text=text, voice=voice))
+    started = time.perf_counter()
+    cached_file = cache_audio_filename(text=text, voice=voice)
+    cached = cached_file.exists()
+
+    if cached:
+        audio_file = cached_file
+    else:
+        audio_bytes = request_aivoice_tts(text=text, voice=voice)
+        with open(cached_file, "wb") as f:
+            f.write(audio_bytes)
+        audio_file = cached_file
+
     audio_url = build_audio_url(request, audio_file)
-    return {"audio_url": audio_url, "voice": voice}
+    elapsed_ms = round((time.perf_counter() - started) * 1000, 2)
+    return {"audio_url": audio_url, "voice": voice, "cached": cached, "latency_ms": elapsed_ms}
 
 
 @router.post("/voice")
@@ -232,7 +255,11 @@ async def handle_voice_input(request: Request, file: UploadFile = File(...)):
 
         ai_text = openai_response(user_text)
 
-        audio_file = save_audio_file(request_aivoice_tts(text=ai_text, voice="alloy"))
+        cached_file = cache_audio_filename(text=ai_text, voice="alloy")
+        if not cached_file.exists():
+            with open(cached_file, "wb") as f:
+                f.write(request_aivoice_tts(text=ai_text, voice="alloy"))
+        audio_file = cached_file
         audio_url = build_audio_url(request, audio_file)
 
         os.remove(tmp_path)
