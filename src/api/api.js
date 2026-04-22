@@ -32,9 +32,7 @@ export async function api(path, options = {}) {
           ? data
           : data?.detail || data?.error || "Unknown server error";
 
-      if (res.status === 401) {
-        msg = "You must be logged in to use audiobooks.";
-      } else if (res.status === 422) {
+      if (res.status === 422) {
         msg = "Upload failed. Check file type or missing fields.";
       }
 
