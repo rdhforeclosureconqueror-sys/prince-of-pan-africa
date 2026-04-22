@@ -45,6 +45,7 @@ export default function MufasaShell({ children }) {
   }, []);
 
   const linkClass = ({ isActive }) => `nav-item${isActive ? " active" : ""}`;
+  const hasAdminAccess = user?.role === "admin" || user?.role === "superadmin";
 
   return (
     <div className="mufasa-shell">
@@ -74,7 +75,7 @@ export default function MufasaShell({ children }) {
           <NavLink to="/timeline" className={linkClass}>Timeline</NavLink>
           <NavLink to="/membership" className={linkClass}>Membership</NavLink>
 
-          {user?.role === "admin" && (
+          {hasAdminAccess && (
             <>
               <NavLink to="/admin" className={linkClass}>Admin</NavLink>
               <NavLink to="/admin/ai" className={linkClass}>AI Dashboard</NavLink>
@@ -88,7 +89,7 @@ export default function MufasaShell({ children }) {
             <div className="user-meta">
               <span className="user-name">{user.displayName || "User"}</span>
               <span className={`user-role ${user.role}`}>
-                {user.role === "admin" ? "🦁 Admin" : "👤 Member"}
+                {hasAdminAccess ? "🦁 Admin" : "👤 Member"}
               </span>
             </div>
             <LogoutButton />

@@ -22,7 +22,7 @@ export default function Home({ user, isAdmin, onAuthChange }) {
   }, [messages]);
 
   const authTitle = useMemo(() => {
-    if (user?.role === "admin") return "Admin access active";
+    if (user?.role === "admin" || user?.role === "superadmin") return "Admin access active";
     if (user) return "Member access active";
     return authMode === "join" ? "Join as a member" : "Sign in";
   }, [authMode, user]);

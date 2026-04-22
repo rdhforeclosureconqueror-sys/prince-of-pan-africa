@@ -106,7 +106,7 @@ export default function App() {
 
   const isAdmin = useMemo(() => {
     if (!user) return false;
-    if (user?.role === "admin" || user?.is_admin) return true;
+    if (user?.role === "admin" || user?.role === "superadmin" || user?.is_admin) return true;
     if (user?.email && adminEmails.includes(user.email.toLowerCase())) return true;
     return false;
   }, [user, adminEmails]);

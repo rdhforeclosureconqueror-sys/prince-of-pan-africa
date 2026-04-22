@@ -28,11 +28,12 @@ def _set_session_cookie(response: Response, user_id: int) -> None:
 
 
 def _serialize_user(user: User) -> dict:
+    is_admin = user.role in {"admin", "superadmin"}
     return {
         "id": user.id,
         "email": user.email,
         "role": user.role,
-        "is_admin": user.role == "admin",
+        "is_admin": is_admin,
         "created_at": user.created_at.isoformat() if user.created_at else None,
     }
 
