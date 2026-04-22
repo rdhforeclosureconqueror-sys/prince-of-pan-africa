@@ -13,6 +13,7 @@ import LeadershipAssessmentPage from "./pages/LeadershipAssessmentPage";
 import LeadershipResultsPage from "./pages/LeadershipResultsPage";
 import SystemVerificationPage from "./pages/SystemVerificationPage";
 import PilotDeferredPage from "./pages/PilotDeferredPage";
+import StudyPage from "./pages/StudyPage";
 import { getBackgroundForPath } from "./utils/backgroundSystem";
 import "./styles/backgroundSystem.css";
 
@@ -47,7 +48,7 @@ function AppRoutes({ user, isAdmin, refreshAuth, dashboardElement }) {
         <Route path="/calendar" element={<PilotDeferredPage title="Calendar is deferred for pilot" />} />
         <Route path="/journal" element={<PilotDeferredPage title="Journal is deferred for pilot" />} />
         <Route path="/ledger" element={<PilotDeferredPage title="Ledger is deferred for pilot" />} />
-        <Route path="/study" element={<PilotDeferredPage title="Study is deferred for pilot" />} />
+        <Route path="/study" element={<StudyPage />} />
         <Route path="/pagt" element={<PilotDeferredPage title="Pan-Africa’s Got Talent is deferred for pilot" />} />
         <Route path="/membership" element={<PilotDeferredPage title="Membership plan is deferred for pilot" />} />
         <Route path="/leadership" element={<LeadershipAssessmentPage />} />

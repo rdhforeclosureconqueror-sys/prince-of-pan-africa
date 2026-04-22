@@ -9,6 +9,7 @@ export const PILOT_INCLUDED_ROUTES = [
   "/leadership",
   "/results",
   "/ops/verification",
+  "/study",
 ];
 
 export const PILOT_DEFERRED_ROUTES = [
@@ -16,7 +17,6 @@ export const PILOT_DEFERRED_ROUTES = [
   "/language-practice",
   "/calendar",
   "/journal",
-  "/study",
   "/pagt",
   "/membership",
   "/ledger",
@@ -29,4 +29,5 @@ export const PILOT_NAV_LINKS = [
   { label: "Languages Hub", to: "/languages" },
   { label: "Decolonized Library", to: "/decolonize" },
   { label: "Leadership", to: "/leadership" },
+  { label: "Audiobooks", to: "/study" },
 ];
