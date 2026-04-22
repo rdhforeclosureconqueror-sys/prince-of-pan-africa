@@ -7,15 +7,17 @@ import { API_BASE_URL } from "../config";
  */
 export async function api(path, options = {}) {
   const url = `${API_BASE_URL}${path}`;
+  const isFormData = options.body instanceof FormData;
+  const normalizedHeaders = {
+    ...(isFormData ? {} : { "Content-Type": "application/json" }),
+    ...(options.headers || {}),
+  };
 
   try {
     const res = await fetch(url, {
       ...options,
       credentials: "include", // ✅ keeps login sessions
-      headers: {
-        "Content-Type": "application/json",
-        ...(options.headers || {}),
-      },
+      headers: normalizedHeaders,
     });
 
     const contentType = res.headers.get("content-type") || "";
@@ -25,12 +27,22 @@ export async function api(path, options = {}) {
 
     // ✅ Normalize response and throw for errors
     if (!res.ok) {
-      const msg =
+      let msg =
         typeof data === "string"
           ? data
-          : data?.error || "Unknown server error";
+          : data?.detail || data?.error || "Unknown server error";
+
+      if (res.status === 401) {
+        msg = "You must be logged in to use audiobooks.";
+      } else if (res.status === 422) {
+        msg = "Upload failed. Check file type or missing fields.";
+      }
+
       console.error(`❌ API error [${res.status}] on ${url}:`, msg);
-      throw new Error(msg);
+      const error = new Error(msg);
+      error.status = res.status;
+      error.payload = data;
+      throw error;
     }
 
     return data;

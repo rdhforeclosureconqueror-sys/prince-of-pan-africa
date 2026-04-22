@@ -71,7 +71,7 @@ export default function StudyPage() {
 
   async function loadLibrary() {
     try {
-      const response = await api("/audiobooks", { method: "GET" });
+      const response = await api("/audiobooks", { method: "GET", credentials: "include" });
       setLibrary(response.items || []);
       if (!selectedBookId && response.items?.length) {
         setSelectedBookId(response.items[0].id);
@@ -84,7 +84,7 @@ export default function StudyPage() {
   async function loadBook(id) {
     if (!id) return;
     try {
-      const response = await api(`/audiobooks/${id}`, { method: "GET" });
+      const response = await api(`/audiobooks/${id}`, { method: "GET", credentials: "include" });
       setSelectedBook(response);
       const safeChapterIndex = Math.max(0, (response.progress?.chapter_index || 1) - 1);
       setActiveChapterIndex(safeChapterIndex);
@@ -160,12 +160,19 @@ export default function StudyPage() {
         });
         const data = await res.json();
         if (!res.ok) {
+          if (res.status === 401) {
+            throw new Error("You must be logged in to use audiobooks.");
+          }
+          if (res.status === 422) {
+            throw new Error("Upload failed. Check file type or missing fields.");
+          }
           throw new Error(data?.detail || "Upload failed.");
         }
         response = data;
       } else {
         response = await api("/audiobooks/create", {
           method: "POST",
+          credentials: "include",
           body: JSON.stringify({
             title: title.trim(),
             author: author.trim() || "Unknown",
@@ -180,7 +187,13 @@ export default function StudyPage() {
       setSelectedBookId(response.audiobook.id);
       await loadLibrary();
     } catch (err) {
-      setError(err.message || "Generation failed.");
+      if (err?.status === 401) {
+        setError("You must be logged in to use audiobooks.");
+      } else if (err?.status === 422) {
+        setError("Upload failed. Check file type or missing fields.");
+      } else {
+        setError(err.message || "Generation failed.");
+      }
     } finally {
       setIsGenerating(false);
     }
@@ -191,6 +204,7 @@ export default function StudyPage() {
     const currentTime = Math.floor((positionOverride ?? audioRef.current?.currentTime) || 0);
     await api(`/audiobooks/${selectedBook.id}/progress`, {
       method: "POST",
+      credentials: "include",
       body: JSON.stringify({
         chapter_index: activeChapterIndex + 1,
         position_seconds: currentTime,
