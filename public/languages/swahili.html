@@ -219,17 +219,66 @@
     .tab-panel{ display:none; margin-top:14px; }
     .tab-panel.is-active{ display:block; }
 
-    .match-shell{ border:1px solid rgba(214,178,94,.24); border-radius:14px; padding:12px; background: rgba(0,0,0,.3); }
+    .match-shell{ border:1px solid rgba(214,178,94,.24); border-radius:16px; padding:14px; background: rgba(0,0,0,.3); }
     .match-head{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px; flex-wrap:wrap; }
     .match-grid{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
-    .match-card{ min-height:66px; border-radius:12px; border:1px solid rgba(214,178,94,.35); background: rgba(0,0,0,.4); color:var(--text); font-weight:700; cursor:pointer; }
-    .match-card span{ display:block; padding:0 8px; line-height:1.25; word-break:break-word; text-wrap:balance; }
-    .match-card .match-primary{ padding-top:10px; font-size:15px; font-weight:800; }
-    .match-card .match-secondary{ padding-bottom:10px; margin-top:4px; font-size:12px; color: var(--muted); font-weight:500; }
+    .match-card{
+      min-height:78px;
+      border-radius:12px;
+      border:1px solid rgba(214,178,94,.35);
+      background: rgba(0,0,0,.4);
+      color:var(--text);
+      font-weight:700;
+      cursor:pointer;
+      padding:0;
+      transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease, background .16s ease;
+    }
+    .match-card span{ display:block; padding:0 10px; line-height:1.32; word-break:normal; overflow-wrap:anywhere; }
+    .match-card .match-primary{ padding-top:12px; font-size:15px; font-weight:800; }
+    .match-card .match-secondary{ padding-bottom:11px; margin-top:4px; font-size:12px; color: var(--muted); font-weight:500; }
     .match-card.is-visible{ border-color: rgba(214,178,94,.8); background: rgba(214,178,94,.16); }
-    .match-card.is-matched{ border-color: rgba(16,185,129,.8); background: rgba(16,185,129,.2); }
+    .match-card.is-matched{
+      border-color: rgba(16,185,129,.85);
+      background: linear-gradient(160deg, rgba(16,185,129,.2), rgba(214,178,94,.18));
+      box-shadow: 0 0 0 1px rgba(16,185,129,.22), 0 0 24px rgba(16,185,129,.25);
+    }
+    .match-card.is-pulse{ animation: matchPulse .24s ease-out; }
+    .match-card.is-mismatch{ animation: mismatchShake .25s linear 2; border-color: rgba(225,29,46,.75); }
     .match-footer{ margin-top:10px; display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
-    @media (max-width:700px){ .match-grid{ grid-template-columns:repeat(2,minmax(0,1fr)); } }
+    @media (max-width:700px){
+      .topbar-inner{ padding:10px 12px; }
+      .nav{ gap:8px; }
+      .wrap{ padding:14px 10px 38px; }
+      .hero{ padding:12px; }
+      .panel{ padding:12px; }
+      .tabbar .btn{ flex:1 1 130px; justify-content:center; }
+      .match-shell{ padding:12px 10px; }
+      .match-grid{ grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+      .match-card{ min-height:84px; }
+      .match-card .match-primary{ font-size:14px; }
+      .match-card .match-secondary{ font-size:11.5px; }
+      .match-footer .btn{ flex:1 1 140px; justify-content:center; }
+      .match-head .btn{ width:100%; justify-content:center; }
+    }
+    body.focus-match-mode .hero-grid{ grid-template-columns:1fr; }
+    body.focus-match-mode .hero-grid > .panel:last-child{ display:none; }
+    body.focus-match-mode #swahiliLessonPanel,
+    body.focus-match-mode .subtitle,
+    body.focus-match-mode .kicker{ display:none; }
+    body.focus-match-mode .hero{ padding:10px; }
+    body.focus-match-mode #swahiliMatchPanel .panel{ padding:10px; border-color: rgba(214,178,94,.38); }
+    body.focus-match-mode .topbar .nav .btn:not([href="/"]),
+    body.focus-match-mode .topbar .nav .select{ display:none; }
+    @keyframes matchPulse{
+      0%{ transform:scale(1); box-shadow:0 0 0 rgba(16,185,129,0); }
+      50%{ transform:scale(1.03); box-shadow:0 0 28px rgba(16,185,129,.38); }
+      100%{ transform:scale(1); box-shadow:0 0 0 rgba(16,185,129,0); }
+    }
+    @keyframes mismatchShake{
+      0%,100%{ transform:translateX(0); }
+      33%{ transform:translateX(-4px); }
+      66%{ transform:translateX(4px); }
+    }
     .controls{
       display:flex; gap:10px; flex-wrap:wrap;
       margin-top: 12px;
@@ -498,6 +547,7 @@
   let activeTab = "lesson";
   let swahiliMatchSession = null;
   let swahiliMatchSeed = "";
+  let matchFeedbackVoice = null;
   const swahiliProgress = { heardWords: new Set(), matchComplete: false };
 
   function triggerLessonUnlock(){
@@ -514,13 +564,41 @@
     document.getElementById("unlockNext").textContent = nextUnlocked ? "Unlocked" : "Locked";
   }
 
-  function onMatchFeedback({ type }){
+  function speakMatchFeedback(message){
+    if(!message || !window.speechSynthesis) return;
+    try{
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(message);
+      utterance.rate = 1.05;
+      utterance.pitch = 1;
+      utterance.volume = 0.85;
+      if(matchFeedbackVoice) utterance.voice = matchFeedbackVoice;
+      window.speechSynthesis.speak(utterance);
+    }catch(err){
+      console.warn("match feedback voice unavailable", err);
+    }
+  }
+
+  function onMatchFeedback({ type, comboLabel, enabled }){
+    if(type === "focus"){
+      document.body.classList.toggle("focus-match-mode", Boolean(enabled));
+      setStatus(enabled ? "🎯 Focus Mode enabled." : "Focus Mode disabled.", "ready");
+      return;
+    }
     if(type === "match"){
-      setStatus("✅ Good job — correct pair.", "ready");
+      const combo = comboLabel && comboLabel !== "Good job" ? ` • ${comboLabel}` : "";
+      setStatus(`✅ Good job — correct pair${combo}.`, "ready");
+      speakMatchFeedback("Good job");
+      return;
+    }
+    if(type === "perfect"){
+      setStatus("🏆 Perfect round — all pairs complete.", "ready");
+      speakMatchFeedback("Perfect");
       return;
     }
     if(type === "mismatch"){
       setStatus("❌ Try again — cards reset.", "loading");
+      speakMatchFeedback("Try again");
     }
   }
 
@@ -567,6 +645,7 @@
   function setActiveTab(tab){
     activeTab = tab;
     const isLesson = tab === "lesson";
+    if(isLesson) document.body.classList.remove("focus-match-mode");
     document.getElementById("swahiliLessonPanel").classList.toggle("is-active", isLesson);
     document.getElementById("swahiliMatchPanel").classList.toggle("is-active", !isLesson);
     document.getElementById("swahiliLessonTab").classList.toggle("active", isLesson);
@@ -591,6 +670,15 @@
     };
     rec.onerror = (e) => setStatus("Mic error: " + (e.error || "unknown"));
     rec.onend = () => setStatus("Mic ready.");
+  }
+
+  if(window.speechSynthesis){
+    const pickVoice = () => {
+      const voices = window.speechSynthesis.getVoices() || [];
+      matchFeedbackVoice = voices.find((v) => /en-US|en_US/i.test(v.lang)) || voices[0] || null;
+    };
+    pickVoice();
+    window.speechSynthesis.onvoiceschanged = pickVoice;
   }
 
   function stopAll(){
