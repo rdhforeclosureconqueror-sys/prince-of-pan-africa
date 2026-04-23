@@ -442,3 +442,109 @@
     min-height: 74px;
   }
 }
+
+/* Correction pass overrides */
+.song-keys-controls {
+  grid-template-columns: repeat(7, minmax(0, auto));
+}
+
+.lane-board__lane {
+  appearance: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.lane-board__hit-line {
+  bottom: 80px;
+  border-top-width: 4px;
+}
+
+.lane-board__hit-targets {
+  position: absolute;
+  left: 0.35rem;
+  right: 0.35rem;
+  bottom: 0.45rem;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.35rem;
+  z-index: 3;
+}
+
+.lane-board__hit-target {
+  min-height: 66px;
+  border-radius: 12px;
+  border: 2px solid #7fb0f0;
+  background: linear-gradient(180deg, #244269, #193150);
+  color: #e8f2ff;
+  font-weight: 800;
+  font-size: 1.05rem;
+  cursor: pointer;
+  box-shadow: 0 6px 16px rgba(8, 17, 30, 0.45);
+}
+
+.lane-board__hit-target.is-pressed {
+  transform: translateY(1px);
+  background: linear-gradient(180deg, #335f93, #22466e);
+}
+
+.song-keys-screen--mobile-mode .lane-board {
+  min-height: 360px;
+}
+
+.song-keys-screen--mobile-mode .lane-board__hit-target {
+  min-height: 84px;
+  font-size: 1.2rem;
+}
+
+.sight-memory-controls {
+  grid-template-columns: repeat(4, minmax(0, auto));
+}
+
+.memory-card-stage {
+  min-height: 240px;
+  background: #0b1626;
+}
+
+.memory-card--minimal {
+  width: min(620px, 94%);
+  min-height: 170px;
+  display: grid;
+  place-items: center;
+  background: #ffffff;
+  border: 1px solid #dde4ef;
+  border-radius: 16px;
+  box-shadow: 0 14px 28px rgba(3, 10, 20, 0.3);
+  padding: 1.6rem;
+}
+
+.memory-card__character-row {
+  margin: 0;
+  width: 100%;
+  text-align: center;
+  display: flex;
+  justify-content: center;
+  flex-wrap: nowrap;
+  gap: clamp(0.8rem, 3vw, 1.5rem);
+}
+
+.memory-card__character {
+  font-size: clamp(1.6rem, 4.8vw, 2.4rem);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1;
+}
+
+@media (max-width: 700px) {
+  .song-keys-controls,
+  .sight-memory-controls {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .lane-board {
+    min-height: 330px;
+  }
+
+  .lane-board__hit-line {
+    bottom: 94px;
+  }
+}

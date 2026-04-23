@@ -123,7 +123,7 @@ export function mountRhythmGame(container) {
   const section = text("section", "brain-game-module song-keys-screen");
   if (mobileMode) section.classList.add("song-keys-screen--mobile-mode");
   const header = text("header", "brain-game-module__header");
-  header.append(text("h3", "", "Song Keys"), text("p", "", "Strike A/S/D/F/G or tap lane pads as notes cross the hit line."));
+  header.append(text("h3", "", "Song Keys"), text("p", "", "Tap the lane hit zone as notes cross the bright target line, or use A/S/D/F/G."));
 
   const controls = text("div", "song-keys-controls");
   const songSelect = document.createElement("select");
@@ -150,7 +150,7 @@ export function mountRhythmGame(container) {
     tempoSelect.append(option);
   });
 
-  const mobileModeBtn = text("button", "song-keys-mobile-toggle", "Mobile Pad Mode");
+  const mobileModeBtn = text("button", "song-keys-mobile-toggle", "Touch Lane Focus");
   mobileModeBtn.type = "button";
   if (mobileMode) mobileModeBtn.classList.add("is-active");
 
@@ -166,34 +166,45 @@ export function mountRhythmGame(container) {
 
   const board = text("div", "lane-board");
   const laneColumns = LANE_KEYS.map((key, laneIndex) => {
-    const lane = text("div", "lane-board__lane");
+    const lane = text("button", "lane-board__lane");
+    lane.type = "button";
     lane.dataset.lane = String(laneIndex);
+    lane.setAttribute("aria-label", `Lane ${key}`);
     lane.append(text("div", "lane-board__label", key));
+
+    lane.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      handlePress(laneIndex);
+    });
+
     board.append(lane);
     return lane;
   });
+
   const hitLine = text("div", "lane-board__hit-line");
   board.append(hitLine);
 
-  const lanePads = text("div", "song-keys-lane-pads");
-  const lanePadButtons = LANE_KEYS.map((key, laneIndex) => {
-    const pad = text("button", "song-keys-lane-pad", key);
-    pad.type = "button";
-    pad.setAttribute("aria-label", `Tap lane ${key}`);
+  const hitTargets = text("div", "lane-board__hit-targets");
+  const laneTargetButtons = LANE_KEYS.map((key, laneIndex) => {
+    const target = text("button", "lane-board__hit-target", key);
+    target.type = "button";
+    target.setAttribute("aria-label", `Hit lane ${key}`);
 
     const onPress = (event) => {
       event.preventDefault();
       handlePress(laneIndex);
     };
 
-    pad.addEventListener("pointerdown", onPress);
-    pad.addEventListener("touchstart", onPress, { passive: false });
-    pad.addEventListener("click", onPress);
-    lanePads.append(pad);
-    return pad;
-  });
+    target.addEventListener("pointerdown", onPress);
+    target.addEventListener("touchstart", onPress, { passive: false });
+    target.addEventListener("click", onPress);
 
-  const feedback = text("p", "brain-game-module__feedback", "Press Start, then play when notes hit the line.");
+    hitTargets.append(target);
+    return target;
+  });
+  board.append(hitTargets);
+
+  const feedback = text("p", "brain-game-module__feedback", "Press Start, then hit each lane right on the target line.");
   const startBtn = text("button", "song-keys-start", "Start Run");
   startBtn.type = "button";
 
@@ -208,7 +219,7 @@ export function mountRhythmGame(container) {
   const patternNode = text("p", "", `Pattern: ${PATTERNS[0].label}`);
   comboPanel.append(comboNode, patternNode);
 
-  section.append(header, controls, board, lanePads, startBtn, comboPanel, stats, feedback);
+  section.append(header, controls, board, startBtn, comboPanel, stats, feedback);
   container.replaceChildren(section);
 
   function updateStats() {
@@ -227,10 +238,10 @@ export function mountRhythmGame(container) {
       const isPressed = laneFlashUntil[laneIndex] > now;
       if (isPressed) {
         lane.classList.add("is-pressed");
-        lanePadButtons[laneIndex].classList.add("is-pressed");
+        laneTargetButtons[laneIndex].classList.add("is-pressed");
       } else {
         lane.classList.remove("is-pressed");
-        lanePadButtons[laneIndex].classList.remove("is-pressed");
+        laneTargetButtons[laneIndex].classList.remove("is-pressed");
       }
       lane.querySelectorAll(".falling-note").forEach((noteEl) => noteEl.remove());
     });
@@ -285,6 +296,7 @@ export function mountRhythmGame(container) {
     const now = performance.now();
     laneFlashUntil[laneIndex] = now + 120;
     tonePlayer.play(LANE_FREQUENCIES[laneIndex]);
+    if (mobileMode && navigator.vibrate) navigator.vibrate(15);
 
     const config = DIFFICULTY_CONFIG[activeDifficulty];
     const candidate = notes
