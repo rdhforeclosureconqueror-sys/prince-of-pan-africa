@@ -6,8 +6,8 @@ import "../styles/brainTraining.css";
 
 const GAME_TABS = [
   { id: "rhythm", label: "Song Keys", mount: mountRhythmGame },
-  { id: "sight", label: "Visual Memory", mount: mountSightGame },
-  { id: "puzzle", label: "Picture Puzzle", mount: mountPuzzleGame },
+  { id: "sight", label: "Sight Memory", mount: mountSightGame },
+  { id: "puzzle", label: "Puzzle", mount: mountPuzzleGame },
 ];
 
 function readStats(root) {
@@ -21,16 +21,20 @@ function readStats(root) {
 
 export default function BrainTraining() {
   const [activeTab, setActiveTab] = useState("rhythm");
+  const [mountVersion, setMountVersion] = useState(0);
   const [statsByGame, setStatsByGame] = useState({
     rhythm: { level: "1", stars: "0", accuracy: "0%" },
     sight: { level: "1", stars: "0", accuracy: "0%" },
     puzzle: { level: "1", stars: "0", accuracy: "0%" },
   });
 
+  const rhythmHostRef = useRef(null);
+  const sightHostRef = useRef(null);
+  const puzzleHostRef = useRef(null);
   const gameHosts = {
-    rhythm: useRef(null),
-    sight: useRef(null),
-    puzzle: useRef(null),
+    rhythm: rhythmHostRef,
+    sight: sightHostRef,
+    puzzle: puzzleHostRef,
   };
 
   useEffect(() => {
@@ -43,20 +47,11 @@ export default function BrainTraining() {
 
       cleanups.push(mount(host));
 
-      const observeTarget = host;
       const observer = new MutationObserver(() => {
-        setStatsByGame((prev) => ({
-          ...prev,
-          [id]: readStats(host),
-        }));
+        setStatsByGame((prev) => ({ ...prev, [id]: readStats(host) }));
       });
 
-      observer.observe(observeTarget, {
-        childList: true,
-        subtree: true,
-        characterData: true,
-      });
-
+      observer.observe(host, { childList: true, subtree: true, characterData: true });
       observers.push(observer);
       setStatsByGame((prev) => ({ ...prev, [id]: readStats(host) }));
     });
@@ -65,7 +60,7 @@ export default function BrainTraining() {
       observers.forEach((observer) => observer.disconnect());
       cleanups.forEach((cleanup) => cleanup?.());
     };
-  }, []);
+  }, [mountVersion]);
 
   const activeStats = useMemo(() => statsByGame[activeTab] ?? { level: "-", stars: "0", accuracy: "0%" }, [statsByGame, activeTab]);
   const activeGameLabel = GAME_TABS.find((tab) => tab.id === activeTab)?.label ?? "-";
@@ -74,39 +69,28 @@ export default function BrainTraining() {
     <main className="brain-training-shell">
       <section className="brain-training-panel">
         <header className="brain-training-panel__header">
-          <h1>Brain Training Suite</h1>
-          <p>Train rhythm, visual memory, and puzzle logic with progressive challenge rounds.</p>
+          <h1>Brain Training Dashboard</h1>
+          <p>Structured rhythm timing and one-card recall drills tuned for focused cognitive sessions.</p>
         </header>
 
         <div className="brain-training-layout">
           <aside className="brain-training-sidebar">
             <section className="brain-training-block">
-              <h2>Choose a profile</h2>
-              <p>Choose your focus path before starting a round.</p>
+              <h2>Profile Rail</h2>
+              <p>Mode: Cognitive Performance</p>
+              <p>Session goal: precision under timed pressure</p>
             </section>
 
-            <article className="brain-training-profile-card">
-              <h3>Starter</h3>
-              <p>Balanced pacing and guided prompts for warm-up sessions.</p>
-              <span>Best for first-time players</span>
-            </article>
-
-            <article className="brain-training-profile-card brain-training-profile-card--accent">
-              <h3>Challenge</h3>
-              <p>Faster cycles and memory pressure to push score growth.</p>
-              <span>Best for streak building</span>
-            </article>
-
             <section className="brain-training-block brain-training-block--summary">
-              <h3>Profile summary</h3>
-              <p>Feedback updates live as you play each game module.</p>
+              <h3>Session notes</h3>
               <ul>
-                <li>Active profile: Focused Challenger</li>
-                <li>Session note: Keep a steady response rhythm</li>
+                <li>Song Keys: align input with hit zone timing.</li>
+                <li>Sight Memory: observe one object without hints.</li>
+                <li>Reset all modules before a fresh benchmark run.</li>
               </ul>
             </section>
 
-            <button type="button" className="brain-training-reset-btn">
+            <button type="button" className="brain-training-reset-btn" onClick={() => setMountVersion((prev) => prev + 1)}>
               Reset all games
             </button>
           </aside>
@@ -131,7 +115,7 @@ export default function BrainTraining() {
                 <strong>{activeStats.level}</strong>
               </article>
               <article className="brain-training-stat-card">
-                <p>Stars earned</p>
+                <p>Score</p>
                 <strong>{activeStats.stars}</strong>
               </article>
               <article className="brain-training-stat-card">
@@ -139,7 +123,7 @@ export default function BrainTraining() {
                 <strong>{activeStats.accuracy}</strong>
               </article>
               <article className="brain-training-stat-card">
-                <p>Active game</p>
+                <p>Active module</p>
                 <strong>{activeGameLabel}</strong>
               </article>
             </section>
