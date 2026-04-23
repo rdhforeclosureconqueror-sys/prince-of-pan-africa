@@ -72,6 +72,9 @@
 .brain-training-reset-btn,
 .song-keys-start,
 .sight-memory-controls button,
+.song-keys-mobile-toggle,
+.song-keys-lane-pad,
+.image-puzzle-controls button,
 .question-panel button,
 .brain-game-module__recall button {
   border-radius: 10px;
@@ -181,6 +184,11 @@
   align-items: center;
 }
 
+.song-keys-mobile-toggle.is-active {
+  border-color: #7ba9e4;
+  background: #234062;
+}
+
 .song-keys-controls select,
 .sight-memory-controls select,
 .brain-game-module__recall input {
@@ -259,6 +267,33 @@
   margin: 0;
 }
 
+.song-keys-lane-pads {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.42rem;
+}
+
+.song-keys-lane-pad {
+  min-height: 58px;
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+.song-keys-lane-pad.is-pressed {
+  background: #31568a;
+  border-color: #8cb5ec;
+  transform: translateY(1px);
+}
+
+.song-keys-screen--mobile-mode .lane-board {
+  min-height: 280px;
+}
+
+.song-keys-screen--mobile-mode .song-keys-lane-pad {
+  min-height: 84px;
+  font-size: 1.15rem;
+}
+
 .memory-card-stage {
   min-height: 220px;
   display: grid;
@@ -329,6 +364,53 @@
   background: #4a2330;
 }
 
+.image-puzzle-controls {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, auto));
+  gap: 0.55rem;
+  align-items: center;
+}
+
+.image-puzzle-controls input,
+.image-puzzle-controls select {
+  border-radius: 8px;
+  border: 1px solid #365077;
+  background: #0f1d30;
+  color: #e8f2ff;
+  padding: 0.5rem 0.55rem;
+}
+
+.image-puzzle-board {
+  display: grid;
+  gap: 0.35rem;
+  border: 1px solid #385171;
+  border-radius: 14px;
+  padding: 0.35rem;
+  background: #0e1a2c;
+  min-height: 280px;
+  align-content: center;
+}
+
+.image-puzzle-placeholder {
+  margin: 0;
+  color: #94afd3;
+  text-align: center;
+}
+
+.image-puzzle-tile {
+  aspect-ratio: 1 / 1;
+  border: 1px solid #3d608f;
+  border-radius: 8px;
+  background-color: #1a2a42;
+  background-repeat: no-repeat;
+  cursor: pointer;
+}
+
+.image-puzzle-tile.is-selected {
+  border: 2px solid #8fb8f0;
+  box-shadow: 0 0 0 1px #8fb8f0 inset;
+}
+
 @media (max-width: 1080px) {
   .brain-training-layout {
     grid-template-columns: 1fr;
@@ -340,7 +422,8 @@
   }
 
   .song-keys-controls,
-  .sight-memory-controls {
+  .sight-memory-controls,
+  .image-puzzle-controls {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -353,5 +436,9 @@
 
   .lane-board {
     min-height: 300px;
+  }
+
+  .song-keys-lane-pad {
+    min-height: 74px;
   }
 }
