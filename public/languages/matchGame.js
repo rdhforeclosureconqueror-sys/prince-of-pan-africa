@@ -54,7 +54,7 @@
     };
   }
 
-  function initMatchGame({ containerId, words, onComplete, onProgress, onBackToLesson, onFeedback, title = 'Word Match', instructions = 'Match each African language word with its English meaning.' } = {}){
+  function initMatchGame({ containerId, words, onComplete, onProgress, onBackToLesson, onFeedback, title = 'Word Match', instructions = 'Match each African language word with its English meaning.', metaHtml = '' } = {}){
     const root = document.getElementById(containerId);
     if(!root){
       console.warn(`initMatchGame: container #${containerId} not found.`);
@@ -76,6 +76,7 @@
       shakeCardIds: [],
       statusMessage: 'Flip two cards to find a pair.',
       statusTone: 'playing',
+      metaHtml: typeof metaHtml === 'string' ? metaHtml : '',
     };
 
     function emitProgress(){
@@ -141,6 +142,7 @@
               Tap cards to reveal. Main label appears first, helper line appears below for clarity.
             </div>
           `}
+          ${state.metaHtml ? `<div class="note" style="margin-bottom:12px">${state.metaHtml}</div>` : ''}
           <div class="match-grid" role="list" style="grid-template-columns:repeat(${state.config.columns},minmax(0,1fr));">
             ${state.cards.map((card) => {
               const isMatched = state.matched.has(card.pairId);
@@ -274,6 +276,10 @@
       refresh(nextWords){
         words = nextWords;
         resetRound();
+      },
+      setMetaHtml(nextMetaHtml){
+        state.metaHtml = typeof nextMetaHtml === 'string' ? nextMetaHtml : '';
+        render();
       },
       destroy(){
         root.innerHTML = '';

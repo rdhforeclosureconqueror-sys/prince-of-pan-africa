@@ -256,6 +256,13 @@
       font-size: 12.5px;
       line-height: 1.55;
     }
+    .sentence-spotlight{
+      font-size: 16px;
+      color: #fff7d1;
+      border-left-color: rgba(214,178,94,.95);
+      background: rgba(38,27,6,.5);
+      font-weight: 600;
+    }
     .danger{ border-left-color: rgba(225,29,46,.7); }
 
     .debug{
@@ -432,7 +439,7 @@
           <div class="section-title">Quick Practice Flow</div>
           <div class="note">
             1) Press Speak on each word.<br/>
-            2) Repeat it 3 times.<br/>
+            2) Repeat it 3 times (🎙).<br/>
             3) Match cards to unlock Next day.<br/><br/>
             <b>Goal:</b> clear mouth-muscle memory.
           </div>
@@ -440,7 +447,7 @@
           <div style="height:10px"></div>
 
           <div class="section-title">Today’s Sentence</div>
-          <div class="note" id="sentenceBox">—</div>
+          <div class="note sentence-spotlight" id="sentenceBox">—</div>
 
           <div style="height:10px"></div>
 
@@ -507,6 +514,20 @@
     document.getElementById("unlockHeard").textContent = `${heardCount}/3`;
     document.getElementById("unlockMatch").textContent = yorubaProgress.matchComplete ? "Complete" : "Not yet";
     document.getElementById("unlockNext").textContent = nextUnlocked ? "Unlocked" : "Locked";
+    if(yorubaMatchSession?.setMetaHtml){
+      yorubaMatchSession.setMetaHtml(buildMatchMetaHtml());
+    }
+  }
+
+  function buildMatchMetaHtml(){
+    const heardCount = Math.min(3, yorubaProgress.heardWords.size);
+    const nextUnlocked = heardCount >= 3 && yorubaProgress.matchComplete;
+    return `
+      <b>Unlock Progress</b><br/>
+      Heard words: <b>${heardCount}/3</b><br/>
+      Match grid: <b>${yorubaProgress.matchComplete ? "Complete" : "Not yet"}</b><br/>
+      Next day: <b>${nextUnlocked ? "Unlocked" : "Locked"}</b>
+    `;
   }
 
   function speakMatchFeedback(message){
@@ -578,6 +599,7 @@
     yorubaMatchSession = window.initMatchGame({
       containerId: "yorubaMatchGame",
       words,
+      metaHtml: buildMatchMetaHtml(),
       title: "Yoruba ↔ English Match (Complete ONE grid to unlock)",
       instructions: "Tap cards to reveal. If the Yoruba word matches its English meaning, they stay flipped. Finish the grid to complete the day’s Match requirement.",
       onComplete: triggerLessonUnlock,
