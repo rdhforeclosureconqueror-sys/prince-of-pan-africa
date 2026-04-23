@@ -4,29 +4,34 @@ const SYMBOLS = {
   hard: ["◆", "◇", "◈", "●", "○", "◉", "▲", "△", "■", "▣"],
 };
 
-const COLORS = {
+const RAINBOW_COLORS = {
   easy: [
-    { name: "Slate Blue", value: "#435f9f" },
-    { name: "Teal", value: "#2a6a72" },
-    { name: "Graphite", value: "#364252" },
-    { name: "Plum", value: "#5a4b78" },
+    { name: "Red", value: "#d93939" },
+    { name: "Orange", value: "#f08b2d" },
+    { name: "Yellow", value: "#f2c744" },
+    { name: "Green", value: "#3cae5f" },
   ],
   medium: [
-    { name: "Steel", value: "#4a5f7b" },
-    { name: "Navy", value: "#304a6e" },
-    { name: "Ash Blue", value: "#51657a" },
-    { name: "Ocean", value: "#3d5f7c" },
+    { name: "Red", value: "#d93939" },
+    { name: "Orange", value: "#f08b2d" },
+    { name: "Yellow", value: "#f2c744" },
+    { name: "Green", value: "#3cae5f" },
+    { name: "Blue", value: "#2f83d1" },
   ],
   hard: [
-    { name: "Deep Navy", value: "#2f4460" },
-    { name: "Midnight Blue", value: "#2d4861" },
-    { name: "Storm Blue", value: "#334e67" },
-    { name: "Ink Blue", value: "#324866" },
+    { name: "Red", value: "#d93939" },
+    { name: "Orange", value: "#f08b2d" },
+    { name: "Yellow", value: "#f2c744" },
+    { name: "Green", value: "#3cae5f" },
+    { name: "Blue", value: "#2f83d1" },
+    { name: "Indigo", value: "#4d5fd2" },
+    { name: "Purple", value: "#8e4ccf" },
   ],
 };
 
 const BORDER_STYLES = ["double", "solid", "dashed"];
 const ACCENT_MARKS = ["•", "✦", "✶"];
+const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ";
 
 function text(tag, className, value) {
   const node = document.createElement(tag);
@@ -39,13 +44,43 @@ function pickRandom(list) {
   return list[Math.floor(Math.random() * list.length)];
 }
 
+function randomAlpha() {
+  return ALPHABET[Math.floor(Math.random() * ALPHABET.length)];
+}
+
+function randomDigit() {
+  return String(Math.floor(Math.random() * 10));
+}
+
+function buildCode(difficulty) {
+  if (difficulty === "easy") return `${randomAlpha()}${randomDigit()}${randomAlpha()}`;
+  if (difficulty === "medium") return `${randomAlpha()}${randomDigit()}${randomAlpha()}`;
+  return `${randomAlpha()}${randomDigit()}${randomAlpha()}${randomDigit()}`;
+}
+
+function mutateCode(code) {
+  const chars = code.split("");
+  const index = Math.floor(Math.random() * chars.length);
+  const active = chars[index];
+
+  if (/\d/.test(active)) {
+    chars[index] = String((Number(active) + 1 + Math.floor(Math.random() * 7)) % 10);
+  } else {
+    let replacement = randomAlpha();
+    while (replacement === active) replacement = randomAlpha();
+    chars[index] = replacement;
+  }
+
+  return chars.join("");
+}
+
 function buildCard(difficulty) {
-  const color = pickRandom(COLORS[difficulty]);
+  const color = pickRandom(RAINBOW_COLORS[difficulty]);
   const symbol = pickRandom(SYMBOLS[difficulty]);
 
   if (difficulty === "easy") {
     return {
-      code: String(100 + Math.floor(Math.random() * 900)),
+      code: buildCode(difficulty),
       color,
       symbol,
     };
@@ -53,20 +88,15 @@ function buildCard(difficulty) {
 
   if (difficulty === "medium") {
     return {
-      code: String(1000 + Math.floor(Math.random() * 9000)),
+      code: buildCode(difficulty),
       color,
       symbol,
       borderStyle: Math.random() > 0.5 ? pickRandom(BORDER_STYLES) : null,
     };
   }
 
-  const alphanumeric = Math.random() > 0.45;
-  const code = alphanumeric
-    ? `${String.fromCharCode(65 + Math.floor(Math.random() * 26))}${Math.floor(100 + Math.random() * 900)}`
-    : String(1000 + Math.floor(Math.random() * 9000));
-
   return {
-    code,
+    code: buildCode(difficulty),
     color,
     symbol,
     borderStyle: pickRandom(BORDER_STYLES),
@@ -81,19 +111,17 @@ function shuffled(list) {
 function buildQuestions(card, difficulty) {
   const questions = [];
 
-  const codeChoices = shuffled([
-    card.code,
-    `${card.code.split("").reverse().join("")}`,
-    `${card.code}`.replace(/\d/, (digit) => `${(Number(digit) + 1) % 10}`),
-  ]).slice(0, 3);
+  const codeChoices = Array.from(
+    new Set(shuffled([card.code, mutateCode(card.code), mutateCode(card.code), mutateCode(card.code)])).values(),
+  ).slice(0, 3);
 
   questions.push({
     prompt: "Which code did you see?",
     answer: card.code,
-    choices: Array.from(new Set(codeChoices)),
+    choices: codeChoices,
   });
 
-  const colorPool = COLORS[difficulty].map((entry) => entry.name);
+  const colorPool = RAINBOW_COLORS[difficulty].map((entry) => entry.name);
   const colorChoices = shuffled([card.color.name, ...colorPool.filter((name) => name !== card.color.name).slice(0, 2)]);
   questions.push({
     prompt: "Which color was the card?",
@@ -101,10 +129,7 @@ function buildQuestions(card, difficulty) {
     choices: colorChoices,
   });
 
-  const symbolChoices = shuffled([
-    card.symbol,
-    ...SYMBOLS[difficulty].filter((symbol) => symbol !== card.symbol).slice(0, 2),
-  ]);
+  const symbolChoices = shuffled([card.symbol, ...SYMBOLS[difficulty].filter((symbol) => symbol !== card.symbol).slice(0, 2)]);
   questions.push({
     prompt: "Which symbol appeared in the center?",
     answer: card.symbol,
@@ -166,14 +191,7 @@ export function mountSightGame(container) {
   const resetBtn = text("button", "", "Reset");
   resetBtn.type = "button";
 
-  controls.append(
-    text("label", "", "Difficulty"),
-    difficultySelect,
-    text("label", "", "Reveal Timer"),
-    revealSelect,
-    startBtn,
-    resetBtn,
-  );
+  controls.append(text("label", "", "Difficulty"), difficultySelect, text("label", "", "Reveal Timer"), revealSelect, startBtn, resetBtn);
 
   const stage = text("div", "memory-card-stage");
   const questionPanel = text("div", "question-panel");
