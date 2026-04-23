@@ -1,37 +1,12 @@
-const SYMBOLS = {
-  easy: ["◆", "●", "▲", "■"],
-  medium: ["◆", "◇", "●", "○", "▲", "■"],
-  hard: ["◆", "◇", "◈", "●", "○", "◉", "▲", "△", "■", "▣"],
-};
-
-const RAINBOW_COLORS = {
-  easy: [
-    { name: "Red", value: "#d93939" },
-    { name: "Orange", value: "#f08b2d" },
-    { name: "Yellow", value: "#f2c744" },
-    { name: "Green", value: "#3cae5f" },
-  ],
-  medium: [
-    { name: "Red", value: "#d93939" },
-    { name: "Orange", value: "#f08b2d" },
-    { name: "Yellow", value: "#f2c744" },
-    { name: "Green", value: "#3cae5f" },
-    { name: "Blue", value: "#2f83d1" },
-  ],
-  hard: [
-    { name: "Red", value: "#d93939" },
-    { name: "Orange", value: "#f08b2d" },
-    { name: "Yellow", value: "#f2c744" },
-    { name: "Green", value: "#3cae5f" },
-    { name: "Blue", value: "#2f83d1" },
-    { name: "Indigo", value: "#4d5fd2" },
-    { name: "Purple", value: "#8e4ccf" },
-  ],
-};
-
-const BORDER_STYLES = ["double", "solid", "dashed"];
-const ACCENT_MARKS = ["•", "✦", "✶"];
 const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+const DIGITS = "0123456789";
+const COLOR_POOL = [
+  { name: "Black", value: "#111827", isDefault: true },
+  { name: "Red", value: "#cf2f2f" },
+  { name: "Blue", value: "#2d61d6" },
+  { name: "Green", value: "#1d8a4a" },
+  { name: "Purple", value: "#7a3fd1" },
+];
 
 function text(tag, className, value) {
   const node = document.createElement(tag);
@@ -44,140 +19,121 @@ function pickRandom(list) {
   return list[Math.floor(Math.random() * list.length)];
 }
 
-function randomAlpha() {
+function shuffle(list) {
+  return [...list].sort(() => Math.random() - 0.5);
+}
+
+function randomLetter() {
   return ALPHABET[Math.floor(Math.random() * ALPHABET.length)];
 }
 
 function randomDigit() {
-  return String(Math.floor(Math.random() * 10));
+  return DIGITS[Math.floor(Math.random() * DIGITS.length)];
 }
 
-function buildCode(difficulty) {
-  if (difficulty === "easy") return `${randomAlpha()}${randomDigit()}${randomAlpha()}`;
-  if (difficulty === "medium") return `${randomAlpha()}${randomDigit()}${randomAlpha()}`;
-  return `${randomAlpha()}${randomDigit()}${randomAlpha()}${randomDigit()}`;
+function ordinal(position) {
+  const mod10 = position % 10;
+  const mod100 = position % 100;
+  if (mod10 === 1 && mod100 !== 11) return `${position}st`;
+  if (mod10 === 2 && mod100 !== 12) return `${position}nd`;
+  if (mod10 === 3 && mod100 !== 13) return `${position}rd`;
+  return `${position}th`;
 }
 
-function mutateCode(code) {
-  const chars = code.split("");
-  const index = Math.floor(Math.random() * chars.length);
-  const active = chars[index];
+function buildCharacterLine(level) {
+  const totalCount = Math.max(3, Math.min(9, 3 + Math.floor((level - 1) / 2)));
+  const lettersCount = Math.max(1, Math.floor(totalCount / 2));
+  const digitsCount = totalCount - lettersCount;
 
-  if (/\d/.test(active)) {
-    chars[index] = String((Number(active) + 1 + Math.floor(Math.random() * 7)) % 10);
-  } else {
-    let replacement = randomAlpha();
-    while (replacement === active) replacement = randomAlpha();
-    chars[index] = replacement;
-  }
+  const tokens = [];
+  for (let i = 0; i < lettersCount; i += 1) tokens.push({ value: randomLetter(), kind: "letter" });
+  for (let i = 0; i < digitsCount; i += 1) tokens.push({ value: randomDigit(), kind: "number" });
 
-  return chars.join("");
-}
+  const ordered = shuffle(tokens);
+  const colorableIndexes = shuffle(ordered.map((_, index) => index));
+  const coloredCount = Math.min(Math.max(1, Math.floor(totalCount / 3)), 3);
+  const coloredIndexes = new Set(colorableIndexes.slice(0, coloredCount));
 
-function buildCard(difficulty) {
-  const color = pickRandom(RAINBOW_COLORS[difficulty]);
-  const symbol = pickRandom(SYMBOLS[difficulty]);
-
-  if (difficulty === "easy") {
+  return ordered.map((token, index) => {
+    const color = coloredIndexes.has(index) ? pickRandom(COLOR_POOL.filter((entry) => !entry.isDefault)) : COLOR_POOL[0];
     return {
-      code: buildCode(difficulty),
-      color,
-      symbol,
+      ...token,
+      position: index + 1,
+      colorName: color.name,
+      colorValue: color.value,
     };
-  }
-
-  if (difficulty === "medium") {
-    return {
-      code: buildCode(difficulty),
-      color,
-      symbol,
-      borderStyle: Math.random() > 0.5 ? pickRandom(BORDER_STYLES) : null,
-    };
-  }
-
-  return {
-    code: buildCode(difficulty),
-    color,
-    symbol,
-    borderStyle: pickRandom(BORDER_STYLES),
-    accentMark: pickRandom(ACCENT_MARKS),
-  };
+  });
 }
 
-function shuffled(list) {
-  return [...list].sort(() => Math.random() - 0.5);
-}
-
-function buildQuestions(card, difficulty) {
+function buildQuestions(memoryLine) {
   const questions = [];
+  const byPosition = memoryLine;
+  const letters = memoryLine.filter((entry) => entry.kind === "letter");
+  const numbers = memoryLine.filter((entry) => entry.kind === "number");
 
-  const codeChoices = Array.from(
-    new Set(shuffled([card.code, mutateCode(card.code), mutateCode(card.code), mutateCode(card.code)])).values(),
-  ).slice(0, 3);
+  const first = byPosition[0];
+  const third = byPosition[2] || byPosition[byPosition.length - 1];
+  const last = byPosition[byPosition.length - 1];
 
   questions.push({
-    prompt: "Which code did you see?",
-    answer: card.code,
-    choices: codeChoices,
+    prompt: "What was the first character?",
+    answer: first.value,
+    choices: shuffle([first.value, randomLetter(), randomDigit()]),
   });
 
-  const colorPool = RAINBOW_COLORS[difficulty].map((entry) => entry.name);
-  const colorChoices = shuffled([card.color.name, ...colorPool.filter((name) => name !== card.color.name).slice(0, 2)]);
   questions.push({
-    prompt: "Which color was the card?",
-    answer: card.color.name,
-    choices: colorChoices,
+    prompt: `What was the ${ordinal(third.position)} character?`,
+    answer: third.value,
+    choices: shuffle([third.value, randomLetter(), randomDigit()]),
   });
 
-  const symbolChoices = shuffled([card.symbol, ...SYMBOLS[difficulty].filter((symbol) => symbol !== card.symbol).slice(0, 2)]);
-  questions.push({
-    prompt: "Which symbol appeared in the center?",
-    answer: card.symbol,
-    choices: symbolChoices,
-  });
-
-  if (card.borderStyle) {
+  if (letters.length > 0) {
+    const firstLetter = letters[0];
     questions.push({
-      prompt: "Which border style was used?",
-      answer: card.borderStyle,
-      choices: shuffled([card.borderStyle, ...BORDER_STYLES.filter((entry) => entry !== card.borderStyle).slice(0, 2)]),
+      prompt: "What was the first letter?",
+      answer: firstLetter.value,
+      choices: shuffle([firstLetter.value, randomLetter(), randomLetter()]),
     });
   }
 
-  if (card.accentMark) {
+  if (numbers.length > 0) {
+    const lastNumber = numbers[numbers.length - 1];
     questions.push({
-      prompt: "Which accent mark was shown?",
-      answer: card.accentMark,
-      choices: shuffled([card.accentMark, ...ACCENT_MARKS.filter((entry) => entry !== card.accentMark)]),
+      prompt: "What was the last number?",
+      answer: lastNumber.value,
+      choices: shuffle([lastNumber.value, randomDigit(), randomDigit()]),
     });
   }
 
-  return questions;
+  questions.push({
+    prompt: `What color was the ${ordinal(third.position)} character?`,
+    answer: third.colorName,
+    choices: shuffle([third.colorName, "Red", "Blue", "Green", "Purple", "Black"]).slice(0, 3),
+  });
+
+  questions.push({
+    prompt: "What color was the last character?",
+    answer: last.colorName,
+    choices: shuffle([last.colorName, "Red", "Blue", "Green", "Purple", "Black"]).slice(0, 3),
+  });
+
+  return questions.slice(0, 5);
 }
 
 export function mountSightGame(container) {
   let level = 1;
   let score = 0;
   let attempts = 0;
-  let difficulty = "easy";
   let revealSeconds = 4;
   let currentRoundId = 0;
   let revealTimeout = null;
-  let activeCard = null;
+  let activeLine = null;
 
   const section = text("section", "brain-game-module sight-memory-screen");
   const header = text("header", "brain-game-module__header");
-  header.append(text("h3", "", "Sight Memory"), text("p", "", "Study one card, then answer from memory."));
+  header.append(text("h3", "", "Sight Memory"), text("p", "", "Memorize one line of characters: identity, order, and color."));
 
   const controls = text("div", "sight-memory-controls");
-  const difficultySelect = document.createElement("select");
-  ["easy", "medium", "hard"].forEach((value) => {
-    const option = document.createElement("option");
-    option.value = value;
-    option.textContent = value[0].toUpperCase() + value.slice(1);
-    difficultySelect.append(option);
-  });
-
   const revealSelect = document.createElement("select");
   [3, 4, 5, 7].forEach((seconds) => {
     const option = document.createElement("option");
@@ -191,7 +147,7 @@ export function mountSightGame(container) {
   const resetBtn = text("button", "", "Reset");
   resetBtn.type = "button";
 
-  controls.append(text("label", "", "Difficulty"), difficultySelect, text("label", "", "Reveal Timer"), revealSelect, startBtn, resetBtn);
+  controls.append(text("label", "", "Reveal Timer"), revealSelect, startBtn, resetBtn);
 
   const stage = text("div", "memory-card-stage");
   const questionPanel = text("div", "question-panel");
@@ -225,25 +181,27 @@ export function mountSightGame(container) {
     accuracyNode.textContent = `Accuracy ${accuracy}%`;
   }
 
-  function renderCard(card) {
-    const cardNode = text("article", "memory-card");
-    cardNode.style.background = `linear-gradient(160deg, ${card.color.value}, #1b263a)`;
-    cardNode.style.borderStyle = card.borderStyle || "solid";
+  function renderCard(memoryLine) {
+    const cardNode = text("article", "memory-card memory-card--minimal");
+    const row = text("p", "memory-card__character-row");
 
-    cardNode.append(text("p", "memory-card__code", card.code), text("p", "memory-card__symbol", card.symbol));
-    if (card.accentMark) {
-      cardNode.append(text("span", "memory-card__accent", card.accentMark));
-    }
+    memoryLine.forEach((entry) => {
+      const token = text("span", "memory-card__character", entry.value);
+      token.style.color = entry.colorValue;
+      token.dataset.kind = entry.kind;
+      row.append(token);
+    });
 
+    cardNode.append(row);
     stage.replaceChildren(cardNode);
   }
 
   function renderQuestions(roundId) {
-    if (roundId !== currentRoundId || !activeCard) return;
+    if (roundId !== currentRoundId || !activeLine) return;
     stage.replaceChildren(text("div", "memory-card-placeholder", "Card hidden"));
 
     const questionList = text("div", "question-panel__list");
-    const questions = buildQuestions(activeCard, difficulty);
+    const questions = buildQuestions(activeLine);
     let correctCount = 0;
 
     questions.forEach((question) => {
@@ -279,7 +237,7 @@ export function mountSightGame(container) {
               level += 1;
               feedback.textContent = "Round complete: strong recall.";
             } else {
-              feedback.textContent = "Round complete: keep observing details.";
+              feedback.textContent = "Round complete: keep observing order and color.";
             }
             updateStats();
           }
@@ -297,12 +255,12 @@ export function mountSightGame(container) {
 
   function startRound() {
     invalidateRound();
-    activeCard = buildCard(difficulty);
+    activeLine = buildCharacterLine(level);
     questionPanel.replaceChildren();
-    renderCard(activeCard);
+    renderCard(activeLine);
 
     const roundId = currentRoundId;
-    feedback.textContent = "Study the card.";
+    feedback.textContent = "Study the line.";
 
     revealTimeout = setTimeout(() => {
       if (roundId !== currentRoundId) return;
@@ -315,16 +273,12 @@ export function mountSightGame(container) {
     level = 1;
     score = 0;
     attempts = 0;
-    activeCard = null;
+    activeLine = null;
     stage.replaceChildren(text("div", "memory-card-placeholder", "Round reset"));
     questionPanel.replaceChildren();
     feedback.textContent = "Reset complete. Start a new round.";
     updateStats();
   }
-
-  difficultySelect.addEventListener("change", (event) => {
-    difficulty = event.target.value;
-  });
 
   revealSelect.addEventListener("change", (event) => {
     revealSeconds = Number(event.target.value);
@@ -333,7 +287,7 @@ export function mountSightGame(container) {
   startBtn.addEventListener("click", startRound);
   resetBtn.addEventListener("click", resetAll);
 
-  stage.replaceChildren(text("div", "memory-card-placeholder", "One card will appear here."));
+  stage.replaceChildren(text("div", "memory-card-placeholder", "One memory line will appear here."));
   updateStats();
 
   return () => {
