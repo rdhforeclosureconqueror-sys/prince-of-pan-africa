@@ -25,15 +25,20 @@ export function mountSightGame(container) {
   const header = text("header", "brain-game-module__header");
   header.append(text("h3", "", "Sight Memory"), text("p", "", "Set reveal time, memorize the stimulus, then recall."));
 
-  const control = text("label", "brain-game-module__control", `Reveal time: ${revealSeconds}s`);
+  const memoryPanel = text("div", "brain-game-module__memory");
+  const controlWrap = text("div", "brain-game-module__memory-controls");
+  const controlLabel = text("p", "brain-game-module__control-label", `Reveal time: ${revealSeconds}s`);
+  const control = text("label", "brain-game-module__control");
   const slider = document.createElement("input");
   slider.type = "range";
   slider.min = "1";
   slider.max = "5";
   slider.value = String(revealSeconds);
   control.append(slider);
+  controlWrap.append(controlLabel, control);
 
   const stage = text("div", "brain-game-module__target");
+  const answerArea = text("div", "brain-game-module__memory-answer");
   const stats = text("div", "brain-game-module__stats");
   const levelNode = text("p", "", "Level 1");
   const scoreNode = text("p", "", "Score 0");
@@ -41,7 +46,8 @@ export function mountSightGame(container) {
   stats.append(levelNode, scoreNode, accuracyNode);
   const feedback = text("p", "brain-game-module__feedback", "Focus, then type symbols in order (no spaces).");
 
-  section.append(header, control, stage, stats, feedback);
+  memoryPanel.append(controlWrap, stage, answerArea);
+  section.append(header, memoryPanel, stats, feedback);
   container.replaceChildren(section);
 
   const clearMemoryTimer = () => {
@@ -56,7 +62,7 @@ export function mountSightGame(container) {
     levelNode.textContent = `Level ${level}`;
     scoreNode.textContent = `Score ${score}`;
     accuracyNode.textContent = `Accuracy ${accuracy}%`;
-    control.firstChild.textContent = `Reveal time: ${revealSeconds}s`;
+    controlLabel.textContent = `Reveal time: ${revealSeconds}s`;
   };
 
   const switchToRecall = () => {
@@ -66,8 +72,7 @@ export function mountSightGame(container) {
     const button = text("button", "", "Submit Recall");
     button.type = "button";
     recall.append(input, button);
-    stage.className = "brain-game-module__recall";
-    stage.replaceChildren(recall);
+    answerArea.replaceChildren(recall);
 
     button.addEventListener("click", () => {
       attempts += 1;
@@ -91,8 +96,8 @@ export function mountSightGame(container) {
     const currentRound = roundId;
 
     sequence = randomSequence(roundLevel);
-    stage.className = "brain-game-module__target";
     stage.textContent = sequence.join(" ");
+    answerArea.replaceChildren();
 
     memoryTimer = setTimeout(() => {
       if (roundId !== currentRound) return;
