@@ -11,6 +11,7 @@ export const PILOT_INCLUDED_ROUTES = [
   "/results",
   "/ops/verification",
   "/study",
+  "/brain-training",
 ];
 
 export const PILOT_DEFERRED_ROUTES = [
@@ -31,4 +32,5 @@ export const PILOT_NAV_LINKS = [
   { label: "Library", to: "/library" },
   { label: "Leadership", to: "/leadership" },
   { label: "Audiobooks", to: "/study" },
+  { label: "Brain Training", to: "/brain-training" },
 ];

@@ -14,6 +14,7 @@ import LeadershipResultsPage from "./pages/LeadershipResultsPage";
 import SystemVerificationPage from "./pages/SystemVerificationPage";
 import PilotDeferredPage from "./pages/PilotDeferredPage";
 import StudyPage from "./pages/StudyPage";
+import BrainTraining from "./pages/BrainTraining";
 import { getBackgroundForPath } from "./utils/backgroundSystem";
 import { API_BASE_URL } from "./config";
 import "./styles/backgroundSystem.css";
@@ -50,6 +51,7 @@ function AppRoutes({ user, isAdmin, refreshAuth, dashboardElement }) {
         <Route path="/journal" element={<PilotDeferredPage title="Journal is deferred for pilot" />} />
         <Route path="/ledger" element={<PilotDeferredPage title="Ledger is deferred for pilot" />} />
         <Route path="/study" element={<StudyPage />} />
+        <Route path="/brain-training" element={<BrainTraining />} />
         <Route path="/pagt" element={<PilotDeferredPage title="Pan-Africa’s Got Talent is deferred for pilot" />} />
         <Route path="/membership" element={<PilotDeferredPage title="Membership plan is deferred for pilot" />} />
         <Route path="/leadership" element={<LeadershipAssessmentPage />} />
