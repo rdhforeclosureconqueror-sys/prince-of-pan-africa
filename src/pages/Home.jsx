@@ -6,6 +6,9 @@ import { API_BASE_URL } from "../config";
 import "../styles/home.css";
 
 const API_BASE = API_BASE_URL;
+const PILOT_LOGIN_URL =
+  import.meta.env.VITE_PILOT_LOGIN_URL ||
+  "https://mufasa-fitness-node.onrender.com/api/auth/pilot-login";
 
 export default function Home({ user, isAdmin, onAuthChange }) {
   const [messages, setMessages] = useState([]);
@@ -88,10 +91,11 @@ export default function Home({ user, isAdmin, onAuthChange }) {
   async function submitAuth(e) {
     e.preventDefault();
     setAuthStatus("");
-    const endpoint = authMode === "join" ? "/auth/join" : "/auth/login";
+    const endpoint = authMode === "join" ? "/auth/join" : "/auth/pilot-login";
+    const authUrl = authMode === "join" ? `${API_BASE}${endpoint}` : PILOT_LOGIN_URL;
 
     try {
-      const res = await fetch(`${API_BASE}${endpoint}`, {
+      const res = await fetch(authUrl, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },

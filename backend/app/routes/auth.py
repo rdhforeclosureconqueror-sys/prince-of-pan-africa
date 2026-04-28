@@ -1,3 +1,6 @@
+import logging
+from uuid import uuid4
+
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy import func
@@ -8,6 +11,7 @@ from app.models import MemberProfile, User
 from app.security import hash_password
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
+logger = logging.getLogger("mufasa-auth")
 
 SESSION_COOKIE = "mufasa_session"
 
@@ -112,6 +116,36 @@ def auth_join(payload: AuthPayload, response: Response, db: Session = Depends(ge
 @router.post("/login")
 def auth_login(payload: AuthPayload, response: Response, db: Session = Depends(get_db)):
     normalized_email = _normalize_email(payload.email)
+    user = _find_user_by_email(db, normalized_email)
+    if not user or user.password_hash != hash_password(payload.password):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    _set_session_cookie(response, user.id)
+    return {"ok": True, "authenticated": True, "user": _serialize_user(user)}
+
+
+@router.get("/pilot-login")
+def pilot_login_smoke():
+    return {
+        "ok": True,
+        "route": "/api/auth/pilot-login",
+        "methods": ["POST"],
+        "message": "Use POST for login",
+    }
+
+
+@router.post("/pilot-login")
+def pilot_login(payload: AuthPayload, request: Request, response: Response, db: Session = Depends(get_db)):
+    normalized_email = _normalize_email(payload.email)
+    request_id = request.headers.get("x-request-id") or request.headers.get("x-correlation-id") or str(uuid4())
+    logger.info(
+        "[pilot-login] request received origin=%s hasEmail=%s emailNormalized=%s requestId=%s",
+        request.headers.get("origin"),
+        bool(payload.email and payload.email.strip()),
+        normalized_email,
+        request_id,
+    )
+
     user = _find_user_by_email(db, normalized_email)
     if not user or user.password_hash != hash_password(payload.password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
