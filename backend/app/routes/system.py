@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from app.database import get_database_type, reset_local_sqlite_database
+from app.dependencies.auth import is_local_or_dev_environment, require_permission
 from verification.verification_engine import build_full_system_verification, build_system_verification, check_database
 
 router = APIRouter(prefix="/system", tags=["System"])
@@ -11,17 +12,30 @@ def _routes_inventory(app) -> list[str]:
 
 
 @router.get("/verification")
-def system_verification(request: Request):
+def system_verification(
+    request: Request, _: None = Depends(require_permission("system:read_verification"))
+):
     return build_system_verification(request.app)
 
 
 @router.get("/verification/full")
-def system_verification_full(request: Request):
+def system_verification_full(
+    request: Request, _: None = Depends(require_permission("system:read_verification"))
+):
     return build_full_system_verification(request.app)
 
 
 @router.post("/database/reset-local")
-def reset_local_database(dev_confirm: bool = Query(default=False)):
+def reset_local_database(
+    dev_confirm: bool = Query(default=False),
+    _: None = Depends(require_permission("system:run_dev_reset")),
+):
+    if not is_local_or_dev_environment():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This endpoint is disabled outside local/dev/test environments",
+        )
+
     if not dev_confirm:
         return {
             "ok": False,
