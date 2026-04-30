@@ -1,18 +1,19 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session, joinedload
 
+from app.dependencies.auth import require_permission
 from app.database import get_db
-from app.models import ActivityLog, LeadershipAssessment, MemberProfile, User
+from app.models import ActivityLog, LeadershipAssessment, User
 
 router = APIRouter(tags=["Member"])
 
 
 @router.get("/member/overview")
-def get_member_overview(db: Session = Depends(get_db)):
-    user = db.query(User).options(joinedload(User.profile)).order_by(User.id.asc()).first()
-
-    if not user:
-        raise HTTPException(status_code=404, detail="No member found")
+def get_member_overview(
+    current_user: User = Depends(require_permission("member:read_overview_self")),
+    db: Session = Depends(get_db),
+):
+    user = db.query(User).options(joinedload(User.profile)).filter(User.id == current_user.id).first()
 
     profile = user.profile
 
@@ -61,15 +62,15 @@ def get_member_overview(db: Session = Depends(get_db)):
 
 
 @router.get("/member/activity")
-def get_member_activity(limit: int = 10, db: Session = Depends(get_db)):
-    user = db.query(User).order_by(User.id.asc()).first()
-
-    if not user:
-        raise HTTPException(status_code=404, detail="No member found")
+def get_member_activity(
+    limit: int = 10,
+    current_user: User = Depends(require_permission("member:read_activity_self")),
+    db: Session = Depends(get_db),
+):
 
     entries = (
         db.query(ActivityLog)
-        .filter(ActivityLog.user_id == user.id)
+        .filter(ActivityLog.user_id == current_user.id)
         .order_by(ActivityLog.timestamp.desc())
         .limit(max(1, min(limit, 50)))
         .all()
@@ -92,7 +93,7 @@ def get_member_activity(limit: int = 10, db: Session = Depends(get_db)):
     return {
         "ok": True,
         "status": "ok",
-        "user_id": user.id,
+        "user_id": current_user.id,
         "activity": activity_items,
         "items": activity_items,
     }
