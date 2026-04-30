@@ -1,18 +1,21 @@
 import os
-import tempfile
 import unittest
 from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from tests.session_test_utils import session_cookie
+
 
 class RBACPhase2RouteProtectionTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.temp_dir = tempfile.TemporaryDirectory()
-        db_path = Path(cls.temp_dir.name) / "test_rbac_phase2.db"
+        db_path = Path("/tmp/test_rbac_phase2.db")
+        if db_path.exists():
+            db_path.unlink()
         os.environ["DATABASE_URL"] = f"sqlite:///{db_path}"
         os.environ["ENVIRONMENT"] = "test"
+        os.environ["SESSION_SECRET"] = "test-session-secret"
 
         from app import models  # noqa: F401
         from app.database import Base, SessionLocal, engine
@@ -22,16 +25,16 @@ class RBACPhase2RouteProtectionTests(unittest.TestCase):
         cls.SessionLocal = SessionLocal
         cls.client = TestClient(app)
 
-    @classmethod
-    def tearDownClass(cls):
-        cls.temp_dir.cleanup()
-
     def setUp(self):
         from app.authz import seed_rbac_defaults
-        from app.models import User
+        from app.models import Permission, Role, RolePermission, User, UserRole
 
         db = self.SessionLocal()
         try:
+            db.query(UserRole).delete()
+            db.query(RolePermission).delete()
+            db.query(Role).delete()
+            db.query(Permission).delete()
             db.query(User).delete()
             db.commit()
 
@@ -49,19 +52,16 @@ class RBACPhase2RouteProtectionTests(unittest.TestCase):
         finally:
             db.close()
 
-    def _cookies(self, user_id: int) -> dict[str, str]:
-        return {"mufasa_session": str(user_id)}
-
     def test_unauthenticated_admin_request_rejected(self):
         response = self.client.get("/admin/ai/overview")
         self.assertEqual(response.status_code, 401)
 
     def test_member_cannot_access_admin_route(self):
-        response = self.client.get("/admin/ai/overview", cookies=self._cookies(self.member_id))
+        response = self.client.get("/admin/ai/overview", cookies=session_cookie(self.member_id))
         self.assertEqual(response.status_code, 403)
 
     def test_admin_can_access_admin_route(self):
-        response = self.client.get("/admin/ai/overview", cookies=self._cookies(self.admin_id))
+        response = self.client.get("/admin/ai/overview", cookies=session_cookie(self.admin_id))
         self.assertEqual(response.status_code, 200)
 
     def test_superadmin_can_access_all_protected_admin_and_system_routes(self):
@@ -73,7 +73,7 @@ class RBACPhase2RouteProtectionTests(unittest.TestCase):
             ("get", "/system/verification/full"),
             ("post", "/system/database/reset-local?dev_confirm=false"),
         ]
-        cookies = self._cookies(self.superadmin_id)
+        cookies = session_cookie(self.superadmin_id)
         for method, route in protected_routes:
             response = getattr(self.client, method)(route, cookies=cookies)
             self.assertEqual(response.status_code, 200, f"{method.upper()} {route} returned {response.status_code}")
@@ -83,7 +83,7 @@ class RBACPhase2RouteProtectionTests(unittest.TestCase):
         try:
             response = self.client.post(
                 "/system/database/reset-local?dev_confirm=true",
-                cookies=self._cookies(self.superadmin_id),
+                cookies=session_cookie(self.superadmin_id),
             )
             self.assertEqual(response.status_code, 403)
         finally:
