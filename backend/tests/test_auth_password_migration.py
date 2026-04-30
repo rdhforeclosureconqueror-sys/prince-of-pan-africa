@@ -21,7 +21,7 @@ class AuthPasswordMigrationTests(unittest.TestCase):
     def tearDownClass(cls):
         cls.temp_dir.cleanup()
 
-    def test_new_user_hash_uses_bcrypt(self):
+    def test_new_user_hash_uses_pbkdf2(self):
         from app.models import User
         from app.routes.auth import AuthPayload, auth_join
         from fastapi import Response
@@ -32,7 +32,7 @@ class AuthPasswordMigrationTests(unittest.TestCase):
             result = auth_join(AuthPayload(email="new@example.com", password="Secret123"), response, db)
             self.assertTrue(result["joined"])
             user = db.query(User).filter(User.email == "new@example.com").first()
-            self.assertTrue(user.password_hash.startswith("$2"))
+            self.assertTrue(user.password_hash.startswith("pbkdf2_sha256$"))
         finally:
             db.close()
 
@@ -57,7 +57,7 @@ class AuthPasswordMigrationTests(unittest.TestCase):
 
             db.refresh(user)
             self.assertNotEqual(user.password_hash, legacy_hash)
-            self.assertTrue(user.password_hash.startswith("$2"))
+            self.assertTrue(user.password_hash.startswith("pbkdf2_sha256$"))
         finally:
             db.close()
 
