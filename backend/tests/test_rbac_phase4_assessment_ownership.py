@@ -5,6 +5,8 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from tests.session_test_utils import session_cookie
+
 
 def _payload(user_id: str | None = None) -> dict:
     body = {
@@ -25,6 +27,7 @@ class RBACPhase4AssessmentOwnershipTests(unittest.TestCase):
         db_path = Path(cls.temp_dir.name) / "test_rbac_phase4_assessment_ownership.db"
         os.environ["DATABASE_URL"] = f"sqlite:///{db_path}"
         os.environ["ENVIRONMENT"] = "test"
+        os.environ["SESSION_SECRET"] = "test-session-secret"
 
         from app import models  # noqa: F401
         from app.database import Base, SessionLocal, engine
@@ -64,9 +67,6 @@ class RBACPhase4AssessmentOwnershipTests(unittest.TestCase):
         finally:
             db.close()
 
-    def _cookies(self, user_id: int) -> dict[str, str]:
-        return {"mufasa_session": str(user_id)}
-
     def test_unauthenticated_submit_and_read_rejected(self):
         submit_response = self.client.post("/assessment/submit", json=_payload())
         read_response = self.client.get(f"/assessment/results/{self.member_one_id}")
@@ -78,7 +78,7 @@ class RBACPhase4AssessmentOwnershipTests(unittest.TestCase):
         submit_response = self.client.post(
             "/assessment/submit",
             json=_payload(),
-            cookies=self._cookies(self.member_one_id),
+            cookies=session_cookie(self.member_one_id),
         )
         self.assertEqual(submit_response.status_code, 200)
         submit_payload = submit_response.json()
@@ -86,17 +86,17 @@ class RBACPhase4AssessmentOwnershipTests(unittest.TestCase):
 
         read_response = self.client.get(
             f"/assessment/results/{self.member_one_id}",
-            cookies=self._cookies(self.member_one_id),
+            cookies=session_cookie(self.member_one_id),
         )
         self.assertEqual(read_response.status_code, 200)
         self.assertEqual(int(read_response.json()["userId"]), self.member_one_id)
 
     def test_member_cannot_read_other_user_via_path_or_query_override(self):
-        self.client.post("/assessment/submit", json=_payload(), cookies=self._cookies(self.member_one_id))
+        self.client.post("/assessment/submit", json=_payload(), cookies=session_cookie(self.member_one_id))
 
         response = self.client.get(
             f"/assessment/results/{self.member_one_id}?userId={self.member_one_id}&user_id={self.member_one_id}",
-            cookies=self._cookies(self.member_two_id),
+            cookies=session_cookie(self.member_two_id),
         )
 
         self.assertEqual(response.status_code, 404)
@@ -110,7 +110,7 @@ class RBACPhase4AssessmentOwnershipTests(unittest.TestCase):
         response = self.client.post(
             "/assessment/submit",
             json=_payload(user_id="totally-new-user"),
-            cookies=self._cookies(self.member_two_id),
+            cookies=session_cookie(self.member_two_id),
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(int(response.json()["userId"]), self.member_two_id)
@@ -129,14 +129,14 @@ class RBACPhase4AssessmentOwnershipTests(unittest.TestCase):
         self.assertEqual(member_two_assessments, 1)
 
     def test_member_cannot_access_analytics(self):
-        response = self.client.get("/assessment/analytics/roles", cookies=self._cookies(self.member_one_id))
+        response = self.client.get("/assessment/analytics/roles", cookies=session_cookie(self.member_one_id))
         self.assertEqual(response.status_code, 403)
 
     def test_admin_and_superadmin_can_access_analytics(self):
-        admin_response = self.client.get("/assessment/analytics/roles", cookies=self._cookies(self.admin_id))
+        admin_response = self.client.get("/assessment/analytics/roles", cookies=session_cookie(self.admin_id))
         superadmin_response = self.client.get(
             "/assessment/analytics/roles",
-            cookies=self._cookies(self.superadmin_id),
+            cookies=session_cookie(self.superadmin_id),
         )
 
         self.assertEqual(admin_response.status_code, 200)

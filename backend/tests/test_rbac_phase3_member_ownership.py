@@ -5,6 +5,8 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from tests.session_test_utils import session_cookie
+
 
 class RBACPhase3MemberOwnershipTests(unittest.TestCase):
     @classmethod
@@ -13,6 +15,7 @@ class RBACPhase3MemberOwnershipTests(unittest.TestCase):
         db_path = Path(cls.temp_dir.name) / "test_rbac_phase3_member_ownership.db"
         os.environ["DATABASE_URL"] = f"sqlite:///{db_path}"
         os.environ["ENVIRONMENT"] = "test"
+        os.environ["SESSION_SECRET"] = "test-session-secret"
 
         from app import models  # noqa: F401
         from app.database import Base, SessionLocal, engine
@@ -75,9 +78,6 @@ class RBACPhase3MemberOwnershipTests(unittest.TestCase):
         finally:
             db.close()
 
-    def _cookies(self, user_id: int) -> dict[str, str]:
-        return {"mufasa_session": str(user_id)}
-
     def test_unauthenticated_member_endpoints_return_401(self):
         overview_response = self.client.get("/member/overview")
         activity_response = self.client.get("/member/activity")
@@ -86,8 +86,8 @@ class RBACPhase3MemberOwnershipTests(unittest.TestCase):
         self.assertEqual(activity_response.status_code, 401)
 
     def test_member_can_access_own_overview_and_activity(self):
-        overview_response = self.client.get("/member/overview", cookies=self._cookies(self.member_one_id))
-        activity_response = self.client.get("/member/activity", cookies=self._cookies(self.member_one_id))
+        overview_response = self.client.get("/member/overview", cookies=session_cookie(self.member_one_id))
+        activity_response = self.client.get("/member/activity", cookies=session_cookie(self.member_one_id))
 
         self.assertEqual(overview_response.status_code, 200)
         self.assertEqual(activity_response.status_code, 200)
@@ -103,7 +103,7 @@ class RBACPhase3MemberOwnershipTests(unittest.TestCase):
         self.assertEqual(activity_payload["activity"][0]["action"], "member-one-action")
 
     def test_second_member_cannot_receive_first_member_data(self):
-        response = self.client.get("/member/activity", cookies=self._cookies(self.member_two_id))
+        response = self.client.get("/member/activity", cookies=session_cookie(self.member_two_id))
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
@@ -114,7 +114,7 @@ class RBACPhase3MemberOwnershipTests(unittest.TestCase):
     def test_query_param_user_id_override_attempt_is_ignored(self):
         response = self.client.get(
             f"/member/activity?user_id={self.member_one_id}",
-            cookies=self._cookies(self.member_two_id),
+            cookies=session_cookie(self.member_two_id),
         )
 
         self.assertEqual(response.status_code, 200)
@@ -124,8 +124,8 @@ class RBACPhase3MemberOwnershipTests(unittest.TestCase):
         self.assertEqual(payload["activity"][0]["action"], "member-two-action")
 
     def test_admin_and_superadmin_can_only_access_their_own_member_scope(self):
-        admin_response = self.client.get("/member/overview", cookies=self._cookies(self.admin_id))
-        superadmin_response = self.client.get("/member/overview", cookies=self._cookies(self.superadmin_id))
+        admin_response = self.client.get("/member/overview", cookies=session_cookie(self.admin_id))
+        superadmin_response = self.client.get("/member/overview", cookies=session_cookie(self.superadmin_id))
 
         self.assertEqual(admin_response.status_code, 200)
         self.assertEqual(superadmin_response.status_code, 200)

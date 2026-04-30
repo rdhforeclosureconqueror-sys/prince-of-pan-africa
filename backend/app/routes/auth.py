@@ -6,10 +6,15 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import MemberProfile, User
 from app.security import hash_password, verify_password
+from app.session import (
+    SESSION_COOKIE,
+    SESSION_MAX_AGE_SECONDS,
+    build_session_cookie_value,
+    parse_session_cookie_value,
+    should_use_secure_cookie,
+)
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
-
-SESSION_COOKIE = "mufasa_session"
 
 
 class AuthPayload(BaseModel):
@@ -35,11 +40,11 @@ def _find_user_by_email(db: Session, email: str) -> User | None:
 def _set_session_cookie(response: Response, user_id: int) -> None:
     response.set_cookie(
         key=SESSION_COOKIE,
-        value=str(user_id),
+        value=build_session_cookie_value(user_id),
         httponly=True,
         samesite="lax",
-        secure=False,
-        max_age=60 * 60 * 24 * 30,
+        secure=should_use_secure_cookie(),
+        max_age=SESSION_MAX_AGE_SECONDS,
     )
 
 
@@ -55,16 +60,13 @@ def _serialize_user(user: User) -> dict:
 
 
 def _current_user(request: Request, db: Session) -> User | None:
-    raw_user_id = request.cookies.get(SESSION_COOKIE)
-    if not raw_user_id:
-        return None
-
+    raw_session = request.cookies.get(SESSION_COOKIE)
     try:
-        user_id = int(raw_user_id)
-    except ValueError:
+        session = parse_session_cookie_value(raw_session)
+    except Exception:
         return None
 
-    return db.query(User).filter(User.id == user_id).first()
+    return db.query(User).filter(User.id == session["user_id"]).first()
 
 
 @router.get("/me")
