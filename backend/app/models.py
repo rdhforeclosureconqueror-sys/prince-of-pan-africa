@@ -20,6 +20,54 @@ class User(Base):
     assessments: Mapped[list["LeadershipAssessment"]] = relationship(back_populates="user")
     audiobooks: Mapped[list["Audiobook"]] = relationship(back_populates="user")
     chapter_reflections: Mapped[list["AudiobookChapterReflection"]] = relationship(back_populates="user")
+    user_roles: Mapped[list["UserRole"]] = relationship(back_populates="user")
+
+
+class Role(Base):
+    __tablename__ = "roles"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+
+    users: Mapped[list["UserRole"]] = relationship(back_populates="role")
+    permissions: Mapped[list["Permission"]] = relationship(
+        secondary="role_permissions",
+        back_populates="roles",
+    )
+
+
+class Permission(Base):
+    __tablename__ = "permissions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(128), nullable=False, unique=True, index=True)
+
+    roles: Mapped[list[Role]] = relationship(secondary="role_permissions", back_populates="permissions")
+
+
+class UserRole(Base):
+    __tablename__ = "user_roles"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    role_id: Mapped[int] = mapped_column(ForeignKey("roles.id"), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    __table_args__ = (UniqueConstraint("user_id", "role_id", name="uq_user_role"),)
+
+    user: Mapped[User] = relationship(back_populates="user_roles")
+    role: Mapped[Role] = relationship(back_populates="users")
+
+
+class RolePermission(Base):
+    __tablename__ = "role_permissions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    role_id: Mapped[int] = mapped_column(ForeignKey("roles.id"), nullable=False, index=True)
+    permission_id: Mapped[int] = mapped_column(ForeignKey("permissions.id"), nullable=False, index=True)
+
+    __table_args__ = (UniqueConstraint("role_id", "permission_id", name="uq_role_permission"),)
+
 
 
 class MemberProfile(Base):

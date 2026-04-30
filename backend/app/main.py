@@ -6,9 +6,10 @@ from fastapi import Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from app.database import init_db
+from app.database import SessionLocal, init_db
 from app.routes import admin, assessment, audiobook, auth, chat, member, portal, system, tts, voice
 from app.services.admin_seed import seed_admin
+from app.authz import seed_rbac_defaults
 
 app = FastAPI(
     title="Mufasa Knowledge Bank API",
@@ -140,6 +141,11 @@ def info():
 async def startup_event():
     init_db()
     result = seed_admin()
+    db = SessionLocal()
+    try:
+        seed_rbac_defaults(db)
+    finally:
+        db.close()
     logger.info(
         "CORS config source=%s ALLOWED_ORIGINS_raw=%s CORS_ALLOWED_ORIGINS_raw=%s parsed_allowed_origins=%s",
         origins_source,
