@@ -10,6 +10,7 @@ from app.database import SessionLocal, init_db
 from app.routes import admin, assessment, audiobook, auth, chat, member, portal, system, tts, voice
 from app.services.admin_seed import seed_admin
 from app.authz import seed_rbac_defaults
+from app.session import get_session_secret
 
 app = FastAPI(
     title="Mufasa Knowledge Bank API",
@@ -139,6 +140,7 @@ def info():
 
 @app.on_event("startup")
 async def startup_event():
+    get_session_secret()
     init_db()
     result = seed_admin()
     db = SessionLocal()

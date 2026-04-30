@@ -1,5 +1,4 @@
 import os
-import tempfile
 import unittest
 from pathlib import Path
 
@@ -11,8 +10,9 @@ from tests.session_test_utils import session_cookie
 class RBACPhase2RouteProtectionTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.temp_dir = tempfile.TemporaryDirectory()
-        db_path = Path(cls.temp_dir.name) / "test_rbac_phase2.db"
+        db_path = Path("/tmp/test_rbac_phase2.db")
+        if db_path.exists():
+            db_path.unlink()
         os.environ["DATABASE_URL"] = f"sqlite:///{db_path}"
         os.environ["ENVIRONMENT"] = "test"
         os.environ["SESSION_SECRET"] = "test-session-secret"
@@ -25,16 +25,16 @@ class RBACPhase2RouteProtectionTests(unittest.TestCase):
         cls.SessionLocal = SessionLocal
         cls.client = TestClient(app)
 
-    @classmethod
-    def tearDownClass(cls):
-        cls.temp_dir.cleanup()
-
     def setUp(self):
         from app.authz import seed_rbac_defaults
-        from app.models import User
+        from app.models import Permission, Role, RolePermission, User, UserRole
 
         db = self.SessionLocal()
         try:
+            db.query(UserRole).delete()
+            db.query(RolePermission).delete()
+            db.query(Role).delete()
+            db.query(Permission).delete()
             db.query(User).delete()
             db.commit()
 

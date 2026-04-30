@@ -20,6 +20,20 @@ def _session_secret() -> str:
     return os.getenv("SESSION_SECRET", "")
 
 
+def get_session_secret() -> str:
+    secret = _session_secret().strip()
+    if secret:
+        return secret
+
+    insecure_ok = os.getenv("ALLOW_INSECURE_DEV_SESSION_SECRET", "").strip().lower() in {"1", "true", "yes", "on"}
+    if insecure_ok and not should_use_secure_cookie():
+        return "dev-insecure-session-secret"
+
+    raise SessionValidationError(
+        "SESSION_SECRET is required. Set SESSION_SECRET in production; for local/dev/test only, "        "you may set ALLOW_INSECURE_DEV_SESSION_SECRET=true to use an explicit fallback."
+    )
+
+
 def _urlsafe_b64encode(data: bytes) -> str:
     return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
 
@@ -35,9 +49,7 @@ def _sign(payload_bytes: bytes, secret: str) -> str:
 
 
 def build_session_cookie_value(user_id: int, issued_at: int | None = None) -> str:
-    secret = _session_secret()
-    if not secret:
-        raise SessionValidationError("SESSION_SECRET is not configured")
+    secret = get_session_secret()
 
     payload: dict[str, Any] = {
         "user_id": int(user_id),
@@ -53,9 +65,7 @@ def parse_session_cookie_value(cookie_value: str | None) -> dict[str, int]:
     if not cookie_value:
         raise SessionValidationError("Missing session cookie")
 
-    secret = _session_secret()
-    if not secret:
-        raise SessionValidationError("SESSION_SECRET is not configured")
+    secret = get_session_secret()
 
     try:
         payload_b64, signature_b64 = cookie_value.split(".", 1)

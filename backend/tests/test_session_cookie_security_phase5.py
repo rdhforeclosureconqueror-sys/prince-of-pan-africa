@@ -1,5 +1,4 @@
 import os
-import tempfile
 import unittest
 from pathlib import Path
 
@@ -11,8 +10,9 @@ from app.session import build_session_cookie_value
 class SessionCookieSecurityPhase5Tests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.temp_dir = tempfile.TemporaryDirectory()
-        db_path = Path(cls.temp_dir.name) / "test_session_phase5.db"
+        db_path = Path("/tmp/test_session_phase5.db")
+        if db_path.exists():
+            db_path.unlink()
         os.environ["DATABASE_URL"] = f"sqlite:///{db_path}"
         os.environ["ENVIRONMENT"] = "test"
         os.environ["SESSION_SECRET"] = "test-session-secret"
@@ -24,10 +24,6 @@ class SessionCookieSecurityPhase5Tests(unittest.TestCase):
         Base.metadata.create_all(bind=engine)
         cls.SessionLocal = SessionLocal
         cls.client = TestClient(app)
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.temp_dir.cleanup()
 
     def setUp(self):
         from app.authz import seed_rbac_defaults
