@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.dependencies.auth import require_permission
 from app.database import get_db
 from app.models import ActivityLog, LeadershipAssessment, User
 from app.services.leadership_question_map import ROLE_KEYS
@@ -22,41 +23,6 @@ class AssessmentSubmitRequest(BaseModel):
     childId: str | None = Field(default=None, min_length=1)
     submissionId: str | None = Field(default=None, min_length=1)
     responses: list[str | int | float] = Field(min_length=30, max_length=30)
-
-
-def _resolve_or_create_user(db: Session, user_identifier: str | None) -> User:
-    if user_identifier:
-        if user_identifier.isdigit():
-            user = db.query(User).filter(User.id == int(user_identifier)).first()
-            if user:
-                return user
-
-        lookup_email = (
-            user_identifier
-            if "@" in user_identifier
-            else f"member+{user_identifier}@local.mufasa"
-        )
-        user = db.query(User).filter(User.email == lookup_email).first()
-        if user:
-            return user
-
-        new_user = User(
-            email=lookup_email,
-            password_hash="",
-            role="member",
-        )
-        db.add(new_user)
-        db.flush()
-        return new_user
-
-    new_user = User(
-        email=f"member-{uuid4()}@local.mufasa",
-        password_hash="",
-        role="member",
-    )
-    db.add(new_user)
-    db.flush()
-    return new_user
 
 
 def _serialize_assessment(row: LeadershipAssessment) -> dict:
@@ -81,8 +47,12 @@ def _serialize_assessment(row: LeadershipAssessment) -> dict:
 
 
 @router.post("/submit")
-def submit_assessment(payload: AssessmentSubmitRequest, db: Session = Depends(get_db)):
-    user = _resolve_or_create_user(db, payload.userId)
+def submit_assessment(
+    payload: AssessmentSubmitRequest,
+    current_user: User = Depends(require_permission("assessment:submit_self")),
+    db: Session = Depends(get_db),
+):
+    user = current_user
 
     scored = score_assessment(payload.responses)
     submission_id = payload.submissionId or str(uuid4())
@@ -137,14 +107,13 @@ def submit_assessment(payload: AssessmentSubmitRequest, db: Session = Depends(ge
 
 
 @router.get("/results/{user_id}")
-def get_latest_assessment(user_id: str, db: Session = Depends(get_db)):
+def get_latest_assessment(
+    user_id: str,
+    current_user: User = Depends(require_permission("assessment:read_self")),
+    db: Session = Depends(get_db),
+):
     query = db.query(LeadershipAssessment)
-
-    if user_id.isdigit():
-        query = query.filter(LeadershipAssessment.user_id == int(user_id))
-    else:
-        user = _resolve_or_create_user(db, user_id)
-        query = query.filter(LeadershipAssessment.user_id == user.id)
+    query = query.filter(LeadershipAssessment.user_id == current_user.id)
 
     row = query.order_by(LeadershipAssessment.id.desc()).first()
 
@@ -162,14 +131,13 @@ def get_latest_assessment(user_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/dashboard/{user_id}")
-def get_assessment_dashboard(user_id: str, db: Session = Depends(get_db)):
+def get_assessment_dashboard(
+    user_id: str,
+    current_user: User = Depends(require_permission("assessment:read_self")),
+    db: Session = Depends(get_db),
+):
     query = db.query(LeadershipAssessment)
-
-    if user_id.isdigit():
-        query = query.filter(LeadershipAssessment.user_id == int(user_id))
-    else:
-        user = _resolve_or_create_user(db, user_id)
-        query = query.filter(LeadershipAssessment.user_id == user.id)
+    query = query.filter(LeadershipAssessment.user_id == current_user.id)
 
     rows = query.order_by(LeadershipAssessment.id.desc()).all()
     if not rows:
@@ -201,7 +169,10 @@ def get_assessment_dashboard(user_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/analytics/roles")
-def role_analytics(db: Session = Depends(get_db)):
+def role_analytics(
+    _: User = Depends(require_permission("assessment:read_analytics")),
+    db: Session = Depends(get_db),
+):
     rows = db.query(LeadershipAssessment.scores).all()
 
     if not rows:
