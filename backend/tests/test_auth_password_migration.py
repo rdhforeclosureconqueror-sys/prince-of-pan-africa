@@ -21,6 +21,20 @@ class AuthPasswordMigrationTests(unittest.TestCase):
     def tearDownClass(cls):
         cls.temp_dir.cleanup()
 
+    def setUp(self):
+        os.environ["ENVIRONMENT"] = "test"
+        os.environ["SESSION_SECRET"] = "test-session-secret"
+
+        from app.models import MemberProfile, User
+
+        db = self.SessionLocal()
+        try:
+            db.query(MemberProfile).delete()
+            db.query(User).delete()
+            db.commit()
+        finally:
+            db.close()
+
     def test_new_user_hash_uses_pbkdf2(self):
         from app.models import User
         from app.routes.auth import AuthPayload, auth_join

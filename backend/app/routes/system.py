@@ -18,6 +18,14 @@ def system_verification(
     return build_readiness_verification()
 
 
+@router.get("/verification/full")
+def system_verification_full(
+    request: Request, _: None = Depends(require_permission("system:read_verification"))
+):
+    """Backward-compatible alias retained for older frontend/tests."""
+    return build_readiness_verification()
+
+
 @router.post("/database/reset-local")
 def reset_local_database(
     dev_confirm: bool = Query(default=False),
