@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import MemberProfile, User
-from app.security import hash_password
+from app.security import hash_password, verify_password
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -113,8 +113,17 @@ def auth_join(payload: AuthPayload, response: Response, db: Session = Depends(ge
 def auth_login(payload: AuthPayload, response: Response, db: Session = Depends(get_db)):
     normalized_email = _normalize_email(payload.email)
     user = _find_user_by_email(db, normalized_email)
-    if not user or user.password_hash != hash_password(payload.password):
+    if not user:
         raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    is_valid, should_upgrade_hash = verify_password(payload.password, user.password_hash)
+    if not is_valid:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    if should_upgrade_hash:
+        user.password_hash = hash_password(payload.password)
+        db.add(user)
+        db.commit()
 
     _set_session_cookie(response, user.id)
     return {"ok": True, "authenticated": True, "user": _serialize_user(user)}
