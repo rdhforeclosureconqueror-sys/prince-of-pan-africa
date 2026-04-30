@@ -10,7 +10,7 @@ from app.database import SessionLocal, init_db
 from app.routes import admin, assessment, audiobook, auth, chat, member, portal, system, tts, voice
 from app.services.admin_seed import seed_admin
 from app.authz import seed_rbac_defaults
-from app.session import get_session_secret
+from app.session import SessionValidationError, get_session_secret
 
 app = FastAPI(
     title="Mufasa Knowledge Bank API",
@@ -121,10 +121,30 @@ def root():
 
 @app.get("/health")
 def health():
+    status_label = "ok"
+    details = {"database": "unknown", "session": "unknown"}
+    try:
+        from verification.verification_engine import check_database
+
+        db_ok = bool(check_database().get("connected"))
+        details["database"] = "ok" if db_ok else "failed"
+        if not db_ok:
+            status_label = "degraded"
+    except Exception:
+        details["database"] = "failed"
+        status_label = "degraded"
+
+    try:
+        get_session_secret()
+        details["session"] = "ok"
+    except SessionValidationError:
+        details["session"] = "failed"
+        status_label = "failed"
+
     return {
-        "ok": True,
+        "status": status_label,
         "service": "Mufasa Knowledge Bank",
-        "environment": os.getenv("ENVIRONMENT", "production"),
+        "details": details,
     }
 
 
