@@ -38,12 +38,14 @@ def _find_user_by_email(db: Session, email: str) -> User | None:
     )
 
 def _set_session_cookie(response: Response, user_id: int) -> None:
+    cross_site_cookie = should_use_secure_cookie()
+    same_site = "none" if cross_site_cookie else "lax"
     response.set_cookie(
         key=SESSION_COOKIE,
         value=build_session_cookie_value(user_id),
         httponly=True,
-        samesite="lax",
-        secure=should_use_secure_cookie(),
+        samesite=same_site,
+        secure=cross_site_cookie,
         max_age=SESSION_MAX_AGE_SECONDS,
     )
 
@@ -133,5 +135,7 @@ def auth_login(payload: AuthPayload, response: Response, db: Session = Depends(g
 
 @router.post("/logout")
 def auth_logout(response: Response):
-    response.delete_cookie(SESSION_COOKIE)
+    cross_site_cookie = should_use_secure_cookie()
+    same_site = "none" if cross_site_cookie else "lax"
+    response.delete_cookie(SESSION_COOKIE, samesite=same_site, secure=cross_site_cookie)
     return {"ok": True, "logged_out": True}

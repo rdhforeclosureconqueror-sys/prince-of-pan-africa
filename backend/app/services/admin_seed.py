@@ -9,7 +9,11 @@ from app.security import hash_password
 
 
 DEFAULT_SUPERADMIN_EMAIL = "rdhforeclosurconqueror@gmail.com"
-SUPERADMIN_EMAIL = os.getenv("SUPERADMIN_EMAIL", DEFAULT_SUPERADMIN_EMAIL).strip().lower()
+SUPERADMIN_EMAIL = (
+    os.getenv("SUPERADMIN_EMAIL")
+    or os.getenv("SUPER_ADMIN_EMAIL")
+    or DEFAULT_SUPERADMIN_EMAIL
+).strip().lower()
 ADMIN_EMAIL = SUPERADMIN_EMAIL  # backward compatibility for verification checks
 SUPERADMIN_ROLE = "superadmin"
 
@@ -46,10 +50,14 @@ def _ensure_profile_and_activity(db: Session, user: User) -> None:
 
 def _resolve_password_hash() -> str | None:
     seed_password_hash = os.getenv("SUPERADMIN_PASSWORD_HASH", "").strip()
+    if not seed_password_hash:
+        seed_password_hash = os.getenv("SUPER_ADMIN_PASSWORD_HASH", "").strip()
     if seed_password_hash:
         return seed_password_hash
 
     seed_password_plaintext = os.getenv("SUPERADMIN_PASSWORD", "")
+    if not seed_password_plaintext:
+        seed_password_plaintext = os.getenv("SUPER_ADMIN_PASSWORD", "")
     if seed_password_plaintext:
         return hash_password(seed_password_plaintext)
 
