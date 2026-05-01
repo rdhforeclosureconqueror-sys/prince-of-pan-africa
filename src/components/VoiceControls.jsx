@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { FaMicrophone, FaPlay, FaPause, FaStop } from "react-icons/fa";
+import { API_BASE_URL } from "../config";
 
 /**
  * VoiceControls Component
@@ -24,7 +25,7 @@ export default function VoiceControls({ latestMessage, onVoiceSend }) {
   // ✅ Keep mic stream reference so we can STOP it (critical fix)
   const streamRef = useRef(null);
 
-  const baseURL = import.meta.env.VITE_API_BASE_URL || "";
+  const baseURL = API_BASE_URL;
 
   // ✅ GLOBAL: show silent crashes / silent play() failures
   useEffect(() => {

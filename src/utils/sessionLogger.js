@@ -3,7 +3,9 @@
 // Logs are stored locally (in IndexedDB or localStorage) and synced to your backend API.
 // Automatically purges logs older than 7 days to keep the DB lean.
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://api.simbawaujamaa.com";
+import { API_BASE_URL } from "../config";
+
+const API_BASE = API_BASE_URL;
 const LOG_KEY = "mufasa_session_logs";
 
 // Helper: load logs from localStorage

@@ -1,6 +1,7 @@
 // src/v2-ledger/components/NotificationBot.jsx
 import React, { useEffect, useRef, useState } from "react";
 import { api } from "../../api/api"; // <-- same helper used elsewhere
+import { WS_BASE_URL } from "../../config";
 import "../../v2-ledger/ledgerV2.css";
 
 /**
@@ -25,11 +26,7 @@ export default function NotificationBot() {
 
   const connectWebSocket = () => {
     try {
-      const wsProto = window.location.protocol === "https:" ? "wss" : "ws";
-      const wsURL = `${wsProto}://${window.location.host.replace(
-        "www.",
-        ""
-      )}/ws`;
+      const wsURL = WS_BASE_URL.endsWith("/ws") ? WS_BASE_URL : `${WS_BASE_URL}/ws`;
       const ws = new WebSocket(wsURL);
       wsRef.current = ws;
 
