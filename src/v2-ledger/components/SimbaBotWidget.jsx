@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import "./SimbaBotWidget.css";
+import { API_BASE_URL, WS_BASE_URL } from "../../config";
 
 export default function SimbaBotWidget({ memberId }) {
   const [messages, setMessages] = useState([]);
@@ -8,8 +9,7 @@ export default function SimbaBotWidget({ memberId }) {
   useEffect(() => {
     if (!memberId) return;
 
-    const wsUrl = import.meta.env.VITE_WS_URL || "wss://api.simbawaujamaa.com";
-    const ws = new WebSocket(wsUrl.replace(/^http/, "ws"));
+    const ws = new WebSocket(WS_BASE_URL);
 
     ws.onopen = () => {
       setConnected(true);
@@ -39,7 +39,7 @@ export default function SimbaBotWidget({ memberId }) {
     // Fallback: Poll for missed notifications
     const pollInterval = setInterval(async () => {
       try {
-        const res = await fetch("/ledger/notifications", { credentials: "include" });
+        const res = await fetch(`${API_BASE_URL}/ledger/notifications`, { credentials: "include" });
         const json = await res.json();
         if (json.ok && json.items?.length) {
           const newMsgs = json.items.map((i) => ({

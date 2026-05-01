@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
+import { API_BASE_URL } from "../config";
 
-const API = import.meta.env.VITE_API_BASE_URL || "";
+const API = API_BASE_URL;
 
 const CATEGORY_FIXES = {
   database: "Check DATABASE_URL, DB connectivity, and ensure migrations/init ran.",

@@ -1,3 +1,5 @@
+import { API_BASE_URL } from "../config";
+
 const STORAGE_KEY = "leadership_results_v1";
 const CONTEXT_KEY = "leadership_context_v1";
 
@@ -25,7 +27,7 @@ const ROLE_LABELS = {
   resourceGenerator: "ResourceGenerator",
 };
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
+const API_BASE = API_BASE_URL;
 
 function readStore() {
   try {
