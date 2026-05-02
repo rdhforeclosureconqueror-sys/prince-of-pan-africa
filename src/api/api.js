@@ -1,12 +1,23 @@
 // src/api/api.js
 import { API_BASE_URL } from "../config";
 
+let hasLoggedApiBase = false;
+
 /**
  * Universal API client for Simba Waa Ujamaa
  * Handles JSON + text responses, cookies, and error normalization
  */
 export async function api(path, options = {}) {
   const url = `${API_BASE_URL}${path}`;
+
+  if (!hasLoggedApiBase) {
+    console.info("[api] API_BASE_URL", API_BASE_URL);
+    hasLoggedApiBase = true;
+  }
+
+  if (["/admin/ai/overview", "/admin/overview", "/admin/activity-stream", "/auth/me"].includes(path)) {
+    console.info("[api] request", { path, url });
+  }
   const isFormData = options.body instanceof FormData;
   const normalizedHeaders = {
     ...(isFormData ? {} : { "Content-Type": "application/json" }),

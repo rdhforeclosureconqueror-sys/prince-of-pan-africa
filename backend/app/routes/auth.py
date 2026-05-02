@@ -4,6 +4,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.authz import get_user_permissions, get_user_role_names
 from app.models import MemberProfile, User
 from app.security import hash_password, verify_password
 from app.session import (
@@ -78,11 +79,21 @@ def auth_me(request: Request, db: Session = Depends(get_db)):
     if not user:
         return {"ok": True, "auth": False, "authenticated": False, "user": None}
 
+    profile = db.query(MemberProfile).filter(MemberProfile.user_id == user.id).first()
+    role_names = get_user_role_names(db, user)
+    permissions = sorted(get_user_permissions(db, user))
+
     return {
         "ok": True,
         "auth": True,
         "authenticated": True,
         "user": _serialize_user(user),
+        "company": (profile.attributes or {}).get("company") if profile else None,
+        "member_profile_role": profile.role if profile else None,
+        "rbac": {
+            "roles": role_names,
+            "permissions": permissions,
+        },
     }
 
 
