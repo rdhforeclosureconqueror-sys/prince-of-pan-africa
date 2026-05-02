@@ -92,6 +92,38 @@ async def log_tts_preflight(request: Request, call_next):
 
     return response
 
+
+@app.middleware("http")
+async def log_admin_request_context(request: Request, call_next):
+    response = await call_next(request)
+
+    tracked_paths = {"/admin/ai/overview", "/admin/overview", "/admin/activity-stream", "/auth/me"}
+    if request.url.path in tracked_paths:
+        user_id = None
+        cookie_present = False
+        try:
+            from app.session import SESSION_COOKIE, parse_session_cookie_value
+
+            raw_session = request.cookies.get(SESSION_COOKIE)
+            cookie_present = bool(raw_session)
+            if raw_session:
+                parsed = parse_session_cookie_value(raw_session)
+                user_id = parsed.get("user_id")
+        except Exception:
+            user_id = None
+
+        logger.info(
+            "REQ method=%s path=%s status=%s user_id=%s cookie_present=%s origin=%s",
+            request.method,
+            request.url.path,
+            response.status_code,
+            user_id,
+            cookie_present,
+            request.headers.get("origin"),
+        )
+
+    return response
+
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 os.makedirs(STATIC_DIR, exist_ok=True)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
