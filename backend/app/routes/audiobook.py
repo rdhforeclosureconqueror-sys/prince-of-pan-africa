@@ -69,7 +69,8 @@ def _allow_guest_audiobooks() -> bool:
         return True
     if explicit in {"0", "false", "no", "off"}:
         return False
-    return not should_use_secure_cookie()
+    env = (os.getenv("ENVIRONMENT") or os.getenv("APP_ENV") or "").strip().lower()
+    return env in {"", "local", "dev", "development", "test", "testing"} and not should_use_secure_cookie()
 
 
 def _normalize_access_level(value: str) -> str:
@@ -113,6 +114,12 @@ def _resolve_audiobook_user(request: Request, db: Session) -> tuple[User, bool]:
     db.commit()
     db.refresh(guest_user)
     return guest_user, True
+
+
+def _auth_mode(user: User, used_guest: bool) -> str:
+    if used_guest or user.role == "guest":
+        return "guest"
+    return "authenticated"
 
 
 def _hash_text(text: str) -> str:
@@ -604,7 +611,7 @@ def _create_or_reuse_audiobook(
 
 @router.post("/create")
 def create_audiobook(payload: AudiobookCreateRequest, request: Request, db: Session = Depends(get_db)):
-    user, _ = _resolve_audiobook_user(request, db)
+    user, used_guest = _resolve_audiobook_user(request, db)
     result = _create_or_reuse_audiobook(
         request=request,
         db=db,
@@ -617,7 +624,7 @@ def create_audiobook(payload: AudiobookCreateRequest, request: Request, db: Sess
         generate_audio=payload.generate_audio,
         access_level=payload.access_level,
     )
-    result["auth_mode"] = "guest" if user.role == "guest" else "authenticated"
+    result["auth_mode"] = _auth_mode(user, used_guest)
     return result
 
 
@@ -632,7 +639,7 @@ async def upload_audiobook(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
-    user, _ = _resolve_audiobook_user(request, db)
+    user, used_guest = _resolve_audiobook_user(request, db)
     filename = (file.filename or "").lower()
     if not (filename.endswith(".txt") or filename.endswith(".pdf")):
         raise HTTPException(status_code=415, detail="Supported upload types are .txt and .pdf.")
@@ -661,14 +668,14 @@ async def upload_audiobook(
         generate_audio=generate_audio,
         access_level=access_level,
     )
-    result["auth_mode"] = "guest" if user.role == "guest" else "authenticated"
+    result["auth_mode"] = _auth_mode(user, used_guest)
     return result
 
 
 @router.get("")
 def list_audiobooks(request: Request, response: Response, db: Session = Depends(get_db)):
-    user, _ = _resolve_audiobook_user(request, db)
-    response.headers["x-audiobook-auth-mode"] = "guest" if user.role == "guest" else "authenticated"
+    user, used_guest = _resolve_audiobook_user(request, db)
+    response.headers["x-audiobook-auth-mode"] = _auth_mode(user, used_guest)
     books = db.query(Audiobook).filter(Audiobook.user_id == user.id).order_by(Audiobook.created_at.desc()).all()
     return {"items": [_serialize_audiobook(book) for book in books], "auth_mode": response.headers["x-audiobook-auth-mode"]}
 
@@ -752,7 +759,7 @@ def generate_single_chapter(audiobook_id: int, chapter_index: int, request: Requ
 
 @router.post("/{audiobook_id}/progress")
 def update_progress(audiobook_id: int, payload: ProgressUpdateRequest, request: Request, db: Session = Depends(get_db)):
-    user, _ = _resolve_audiobook_user(request, db)
+    user, used_guest = _resolve_audiobook_user(request, db)
     book = db.query(Audiobook).filter(Audiobook.id == audiobook_id, Audiobook.user_id == user.id).first()
     if not book:
         raise HTTPException(status_code=404, detail="Audiobook not found.")
@@ -768,12 +775,12 @@ def update_progress(audiobook_id: int, payload: ProgressUpdateRequest, request: 
     progress.completed_chapters = sorted(set([idx for idx in payload.completed_chapters if idx >= 1]))
     progress.updated_at = datetime.utcnow()
     db.commit()
-    return {"ok": True}
+    return {"ok": True, "auth_mode": _auth_mode(user, used_guest)}
 
 
 @router.get("/{audiobook_id}/reflections")
 def list_reflections(audiobook_id: int, request: Request, db: Session = Depends(get_db)):
-    user, _ = _resolve_audiobook_user(request, db)
+    user, used_guest = _resolve_audiobook_user(request, db)
     book = db.query(Audiobook).filter(Audiobook.id == audiobook_id, Audiobook.user_id == user.id).first()
     if not book:
         raise HTTPException(status_code=404, detail="Audiobook not found.")
@@ -794,13 +801,14 @@ def list_reflections(audiobook_id: int, request: Request, db: Session = Depends(
                 "updated_at": item.updated_at.isoformat() if item.updated_at else None,
             }
             for item in reflections
-        ]
+        ],
+        "auth_mode": _auth_mode(user, used_guest),
     }
 
 
 @router.put("/{audiobook_id}/chapters/{chapter_index}/reflection")
 def save_reflection(audiobook_id: int, chapter_index: int, payload: ReflectionRequest, request: Request, db: Session = Depends(get_db)):
-    user, _ = _resolve_audiobook_user(request, db)
+    user, used_guest = _resolve_audiobook_user(request, db)
     book = db.query(Audiobook).filter(Audiobook.id == audiobook_id, Audiobook.user_id == user.id).first()
     if not book:
         raise HTTPException(status_code=404, detail="Audiobook not found.")
@@ -840,12 +848,12 @@ def save_reflection(audiobook_id: int, chapter_index: int, payload: ReflectionRe
         record.updated_at = datetime.utcnow()
 
     db.commit()
-    return {"ok": True, "chapter_index": chapter_index, "prompt": prompt}
+    return {"ok": True, "chapter_index": chapter_index, "prompt": prompt, "auth_mode": _auth_mode(user, used_guest)}
 
 
 @router.post("/{audiobook_id}/reflections/summary")
 def summarize_reflections(audiobook_id: int, payload: ReflectionSummaryRequest, request: Request, db: Session = Depends(get_db)):
-    user, _ = _resolve_audiobook_user(request, db)
+    user, used_guest = _resolve_audiobook_user(request, db)
     book = db.query(Audiobook).filter(Audiobook.id == audiobook_id, Audiobook.user_id == user.id).first()
     if not book:
         raise HTTPException(status_code=404, detail="Audiobook not found.")
@@ -857,4 +865,4 @@ def summarize_reflections(audiobook_id: int, payload: ReflectionSummaryRequest, 
         .all()
     )
     summary = _build_reflection_summary(reflections=reflections, include_skipped=payload.include_skipped)
-    return {"summary": summary, "count": len(reflections)}
+    return {"summary": summary, "count": len(reflections), "auth_mode": _auth_mode(user, used_guest)}

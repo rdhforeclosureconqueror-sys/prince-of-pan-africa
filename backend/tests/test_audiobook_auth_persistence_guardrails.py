@@ -61,6 +61,15 @@ class AudiobookAuthPersistenceGuardrails(unittest.TestCase):
         finally:
             os.environ['ENVIRONMENT'] = 'test'
 
+    def test_unauthenticated_production_reflection_summary_returns_401(self):
+        os.environ['ENVIRONMENT'] = 'production'
+        os.environ['ALLOW_GUEST_AUDIOBOOKS'] = 'false'
+        try:
+            res = TestClient(self.client.app).post('/audiobooks/1/reflections/summary', json={'include_skipped': False})
+            self.assertEqual(res.status_code, 401)
+        finally:
+            os.environ['ENVIRONMENT'] = 'test'
+
     def test_authenticated_user_sees_only_own_books(self):
         c1 = self._login_cookie('owner1@example.com')
         user1_client = TestClient(self.client.app)

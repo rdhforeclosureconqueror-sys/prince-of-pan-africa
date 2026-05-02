@@ -165,8 +165,11 @@ def health():
     try:
         from verification.verification_engine import check_database
 
-        db_ok = bool(check_database().get("connected"))
+        db_check = check_database()
+        db_ok = bool(db_check.get("connected"))
         details["database"] = "ok" if db_ok else "failed"
+        details["database_mode"] = db_check.get("persistence_mode", details["database_mode"])
+        details["database_unsafe_fallback"] = bool(db_check.get("unsafe_fallback", False))
         if not db_ok:
             status_label = "degraded"
     except Exception:
