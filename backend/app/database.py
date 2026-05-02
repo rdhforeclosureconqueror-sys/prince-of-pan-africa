@@ -5,6 +5,13 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 DEFAULT_SQLITE_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "mufasa.db"))
+
+
+def is_production_like_environment() -> bool:
+    env = (os.getenv("ENVIRONMENT") or os.getenv("APP_ENV") or "").strip().lower()
+    return env not in {"", "local", "dev", "development", "test", "testing"}
+
+
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DEFAULT_SQLITE_PATH}")
 
 
@@ -101,6 +108,17 @@ def get_database_type() -> str:
     if SQLALCHEMY_DATABASE_URL.startswith("sqlite"):
         return "sqlite"
     return "unknown"
+
+
+def is_unsafe_sqlite_fallback() -> bool:
+    return IS_SQLITE and not os.getenv("DATABASE_URL")
+
+
+def enforce_database_url_for_production() -> None:
+    if not is_production_like_environment():
+        return
+    if not os.getenv("DATABASE_URL"):
+        raise RuntimeError("DATABASE_URL is required in production-like environments.")
 
 
 # =========================
