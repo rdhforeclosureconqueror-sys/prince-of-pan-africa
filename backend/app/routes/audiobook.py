@@ -1,19 +1,20 @@
 import hashlib
 import io
 import logging
+import os
 import re
 import threading
 import time
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Response, UploadFile
 from pypdf import PdfReader
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal, get_db
 from app.models import AudioAsset, Audiobook, AudiobookChapter, AudiobookChapterReflection, AudiobookProgress, User
-from app.session import SESSION_COOKIE, parse_session_cookie_value
+from app.session import SESSION_COOKIE, parse_session_cookie_value, should_use_secure_cookie
 from app.routes.chat import generate_tts_audio_url, normalize_tts_text
 
 router = APIRouter(prefix="/audiobooks", tags=["Audiobooks"])
@@ -62,6 +63,15 @@ class ReflectionSummaryRequest(BaseModel):
 GUEST_EMAIL = "pilot.audiobook.guest@local"
 
 
+def _allow_guest_audiobooks() -> bool:
+    explicit = (os.getenv("ALLOW_GUEST_AUDIOBOOKS", "") or "").strip().lower()
+    if explicit in {"1", "true", "yes", "on"}:
+        return True
+    if explicit in {"0", "false", "no", "off"}:
+        return False
+    return not should_use_secure_cookie()
+
+
 def _normalize_access_level(value: str) -> str:
     normalized = (value or "free").strip().lower()
     if normalized not in ALLOWED_ACCESS_LEVELS:
@@ -90,6 +100,9 @@ def _resolve_audiobook_user(request: Request, db: Session) -> tuple[User, bool]:
     user = _resolve_session_user(request, db)
     if user:
         return user, False
+
+    if not _allow_guest_audiobooks():
+        raise HTTPException(status_code=401, detail="Authentication required")
 
     guest_user = db.query(User).filter(User.email == GUEST_EMAIL).first()
     if guest_user:
@@ -592,7 +605,7 @@ def _create_or_reuse_audiobook(
 @router.post("/create")
 def create_audiobook(payload: AudiobookCreateRequest, request: Request, db: Session = Depends(get_db)):
     user, _ = _resolve_audiobook_user(request, db)
-    return _create_or_reuse_audiobook(
+    result = _create_or_reuse_audiobook(
         request=request,
         db=db,
         user=user,
@@ -604,6 +617,8 @@ def create_audiobook(payload: AudiobookCreateRequest, request: Request, db: Sess
         generate_audio=payload.generate_audio,
         access_level=payload.access_level,
     )
+    result["auth_mode"] = "guest" if user.role == "guest" else "authenticated"
+    return result
 
 
 @router.post("/upload")
@@ -634,7 +649,7 @@ async def upload_audiobook(
     else:
         text = _extract_text_from_pdf(payload)
 
-    return _create_or_reuse_audiobook(
+    result = _create_or_reuse_audiobook(
         request=request,
         db=db,
         user=user,
@@ -646,13 +661,16 @@ async def upload_audiobook(
         generate_audio=generate_audio,
         access_level=access_level,
     )
+    result["auth_mode"] = "guest" if user.role == "guest" else "authenticated"
+    return result
 
 
 @router.get("")
-def list_audiobooks(request: Request, db: Session = Depends(get_db)):
+def list_audiobooks(request: Request, response: Response, db: Session = Depends(get_db)):
     user, _ = _resolve_audiobook_user(request, db)
+    response.headers["x-audiobook-auth-mode"] = "guest" if user.role == "guest" else "authenticated"
     books = db.query(Audiobook).filter(Audiobook.user_id == user.id).order_by(Audiobook.created_at.desc()).all()
-    return {"items": [_serialize_audiobook(book) for book in books]}
+    return {"items": [_serialize_audiobook(book) for book in books], "auth_mode": response.headers["x-audiobook-auth-mode"]}
 
 
 @router.get("/{audiobook_id}")

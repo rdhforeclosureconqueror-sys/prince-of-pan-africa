@@ -6,7 +6,14 @@ from fastapi import Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from app.database import SessionLocal, init_db
+from app.database import (
+    SessionLocal,
+    enforce_database_url_for_production,
+    get_database_type,
+    init_db,
+    is_production_like_environment,
+    is_unsafe_sqlite_fallback,
+)
 from app.routes import admin, assessment, audiobook, auth, chat, member, portal, system, tts, voice
 from app.services.admin_seed import seed_admin
 from app.authz import seed_rbac_defaults
@@ -154,7 +161,7 @@ def root():
 @app.get("/health")
 def health():
     status_label = "ok"
-    details = {"database": "unknown", "session": "unknown"}
+    details = {"database": "unknown", "session": "unknown", "database_mode": get_database_type()}
     try:
         from verification.verification_engine import check_database
 
@@ -171,6 +178,11 @@ def health():
         details["session"] = "ok"
     except SessionValidationError:
         details["session"] = "failed"
+        status_label = "failed"
+
+    if is_production_like_environment() and is_unsafe_sqlite_fallback():
+        details["database"] = "failed"
+        details["database_mode"] = "sqlite_fallback_unsafe"
         status_label = "failed"
 
     return {
@@ -192,6 +204,7 @@ def info():
 
 @app.on_event("startup")
 async def startup_event():
+    enforce_database_url_for_production()
     get_session_secret()
     init_db()
     result = seed_admin()
