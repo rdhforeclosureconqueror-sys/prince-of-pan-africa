@@ -4,7 +4,13 @@ from typing import Any
 
 from sqlalchemy import inspect, text
 
-from app.database import SessionLocal, engine, get_database_type
+from app.database import (
+    SessionLocal,
+    engine,
+    get_database_type,
+    is_production_like_environment,
+    is_unsafe_sqlite_fallback,
+)
 from app.models import Permission, Role, User
 from app.services.admin_seed import ADMIN_EMAIL
 from app.session import SessionValidationError, get_session_secret
@@ -31,6 +37,8 @@ def check_database() -> dict[str, Any]:
         "connected": False,
         "tables": {},
         "seed_admin_exists": False,
+        "persistence_mode": "postgres" if db_type == "postgresql" else db_type,
+        "unsafe_fallback": is_unsafe_sqlite_fallback(),
     }
 
     try:
@@ -48,6 +56,9 @@ def check_database() -> dict[str, Any]:
             )
 
         result["ok"] = result["connected"] and all(result["tables"].values())
+        if is_production_like_environment() and result["unsafe_fallback"]:
+            result["ok"] = False
+            result["error"] = "Unsafe SQLite fallback detected for production-like environment."
         return result
     except Exception as exc:
         result["error"] = str(exc)
