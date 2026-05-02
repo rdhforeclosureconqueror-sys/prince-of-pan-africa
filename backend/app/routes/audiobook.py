@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.database import SessionLocal, get_db
 from app.models import AudioAsset, Audiobook, AudiobookChapter, AudiobookChapterReflection, AudiobookProgress, User
-from app.routes.auth import SESSION_COOKIE
+from app.session import SESSION_COOKIE, parse_session_cookie_value
 from app.routes.chat import generate_tts_audio_url, normalize_tts_text
 
 router = APIRouter(prefix="/audiobooks", tags=["Audiobooks"])
@@ -70,17 +70,20 @@ def _normalize_access_level(value: str) -> str:
 
 
 def _resolve_session_user(request: Request, db: Session) -> User | None:
-    raw_user_id = request.cookies.get(SESSION_COOKIE)
-    if not raw_user_id:
+    raw_session = request.cookies.get(SESSION_COOKIE)
+    if not raw_session:
         return None
 
     try:
-        user_id = int(raw_user_id)
-    except ValueError:
+        session = parse_session_cookie_value(raw_session)
+    except Exception:
         return None
 
-    user = db.query(User).filter(User.id == user_id).first()
-    return user
+    user_id = session.get("user_id")
+    if not user_id:
+        return None
+
+    return db.query(User).filter(User.id == int(user_id)).first()
 
 
 def _resolve_audiobook_user(request: Request, db: Session) -> tuple[User, bool]:
