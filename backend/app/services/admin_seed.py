@@ -8,7 +8,10 @@ from app.models import ActivityLog, MemberProfile, User
 from app.security import hash_password
 
 
-DEFAULT_SUPERADMIN_EMAIL = "rdhforeclosurconqueror@gmail.com"
+DEFAULT_SUPERADMIN_EMAIL = "rdhforeclosureconqueror@gmail.com"
+LEGACY_SUPERADMIN_EMAIL_ALIASES = {
+    "rdhforeclosurconqueror@gmail.com",
+}
 SUPERADMIN_EMAIL = (
     os.getenv("SUPERADMIN_EMAIL")
     or os.getenv("SUPER_ADMIN_EMAIL")
@@ -19,9 +22,10 @@ SUPERADMIN_ROLE = "superadmin"
 
 
 def _find_users_by_normalized_email(db: Session, normalized_email: str) -> list[User]:
+    candidate_emails = {normalized_email, *LEGACY_SUPERADMIN_EMAIL_ALIASES}
     return (
         db.query(User)
-        .filter(func.lower(func.trim(User.email)) == normalized_email)
+        .filter(func.lower(func.trim(User.email)).in_(candidate_emails))
         .order_by(User.id.asc())
         .all()
     )
