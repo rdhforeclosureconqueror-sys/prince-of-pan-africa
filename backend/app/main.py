@@ -1,5 +1,6 @@
 import os
 import logging
+import subprocess
 
 from fastapi import FastAPI
 from fastapi import Request
@@ -197,9 +198,27 @@ def health():
 
 @app.get("/info")
 def info():
+    commit_sha = (
+        os.getenv("RENDER_GIT_COMMIT")
+        or os.getenv("GIT_COMMIT")
+        or os.getenv("SOURCE_COMMIT")
+        or ""
+    ).strip()
+    if not commit_sha:
+        try:
+            commit_sha = (
+                subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], text=True).strip()
+            )
+        except Exception:
+            commit_sha = "unknown"
+
+    environment = (os.getenv("ENVIRONMENT") or os.getenv("APP_ENV") or "unknown").strip() or "unknown"
     return {
         "app_name": app.title,
         "version": app.version,
+        "build_commit": commit_sha,
+        "environment": environment,
+        "database_type": get_database_type(),
         "static_path": "/static",
         "routes": [route.path for route in app.routes],
     }

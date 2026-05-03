@@ -16,7 +16,7 @@ import PilotDeferredPage from "./pages/PilotDeferredPage";
 import StudyPage from "./pages/StudyPage";
 import BrainTraining from "./pages/BrainTraining";
 import { getBackgroundForPath } from "./utils/backgroundSystem";
-import { API_BASE_URL } from "./config";
+import { API_BASE_URL, API_DEBUG } from "./config";
 import "./styles/backgroundSystem.css";
 
 const API = API_BASE_URL;
@@ -91,6 +91,9 @@ export default function App() {
 
   const refreshAuth = useCallback(async () => {
     try {
+      if (API_DEBUG) {
+        console.info("[runtime] auth/me request URL", `${API}/auth/me`);
+      }
       const res = await fetch(`${API}/auth/me`, {
         method: "GET",
         credentials: "include",
