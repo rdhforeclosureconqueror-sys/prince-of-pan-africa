@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import VoiceControls from "../components/VoiceControls";
 import { sendChatMessage, sendVoiceMessage } from "../api/mufasaClient";
-import { API_BASE_URL } from "../config";
+import { API_BASE_URL, API_DEBUG } from "../config";
 import "../styles/home.css";
 
 const API_BASE = API_BASE_URL;
@@ -91,6 +91,9 @@ export default function Home({ user, isAdmin, onAuthChange }) {
     const endpoint = authMode === "join" ? "/auth/join" : "/auth/login";
 
     try {
+      if (API_DEBUG) {
+        console.info("[runtime] auth request URL", `${API_BASE}${endpoint}`);
+      }
       const res = await fetch(`${API_BASE}${endpoint}`, {
         method: "POST",
         credentials: "include",

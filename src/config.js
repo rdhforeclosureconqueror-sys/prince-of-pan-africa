@@ -11,12 +11,20 @@ const hostname = window?.location?.hostname || "production";
 // -----------------------------
 // 🔗 PRIMARY BACKEND (Simba Waa Ujamaa API)
 // -----------------------------
-const PROD_API = "https://api.simbawaujamaa.com";
+const PROD_API = "https://prince-of-pan-africa-backend.onrender.com";
 const DEV_API = "http://localhost:3000";
 
 export const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ||
   (hostname === "localhost" ? DEV_API : PROD_API);
+
+const runtimeSearchParams = new URLSearchParams(window?.location?.search || "");
+export const API_DEBUG =
+  runtimeSearchParams.get("apiDebug") === "1" || window?.localStorage?.getItem("apiDebug") === "1";
+
+if (API_DEBUG) {
+  console.info("[runtime] resolved API_BASE_URL", API_BASE_URL);
+}
 
 // Legacy alias (for backward compatibility)
 export const API_BASE = API_BASE_URL;
