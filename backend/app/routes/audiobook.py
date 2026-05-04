@@ -13,7 +13,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal, get_db
-from app.models import AudioAsset, Audiobook, AudiobookChapter, AudiobookChapterReflection, AudiobookProgress, User
+from app.models import AudioAsset, Audiobook, AudiobookChapter, AudiobookChapterReflection, AudiobookProgress, BookOrganizerBlock, BookOrganizerDocument, User, compute_text_checksum
+from app.config import settings
 from app.session import SESSION_COOKIE, parse_session_cookie_value, should_use_secure_cookie
 from app.routes.chat import generate_tts_audio_url, normalize_tts_text
 
@@ -59,8 +60,13 @@ class ReflectionRequest(BaseModel):
 class ReflectionSummaryRequest(BaseModel):
     include_skipped: bool = False
 
+class OrganizerTextIngestRequest(BaseModel):
+    title: str = Field(default="Untitled", min_length=1, max_length=255)
+    text: str = Field(min_length=1, max_length=1_200_000)
+
 
 GUEST_EMAIL = "pilot.audiobook.guest@local"
+MAX_ORGANIZER_TEXT_CHARS = 1_200_000
 
 
 def _allow_guest_audiobooks() -> bool:
@@ -124,6 +130,12 @@ def _auth_mode(user: User, used_guest: bool) -> str:
 
 def _hash_text(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _split_paragraphs_preserving_text(text: str) -> list[str]:
+    normalized = (text or "").replace("\r\n", "\n")
+    paragraphs = [p for p in re.split(r"\n\s*\n", normalized) if p.strip()]
+    return paragraphs
 
 
 def _chunk_text_block(block_text: str) -> list[str]:
@@ -670,6 +682,63 @@ async def upload_audiobook(
     )
     result["auth_mode"] = _auth_mode(user, used_guest)
     return result
+
+
+@router.post("/organizer/ingest-text")
+def ingest_text_for_organizer(payload: OrganizerTextIngestRequest, request: Request, db: Session = Depends(get_db)):
+    if not settings.ENABLE_TEXT_BOOK_ORGANIZER:
+        raise HTTPException(status_code=404, detail="Not found.")
+
+    user = _resolve_session_user(request, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    raw_text = payload.text or ""
+    if not raw_text.strip():
+        raise HTTPException(status_code=422, detail="Text cannot be empty.")
+    if len(raw_text) > MAX_ORGANIZER_TEXT_CHARS:
+        raise HTTPException(status_code=413, detail=f"Text exceeds limit ({MAX_ORGANIZER_TEXT_CHARS} characters).")
+
+    paragraphs = _split_paragraphs_preserving_text(raw_text)
+    if not paragraphs:
+        raise HTTPException(status_code=422, detail="Text must include at least one paragraph.")
+
+    source_hash = compute_text_checksum(raw_text)
+    document = BookOrganizerDocument(
+        user_id=user.id,
+        title=payload.title.strip() or "Untitled",
+        source_text_hash=source_hash,
+    )
+    db.add(document)
+    db.flush()
+
+    created_blocks: list[BookOrganizerBlock] = []
+    for index, paragraph_text in enumerate(paragraphs, start=1):
+        block = BookOrganizerBlock(
+            document_id=document.id,
+            block_index=index,
+            block_id=f"p{index:05d}",
+            text=paragraph_text,
+            checksum=compute_text_checksum(paragraph_text),
+        )
+        db.add(block)
+        created_blocks.append(block)
+
+    db.commit()
+    db.refresh(document)
+    return {
+        "document": {
+            "id": document.id,
+            "title": document.title,
+            "user_id": document.user_id,
+            "source_text_hash": document.source_text_hash,
+            "created_at": document.created_at.isoformat(),
+        },
+        "blocks": [
+            {"block_id": block.block_id, "block_index": block.block_index, "checksum": block.checksum}
+            for block in created_blocks
+        ],
+    }
 
 
 @router.get("")
