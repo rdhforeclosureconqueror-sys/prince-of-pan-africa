@@ -70,6 +70,11 @@ class OrganizerPlanProposalRequest(BaseModel):
     unused_block_ids: list[str] = Field(default_factory=list)
 
 
+class OrganizerPreviewRequest(BaseModel):
+    document_id: int = Field(ge=1)
+    plan_id: int = Field(ge=1)
+
+
 GUEST_EMAIL = "pilot.audiobook.guest@local"
 MAX_ORGANIZER_TEXT_CHARS = 1_200_000
 ORGANIZER_PLAN_CHAPTER_BLOCKS = 5
@@ -818,6 +823,64 @@ def propose_organization_plan(payload: OrganizerPlanProposalRequest, request: Re
     db.refresh(plan)
 
     return {"plan_id": plan.id, "document_id": document.id, "structure": structure}
+
+
+@router.post("/organizer/preview")
+def preview_organization(payload: OrganizerPreviewRequest, request: Request, db: Session = Depends(get_db)):
+    if not settings.ENABLE_TEXT_BOOK_ORGANIZER:
+        raise HTTPException(status_code=404, detail="Not found.")
+
+    user = _resolve_session_user(request, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    document = (
+        db.query(BookOrganizerDocument)
+        .filter(BookOrganizerDocument.id == payload.document_id, BookOrganizerDocument.user_id == user.id)
+        .first()
+    )
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found.")
+
+    plan = (
+        db.query(BookOrganizationPlan)
+        .filter(BookOrganizationPlan.id == payload.plan_id, BookOrganizationPlan.document_id == document.id)
+        .first()
+    )
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan not found.")
+
+    blocks = (
+        db.query(BookOrganizerBlock)
+        .filter(BookOrganizerBlock.document_id == document.id)
+        .order_by(BookOrganizerBlock.block_index.asc())
+        .all()
+    )
+    block_map = {block.block_id: block for block in blocks}
+
+    chapters = []
+    for chapter in plan.structure.get("chapters", []):
+        paragraphs = []
+        missing_block_ids: list[str] = []
+        for block_id in chapter.get("block_ids", []):
+            block = block_map.get(block_id)
+            if block:
+                paragraphs.append({"block_id": block.block_id, "block_index": block.block_index, "text": block.text})
+            else:
+                missing_block_ids.append(block_id)
+
+        if missing_block_ids:
+            raise HTTPException(status_code=422, detail={"invalid_block_ids": missing_block_ids})
+
+        chapters.append(
+            {
+                "chapter_index": chapter.get("chapter_index"),
+                "chapter_title": chapter.get("chapter_title"),
+                "paragraphs": paragraphs,
+            }
+        )
+
+    return {"document_id": document.id, "plan_id": plan.id, "chapters": chapters}
 
 
 @router.get("")

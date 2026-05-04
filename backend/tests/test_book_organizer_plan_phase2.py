@@ -118,6 +118,44 @@ class BookOrganizerPlanPhase2Tests(unittest.TestCase):
         )
         self.assertEqual(res.status_code, 422)
 
+    def test_preview_returns_original_paragraph_text_grouped_by_chapter(self):
+        client = self._authed_client()
+        document_id = self._create_document(client, text='Para A\n\nPara B\n\nPara C')
+
+        plan = client.post('/audiobooks/organizer/propose-plan', json={'document_id': document_id}).json()
+        preview = client.post('/audiobooks/organizer/preview', json={'document_id': document_id, 'plan_id': plan['plan_id']})
+        self.assertEqual(preview.status_code, 200)
+
+        payload = preview.json()
+        self.assertEqual(payload['document_id'], document_id)
+        chapter_paragraphs = [p['text'] for ch in payload['chapters'] for p in ch['paragraphs']]
+        self.assertEqual(chapter_paragraphs, ['Para A', 'Para B', 'Para C'])
+
+    def test_preview_rejects_missing_plan_block_ids_with_422(self):
+        from app.models import BookOrganizationPlan
+
+        client = self._authed_client()
+        document_id = self._create_document(client, text='Para A\n\nPara B')
+        plan_res = client.post('/audiobooks/organizer/propose-plan', json={'document_id': document_id})
+        self.assertEqual(plan_res.status_code, 200)
+        plan_id = plan_res.json()['plan_id']
+
+        with self.SessionLocal() as db:
+            plan = db.query(BookOrganizationPlan).filter(BookOrganizationPlan.id == plan_id).first()
+            structure = dict(plan.structure)
+            chapters = [dict(ch) for ch in structure['chapters']]
+            first = dict(chapters[0])
+            first['block_ids'] = [*first['block_ids'], 'p99999']
+            chapters[0] = first
+            structure['chapters'] = chapters
+            plan.structure = structure
+            db.add(plan)
+            db.commit()
+
+        preview = client.post('/audiobooks/organizer/preview', json={'document_id': document_id, 'plan_id': plan_id})
+        self.assertEqual(preview.status_code, 422)
+        self.assertEqual(preview.json()['detail']['invalid_block_ids'], ['p99999'])
+
 
 if __name__ == '__main__':
     unittest.main()

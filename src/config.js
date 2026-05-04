@@ -77,6 +77,10 @@ export const ENV = {
   isProd: !isDev,
 };
 
+export const ENABLE_TEXT_BOOK_ORGANIZER = ["1", "true", "yes", "on"].includes(
+  String(import.meta.env.VITE_ENABLE_TEXT_BOOK_ORGANIZER || "").trim().toLowerCase(),
+);
+
 // -----------------------------
 // ✅ LOG CONFIG SUMMARY (Dev only)
 // -----------------------------
