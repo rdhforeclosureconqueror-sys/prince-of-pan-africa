@@ -74,6 +74,14 @@ class OrganizerPreviewRequest(BaseModel):
     document_id: int = Field(ge=1)
     plan_id: int = Field(ge=1)
 
+class OrganizerStructureEditRequest(BaseModel):
+    document_id: int = Field(ge=1)
+    plan_id: int = Field(ge=1)
+    plan_name: str = Field(default="Edited plan", min_length=1, max_length=255)
+    chapter_title_overrides: dict[int, str] = Field(default_factory=dict)
+    merge_chapter_indexes: list[int] = Field(default_factory=list)
+    split_operations: list[dict] = Field(default_factory=list)
+
 
 GUEST_EMAIL = "pilot.audiobook.guest@local"
 MAX_ORGANIZER_TEXT_CHARS = 1_200_000
@@ -825,6 +833,117 @@ def propose_organization_plan(payload: OrganizerPlanProposalRequest, request: Re
     return {"plan_id": plan.id, "document_id": document.id, "structure": structure}
 
 
+def _validate_plan_block_ids(chapters: list[dict], block_map: dict[str, BookOrganizerBlock]):
+    missing_block_ids: list[str] = []
+    for chapter in chapters:
+        for block_id in chapter.get("block_ids", []):
+            if block_id not in block_map:
+                missing_block_ids.append(block_id)
+    if missing_block_ids:
+        raise HTTPException(status_code=422, detail={"invalid_block_ids": list(dict.fromkeys(missing_block_ids))})
+
+
+@router.post("/organizer/review-structure")
+def review_structure_for_organizer(payload: OrganizerStructureEditRequest, request: Request, db: Session = Depends(get_db)):
+    if not settings.ENABLE_TEXT_BOOK_ORGANIZER:
+        raise HTTPException(status_code=404, detail="Not found.")
+
+    user = _resolve_session_user(request, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    document = (
+        db.query(BookOrganizerDocument)
+        .filter(BookOrganizerDocument.id == payload.document_id, BookOrganizerDocument.user_id == user.id)
+        .first()
+    )
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found.")
+
+    plan = (
+        db.query(BookOrganizationPlan)
+        .filter(BookOrganizationPlan.id == payload.plan_id, BookOrganizationPlan.document_id == document.id)
+        .first()
+    )
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan not found.")
+
+    blocks = (
+        db.query(BookOrganizerBlock)
+        .filter(BookOrganizerBlock.document_id == document.id)
+        .order_by(BookOrganizerBlock.block_index.asc())
+        .all()
+    )
+    block_map = {block.block_id: block for block in blocks}
+
+    chapters = [
+        {
+            "chapter_index": int(chapter.get("chapter_index", index + 1)),
+            "chapter_title": chapter.get("chapter_title") or f"Chapter {index + 1}",
+            "block_ids": list(chapter.get("block_ids", [])),
+        }
+        for index, chapter in enumerate(plan.structure.get("chapters", []))
+    ]
+    _validate_plan_block_ids(chapters, block_map)
+
+    merge_targets = sorted(set(payload.merge_chapter_indexes))
+    if any(index < 1 for index in merge_targets):
+        raise HTTPException(status_code=422, detail="merge_chapter_indexes must be >= 1")
+    for merge_index in reversed(merge_targets):
+        if merge_index >= len(chapters):
+            raise HTTPException(status_code=422, detail=f"Cannot merge chapter {merge_index} with next chapter.")
+        chapters[merge_index - 1]["block_ids"].extend(chapters[merge_index]["block_ids"])
+        del chapters[merge_index]
+
+    for split in payload.split_operations:
+        chapter_index = int(split.get("chapter_index", 0))
+        boundary_block_id = (split.get("boundary_block_id") or "").strip()
+        if chapter_index < 1 or chapter_index > len(chapters):
+            raise HTTPException(status_code=422, detail="Invalid chapter_index for split.")
+        if not boundary_block_id:
+            raise HTTPException(status_code=422, detail="boundary_block_id is required for split.")
+
+        target = chapters[chapter_index - 1]
+        block_ids = target["block_ids"]
+        if boundary_block_id not in block_ids:
+            raise HTTPException(status_code=422, detail={"invalid_block_ids": [boundary_block_id]})
+        split_at = block_ids.index(boundary_block_id)
+        if split_at <= 0:
+            raise HTTPException(status_code=422, detail="Split boundary must not be the first block in chapter.")
+
+        target["block_ids"] = block_ids[:split_at]
+        chapters.insert(
+            chapter_index,
+            {
+                "chapter_index": chapter_index + 1,
+                "chapter_title": f"{target['chapter_title']} (Part 2)",
+                "block_ids": block_ids[split_at:],
+            },
+        )
+
+    for index, chapter in enumerate(chapters, start=1):
+        chapter["chapter_index"] = index
+        if index in payload.chapter_title_overrides:
+            chapter["chapter_title"] = (payload.chapter_title_overrides[index] or "").strip() or chapter["chapter_title"]
+
+    _validate_plan_block_ids(chapters, block_map)
+
+    structure = {
+        "title_candidate": plan.structure.get("title_candidate") or document.title or "Untitled",
+        "chapters": chapters,
+        "warnings": plan.structure.get("warnings", []),
+    }
+    new_plan = BookOrganizationPlan(
+        document_id=document.id,
+        name=payload.plan_name.strip() or "Edited plan",
+        structure=structure,
+    )
+    db.add(new_plan)
+    db.commit()
+    db.refresh(new_plan)
+    return {"plan_id": new_plan.id, "document_id": document.id, "structure": structure}
+
+
 @router.post("/organizer/preview")
 def preview_organization(payload: OrganizerPreviewRequest, request: Request, db: Session = Depends(get_db)):
     if not settings.ENABLE_TEXT_BOOK_ORGANIZER:
@@ -858,19 +977,13 @@ def preview_organization(payload: OrganizerPreviewRequest, request: Request, db:
     )
     block_map = {block.block_id: block for block in blocks}
 
+    _validate_plan_block_ids(plan.structure.get("chapters", []), block_map)
     chapters = []
     for chapter in plan.structure.get("chapters", []):
         paragraphs = []
-        missing_block_ids: list[str] = []
         for block_id in chapter.get("block_ids", []):
             block = block_map.get(block_id)
-            if block:
-                paragraphs.append({"block_id": block.block_id, "block_index": block.block_index, "text": block.text})
-            else:
-                missing_block_ids.append(block_id)
-
-        if missing_block_ids:
-            raise HTTPException(status_code=422, detail={"invalid_block_ids": missing_block_ids})
+            paragraphs.append({"block_id": block.block_id, "block_index": block.block_index, "text": block.text})
 
         chapters.append(
             {
