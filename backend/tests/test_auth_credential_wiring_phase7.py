@@ -6,6 +6,8 @@ from fastapi.testclient import TestClient
 
 from app.session import build_session_cookie_value
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
 
 class AuthCredentialWiringPhase7Tests(unittest.TestCase):
     @classmethod
@@ -93,14 +95,14 @@ class AuthCredentialWiringPhase7Tests(unittest.TestCase):
 
 class FrontendCredentialWiringStaticTests(unittest.TestCase):
     def test_assessment_service_fetches_include_credentials(self):
-        src = Path('src/services/leadershipService.js').read_text()
+        src = (REPO_ROOT / 'src/services/leadershipService.js').read_text()
         self.assertIn('assessment/submit', src)
         self.assertIn('credentials: "include"', src)
         self.assertIn('assessment/results/${encodeURIComponent(userId)}', src)
         self.assertIn('assessment/dashboard/${encodeURIComponent(userId)}', src)
 
     def test_system_verification_uses_shared_api_client(self):
-        src = Path('src/pages/SystemVerificationPage.jsx').read_text()
+        src = (REPO_ROOT / 'src/pages/SystemVerificationPage.jsx').read_text()
         self.assertIn('import { api } from "../api/api";', src)
         self.assertIn('api("/system/verification/full"', src)
 

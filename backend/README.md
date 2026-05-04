@@ -18,3 +18,4 @@ Coordinates OpenAI GPT and OpenVoice APIs for text, speech, and structured porta
 - `OPENAI_API_KEY`
 - `OPENVOICE_URL` (default: https://ffmpeg-9xhs.onrender.com)
 - `ALLOWED_ORIGINS` (comma-separated list of frontend URLs for CORS)
+- `ENABLE_TEXT_BOOK_ORGANIZER` (`true` to enable `/audiobooks/organizer/*` routes; otherwise organizer endpoints return `404`)
