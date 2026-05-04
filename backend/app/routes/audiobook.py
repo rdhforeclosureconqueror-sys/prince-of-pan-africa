@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal, get_db
-from app.models import AudioAsset, Audiobook, AudiobookChapter, AudiobookChapterReflection, AudiobookProgress, BookOrganizerBlock, BookOrganizerDocument, User, compute_text_checksum
+from app.models import AudioAsset, Audiobook, AudiobookChapter, AudiobookChapterReflection, AudiobookProgress, BookOrganizationPlan, BookOrganizerBlock, BookOrganizerDocument, User, compute_text_checksum
 from app.config import settings
 from app.session import SESSION_COOKIE, parse_session_cookie_value, should_use_secure_cookie
 from app.routes.chat import generate_tts_audio_url, normalize_tts_text
@@ -64,9 +64,15 @@ class OrganizerTextIngestRequest(BaseModel):
     title: str = Field(default="Untitled", min_length=1, max_length=255)
     text: str = Field(min_length=1, max_length=1_200_000)
 
+class OrganizerPlanProposalRequest(BaseModel):
+    document_id: int = Field(ge=1)
+    plan_name: str = Field(default="Default plan", min_length=1, max_length=255)
+    unused_block_ids: list[str] = Field(default_factory=list)
+
 
 GUEST_EMAIL = "pilot.audiobook.guest@local"
 MAX_ORGANIZER_TEXT_CHARS = 1_200_000
+ORGANIZER_PLAN_CHAPTER_BLOCKS = 5
 
 
 def _allow_guest_audiobooks() -> bool:
@@ -739,6 +745,79 @@ def ingest_text_for_organizer(payload: OrganizerTextIngestRequest, request: Requ
             for block in created_blocks
         ],
     }
+
+
+@router.post("/organizer/propose-plan")
+def propose_organization_plan(payload: OrganizerPlanProposalRequest, request: Request, db: Session = Depends(get_db)):
+    if not settings.ENABLE_TEXT_BOOK_ORGANIZER:
+        raise HTTPException(status_code=404, detail="Not found.")
+
+    user = _resolve_session_user(request, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    document = (
+        db.query(BookOrganizerDocument)
+        .filter(BookOrganizerDocument.id == payload.document_id, BookOrganizerDocument.user_id == user.id)
+        .first()
+    )
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found.")
+
+    blocks = (
+        db.query(BookOrganizerBlock)
+        .filter(BookOrganizerBlock.document_id == document.id)
+        .order_by(BookOrganizerBlock.block_index.asc())
+        .all()
+    )
+    if not blocks:
+        raise HTTPException(status_code=422, detail="Document has no blocks.")
+
+    existing_ids = [b.block_id for b in blocks]
+    existing_set = set(existing_ids)
+    requested_unused = list(dict.fromkeys(payload.unused_block_ids or []))
+    invalid_unused = [block_id for block_id in requested_unused if block_id not in existing_set]
+    if invalid_unused:
+        raise HTTPException(status_code=422, detail={"invalid_block_ids": invalid_unused})
+
+    used_ids = [block_id for block_id in existing_ids if block_id not in set(requested_unused)]
+    chapters = []
+    for start in range(0, len(used_ids), ORGANIZER_PLAN_CHAPTER_BLOCKS):
+        chunk = used_ids[start : start + ORGANIZER_PLAN_CHAPTER_BLOCKS]
+        chapters.append(
+            {
+                "chapter_index": len(chapters) + 1,
+                "chapter_title": f"Chapter {len(chapters) + 1}",
+                "block_ids": chunk,
+            }
+        )
+
+    warnings = []
+    if requested_unused:
+        warnings.append(
+            {
+                "code": "unused_blocks",
+                "message": "Some blocks were explicitly marked unused.",
+                "block_ids": requested_unused,
+            }
+        )
+
+    structure = {
+        "title_candidate": document.title.strip() or "Untitled",
+        "chapters": chapters,
+        "warnings": warnings,
+    }
+
+    plan = BookOrganizationPlan(
+        document_id=document.id,
+        name=payload.plan_name.strip() or "Default plan",
+        structure=structure,
+    )
+    db.add(plan)
+    db.commit()
+    db.refresh(plan)
+
+    return {"plan_id": plan.id, "document_id": document.id, "structure": structure}
 
 
 @router.get("")
