@@ -1,7 +1,8 @@
 from datetime import datetime
+import hashlib
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, event, inspect
+from sqlalchemy.orm import Mapped, Session, mapped_column, relationship
 
 from app.database import Base
 
@@ -201,3 +202,73 @@ class AudiobookChapterReflection(Base):
 
     audiobook: Mapped[Audiobook] = relationship(back_populates="reflections")
     user: Mapped[User] = relationship(back_populates="chapter_reflections")
+
+
+class BookOrganizerDocument(Base):
+    __tablename__ = "book_organizer_documents"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    source_text_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    __table_args__ = (UniqueConstraint("user_id", "source_text_hash", name="uq_organizer_user_source_hash"),)
+
+    blocks: Mapped[list["BookOrganizerBlock"]] = relationship(back_populates="document")
+    plans: Mapped[list["BookOrganizationPlan"]] = relationship(back_populates="document")
+
+
+class BookOrganizerBlock(Base):
+    __tablename__ = "book_organizer_blocks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    document_id: Mapped[int] = mapped_column(ForeignKey("book_organizer_documents.id"), nullable=False, index=True)
+    block_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    block_id: Mapped[str] = mapped_column(String(80), nullable=False)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    checksum: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("document_id", "block_index", name="uq_organizer_document_block_index"),
+        UniqueConstraint("document_id", "block_id", name="uq_organizer_document_block_id"),
+    )
+
+    document: Mapped[BookOrganizerDocument] = relationship(back_populates="blocks")
+
+
+class BookOrganizationPlan(Base):
+    __tablename__ = "book_organization_plans"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    document_id: Mapped[int] = mapped_column(ForeignKey("book_organizer_documents.id"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False, default="Default plan")
+    structure: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    document: Mapped[BookOrganizerDocument] = relationship(back_populates="plans")
+
+
+def compute_text_checksum(text: str) -> str:
+    return hashlib.sha256((text or "").encode("utf-8")).hexdigest()
+
+
+@event.listens_for(BookOrganizerBlock, "before_insert")
+def _set_block_checksum_before_insert(mapper, connection, target):
+    target.checksum = compute_text_checksum(target.text)
+
+
+@event.listens_for(Session, "before_flush")
+def _enforce_immutable_book_organizer_blocks(session, flush_context, instances):
+    for obj in session.dirty:
+        if not isinstance(obj, BookOrganizerBlock):
+            continue
+
+        state = inspect(obj)
+        text_history = state.attrs.text.history
+        checksum_history = state.attrs.checksum.history
+
+        if text_history.has_changes() or checksum_history.has_changes():
+            raise ValueError("Book organizer block text and checksum are immutable once created.")

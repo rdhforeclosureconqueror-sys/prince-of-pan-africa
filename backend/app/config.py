@@ -14,6 +14,7 @@ class Settings:
     )
     AIVOICE_API_KEY: str = os.getenv("AIVOICE_API_KEY", "")
     BASE_URL: str = os.getenv("BASE_URL", "https://mufasa-knowledge-bank.onrender.com")
+    ENABLE_TEXT_BOOK_ORGANIZER: bool = os.getenv("ENABLE_TEXT_BOOK_ORGANIZER", "false").strip().lower() in {"1", "true", "yes", "on"}
 
 
 settings = Settings()
