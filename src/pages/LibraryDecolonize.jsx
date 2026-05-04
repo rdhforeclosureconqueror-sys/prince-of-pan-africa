@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api/api";
+import { ENABLE_TEXT_BOOK_ORGANIZER } from "../config";
 import "../styles/library.css";
 
 const PHASES = [
@@ -60,6 +61,11 @@ export default function LibraryDecolonize() {
           <Link to="/portal/decolonize" className="library-pill library-pill--gold">
             Open Decolonization Portal
           </Link>
+          {ENABLE_TEXT_BOOK_ORGANIZER ? (
+            <Link to="/library/organizer" className="library-pill">
+              Open Text Organizer
+            </Link>
+          ) : null}
         </div>
 
         <section className="saved-library-grid">

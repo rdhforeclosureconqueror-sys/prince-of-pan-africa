@@ -7,6 +7,7 @@ import Home from "./pages/Home";
 import LanguagesHub from "./pages/LanguagesHub";
 import LibraryDecolonize from "./pages/LibraryDecolonize";
 import PortalDecolonize from "./pages/PortalDecolonize";
+import LibraryOrganizer from "./pages/LibraryOrganizer";
 import TimelinePage from "./pages/TimelinePage";
 import MemberDashboard from "./pages/MemberDashboard";
 import LeadershipAssessmentPage from "./pages/LeadershipAssessmentPage";
@@ -16,7 +17,7 @@ import PilotDeferredPage from "./pages/PilotDeferredPage";
 import StudyPage from "./pages/StudyPage";
 import BrainTraining from "./pages/BrainTraining";
 import { getBackgroundForPath } from "./utils/backgroundSystem";
-import { API_BASE_URL, API_DEBUG } from "./config";
+import { API_BASE_URL, API_DEBUG, ENABLE_TEXT_BOOK_ORGANIZER } from "./config";
 import "./styles/backgroundSystem.css";
 
 const API = API_BASE_URL;
@@ -59,6 +60,10 @@ function AppRoutes({ user, isAdmin, refreshAuth, dashboardElement }) {
         <Route path="/ops/verification" element={<SystemVerificationPage />} />
         <Route path="/decolonize" element={<Navigate to="/library" replace />} />
         <Route path="/library" element={<LibraryDecolonize />} />
+        <Route
+          path="/library/organizer"
+          element={ENABLE_TEXT_BOOK_ORGANIZER ? <LibraryOrganizer /> : <Navigate to="/library" replace />}
+        />
         <Route path="/portal/decolonize" element={<PortalDecolonize />} />
         <Route path="/holistic" element={<Navigate to="/dashboard" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
