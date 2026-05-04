@@ -70,6 +70,10 @@ class OrganizerPlanProposalRequest(BaseModel):
     unused_block_ids: list[str] = Field(default_factory=list)
 
 
+class OrganizerPreviewRequest(BaseModel):
+    plan_id: int = Field(ge=1)
+
+
 GUEST_EMAIL = "pilot.audiobook.guest@local"
 MAX_ORGANIZER_TEXT_CHARS = 1_200_000
 ORGANIZER_PLAN_CHAPTER_BLOCKS = 5
@@ -818,6 +822,69 @@ def propose_organization_plan(payload: OrganizerPlanProposalRequest, request: Re
     db.refresh(plan)
 
     return {"plan_id": plan.id, "document_id": document.id, "structure": structure}
+
+
+@router.post("/organizer/preview")
+def assemble_organization_preview(payload: OrganizerPreviewRequest, request: Request, db: Session = Depends(get_db)):
+    if not settings.ENABLE_TEXT_BOOK_ORGANIZER:
+        raise HTTPException(status_code=404, detail="Not found.")
+
+    user = _resolve_session_user(request, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    plan = (
+        db.query(BookOrganizationPlan)
+        .join(BookOrganizerDocument, BookOrganizationPlan.document_id == BookOrganizerDocument.id)
+        .filter(BookOrganizationPlan.id == payload.plan_id, BookOrganizerDocument.user_id == user.id)
+        .first()
+    )
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan not found.")
+
+    document = (
+        db.query(BookOrganizerDocument)
+        .filter(BookOrganizerDocument.id == plan.document_id, BookOrganizerDocument.user_id == user.id)
+        .first()
+    )
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found.")
+
+    blocks = db.query(BookOrganizerBlock).filter(BookOrganizerBlock.document_id == document.id).all()
+    by_id = {block.block_id: block for block in blocks}
+
+    structure = plan.structure or {}
+    preview_chapters: list[dict] = []
+
+    for chapter in structure.get("chapters", []):
+        chapter_title = chapter.get("chapter_title") or f"Chapter {chapter.get('chapter_index', 0)}"
+        block_ids = chapter.get("block_ids") or []
+        paragraphs: list[str] = []
+        for block_id in block_ids:
+            block = by_id.get(block_id)
+            if not block:
+                raise HTTPException(status_code=422, detail={"invalid_block_ids": [block_id]})
+
+            expected_checksum = compute_text_checksum(block.text)
+            if block.checksum != expected_checksum:
+                raise HTTPException(status_code=422, detail={"checksum_mismatch_block_ids": [block_id]})
+
+            paragraphs.append(block.text)
+
+        preview_chapters.append(
+            {
+                "chapter_title": chapter_title,
+                "paragraphs": paragraphs,
+            }
+        )
+
+    return {
+        "plan_id": plan.id,
+        "document_id": document.id,
+        "title": structure.get("title_candidate") or document.title,
+        "chapters": preview_chapters,
+        "warnings": structure.get("warnings") or [],
+    }
 
 
 @router.get("")
