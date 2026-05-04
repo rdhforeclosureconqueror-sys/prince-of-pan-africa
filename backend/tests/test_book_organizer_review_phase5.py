@@ -118,6 +118,73 @@ class BookOrganizerReviewPhase5Tests(unittest.TestCase):
         edited = client.post('/audiobooks/organizer/review-structure', json={'document_id': document_id, 'plan_id': plan_id})
         self.assertEqual(edited.status_code, 422)
 
+    def test_export_txt_uses_original_block_text_only(self):
+        client = self._authed_client()
+        ingest = client.post('/audiobooks/organizer/ingest-text', json={'title': 'Source', 'text': 'Para 1\n\nPara 2\n\nPara 3'})
+        document_id = ingest.json()['document']['id']
+        plan_id = client.post('/audiobooks/organizer/propose-plan', json={'document_id': document_id}).json()['plan_id']
+        revised = client.post('/audiobooks/organizer/review-structure', json={
+            'document_id': document_id,
+            'plan_id': plan_id,
+            'chapter_title_overrides': {'1': 'Renamed'},
+        }).json()
+        exported = client.post('/audiobooks/organizer/export-txt', json={'document_id': document_id, 'plan_id': revised['plan_id']})
+        self.assertEqual(exported.status_code, 200)
+        body = exported.text
+        self.assertIn('Renamed', body)
+        self.assertIn('Para 1', body)
+        self.assertIn('Para 2', body)
+        self.assertIn('Para 3', body)
+        self.assertNotIn('p00001', body)
+
+    def test_export_txt_fails_on_checksum_mismatch(self):
+        from app.models import BookOrganizerBlock
+
+        client = self._authed_client()
+        document_id, plan_id = self._doc_and_plan(client)
+        with self.SessionLocal() as db:
+            block = db.query(BookOrganizerBlock).filter(BookOrganizerBlock.document_id == document_id, BookOrganizerBlock.block_id == 'p00001').first()
+            db.execute(
+                BookOrganizerBlock.__table__.update().where(BookOrganizerBlock.id == block.id).values(checksum='bad-checksum')
+            )
+            db.commit()
+        exported = client.post('/audiobooks/organizer/export-txt', json={'document_id': document_id, 'plan_id': plan_id})
+        self.assertEqual(exported.status_code, 422)
+        self.assertEqual(exported.json()['detail']['checksum_mismatch_block_ids'], ['p00001'])
+
+    def test_export_txt_fails_on_invalid_block_ids(self):
+        from app.models import BookOrganizationPlan
+
+        client = self._authed_client()
+        document_id, plan_id = self._doc_and_plan(client)
+        with self.SessionLocal() as db:
+            plan = db.query(BookOrganizationPlan).filter(BookOrganizationPlan.id == plan_id).first()
+            structure = dict(plan.structure)
+            chapters = [dict(ch) for ch in structure['chapters']]
+            chapters[0]['block_ids'] = ['p99999']
+            structure['chapters'] = chapters
+            plan.structure = structure
+            db.commit()
+        exported = client.post('/audiobooks/organizer/export-txt', json={'document_id': document_id, 'plan_id': plan_id})
+        self.assertEqual(exported.status_code, 422)
+        self.assertEqual(exported.json()['detail']['invalid_block_ids'], ['p99999'])
+
+    def test_export_txt_body_matches_preview_body_text(self):
+        client = self._authed_client()
+        ingest = client.post('/audiobooks/organizer/ingest-text', json={'title': 'Source', 'text': 'Para A\n\nPara B\n\nPara C'})
+        document_id = ingest.json()['document']['id']
+        plan_id = client.post('/audiobooks/organizer/propose-plan', json={'document_id': document_id}).json()['plan_id']
+        preview = client.post('/audiobooks/organizer/preview', json={'document_id': document_id, 'plan_id': plan_id}).json()
+        exported = client.post('/audiobooks/organizer/export-txt', json={'document_id': document_id, 'plan_id': plan_id})
+        self.assertEqual(exported.status_code, 200)
+        preview_parts = []
+        for chapter in preview['chapters']:
+            preview_parts.append(chapter['chapter_title'])
+            preview_parts.extend([paragraph['text'] for paragraph in chapter['paragraphs']])
+            preview_parts.append("")
+        preview_text = "\n\n".join(preview_parts).rstrip() + "\n"
+        self.assertEqual(exported.text, preview_text)
+
 
 if __name__ == '__main__':
     unittest.main()

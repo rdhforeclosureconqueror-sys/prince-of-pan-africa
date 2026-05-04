@@ -8,6 +8,7 @@ import time
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Response, UploadFile
+from fastapi.responses import PlainTextResponse
 from pypdf import PdfReader
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -843,6 +844,27 @@ def _validate_plan_block_ids(chapters: list[dict], block_map: dict[str, BookOrga
         raise HTTPException(status_code=422, detail={"invalid_block_ids": list(dict.fromkeys(missing_block_ids))})
 
 
+def _build_organizer_chapters_from_plan(plan: BookOrganizationPlan, block_map: dict[str, BookOrganizerBlock]) -> list[dict]:
+    _validate_plan_block_ids(plan.structure.get("chapters", []), block_map)
+    chapters = []
+    for chapter in plan.structure.get("chapters", []):
+        paragraphs = []
+        for block_id in chapter.get("block_ids", []):
+            block = block_map.get(block_id)
+            if compute_text_checksum(block.text) != block.checksum:
+                raise HTTPException(status_code=422, detail={"checksum_mismatch_block_ids": [block.block_id]})
+            paragraphs.append({"block_id": block.block_id, "block_index": block.block_index, "text": block.text})
+
+        chapters.append(
+            {
+                "chapter_index": chapter.get("chapter_index"),
+                "chapter_title": chapter.get("chapter_title"),
+                "paragraphs": paragraphs,
+            }
+        )
+    return chapters
+
+
 @router.post("/organizer/review-structure")
 def review_structure_for_organizer(payload: OrganizerStructureEditRequest, request: Request, db: Session = Depends(get_db)):
     if not settings.ENABLE_TEXT_BOOK_ORGANIZER:
@@ -977,23 +999,56 @@ def preview_organization(payload: OrganizerPreviewRequest, request: Request, db:
     )
     block_map = {block.block_id: block for block in blocks}
 
-    _validate_plan_block_ids(plan.structure.get("chapters", []), block_map)
-    chapters = []
-    for chapter in plan.structure.get("chapters", []):
-        paragraphs = []
-        for block_id in chapter.get("block_ids", []):
-            block = block_map.get(block_id)
-            paragraphs.append({"block_id": block.block_id, "block_index": block.block_index, "text": block.text})
-
-        chapters.append(
-            {
-                "chapter_index": chapter.get("chapter_index"),
-                "chapter_title": chapter.get("chapter_title"),
-                "paragraphs": paragraphs,
-            }
-        )
+    chapters = _build_organizer_chapters_from_plan(plan, block_map)
 
     return {"document_id": document.id, "plan_id": plan.id, "chapters": chapters}
+
+
+@router.post("/organizer/export-txt")
+def export_organization_txt(payload: OrganizerPreviewRequest, request: Request, db: Session = Depends(get_db)):
+    if not settings.ENABLE_TEXT_BOOK_ORGANIZER:
+        raise HTTPException(status_code=404, detail="Not found.")
+    user = _resolve_session_user(request, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    document = (
+        db.query(BookOrganizerDocument)
+        .filter(BookOrganizerDocument.id == payload.document_id, BookOrganizerDocument.user_id == user.id)
+        .first()
+    )
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found.")
+    plan = (
+        db.query(BookOrganizationPlan)
+        .filter(BookOrganizationPlan.id == payload.plan_id, BookOrganizationPlan.document_id == document.id)
+        .first()
+    )
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan not found.")
+
+    blocks = (
+        db.query(BookOrganizerBlock)
+        .filter(BookOrganizerBlock.document_id == document.id)
+        .order_by(BookOrganizerBlock.block_index.asc())
+        .all()
+    )
+    block_map = {block.block_id: block for block in blocks}
+    chapters = _build_organizer_chapters_from_plan(plan, block_map)
+
+    txt_parts: list[str] = []
+    for chapter in chapters:
+        txt_parts.append((chapter.get("chapter_title") or "Untitled Chapter").strip())
+        for paragraph in chapter.get("paragraphs", []):
+            txt_parts.append(paragraph.get("text", ""))
+        txt_parts.append("")
+
+    txt_body = "\n\n".join(txt_parts).rstrip() + "\n"
+    safe_title = re.sub(r"[^a-zA-Z0-9._-]+", "_", (document.title or "manuscript")).strip("_") or "manuscript"
+    return PlainTextResponse(
+        content=txt_body,
+        headers={"Content-Disposition": f'attachment; filename="{safe_title}.txt"'},
+        media_type="text/plain; charset=utf-8",
+    )
 
 
 @router.get("")

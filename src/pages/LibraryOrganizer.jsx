@@ -12,6 +12,7 @@ export default function LibraryOrganizer() {
   const [planId, setPlanId] = useState(null);
   const [titleEdits, setTitleEdits] = useState({});
   const [splitBoundary, setSplitBoundary] = useState({});
+  const [downloadingTxt, setDownloadingTxt] = useState(false);
 
   async function handleOrganize() {
     setLoading(true);
@@ -59,6 +60,46 @@ export default function LibraryOrganizer() {
     setPreview(nextPreview);
   }
 
+  async function handleDownloadTxt() {
+    if (!documentId || !planId) return;
+    setDownloadingTxt(true);
+    setError("");
+    try {
+      const res = await fetch(`/audiobooks/organizer/export-txt`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ document_id: documentId, plan_id: planId }),
+      });
+      if (!res.ok) {
+        let msg = "TXT export failed.";
+        try {
+          const payload = await res.json();
+          msg = payload?.detail ? JSON.stringify(payload.detail) : msg;
+        } catch (_err) {
+          msg = `TXT export failed (${res.status}).`;
+        }
+        throw new Error(msg);
+      }
+      const blob = await res.blob();
+      const disposition = res.headers.get("content-disposition") || "";
+      const match = disposition.match(/filename=\"?([^\";]+)\"?/i);
+      const filename = match?.[1] || "manuscript.txt";
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err?.message || "TXT export failed.");
+    } finally {
+      setDownloadingTxt(false);
+    }
+  }
+
   return (
     <main className="library-shell">
       <div className="library-inner cosmic-readable-shell">
@@ -80,6 +121,9 @@ export default function LibraryOrganizer() {
         <div className="library-actions">
           <button type="button" className="library-pill library-pill--green" onClick={handleOrganize} disabled={loading}>
             {loading ? "Organizing..." : "Create Structured Preview"}
+          </button>
+          <button type="button" className="library-pill" onClick={handleDownloadTxt} disabled={!preview?.chapters?.length || downloadingTxt}>
+            {downloadingTxt ? "Downloading TXT..." : "Download TXT"}
           </button>
         </div>
 
