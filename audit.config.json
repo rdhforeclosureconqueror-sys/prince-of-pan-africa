@@ -7,8 +7,8 @@
     "GOOGLE_CLIENT_SECRET"
   ],
   "endpoints": [
-    "https://api.simbawaujamaa.com/health",
-    "https://api.simbawaujamaa.com/auth/me",
+    "https://prince-of-pan-africa-backend.onrender.com/health",
+    "https://prince-of-pan-africa-backend.onrender.com/auth/me",
     "https://black-dollar-ledger.onrender.com"
   ],
   "requiredFiles": [

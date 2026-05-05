@@ -59,7 +59,7 @@ export default function GlobalNav({ isAdmin, user }) {
           {user?.email ? (
             <span>Logged in as: {user.email}</span>
           ) : (
-            <Link to="/" onClick={closeMenu} className="global-nav__link">
+            <Link to="/?auth=login" onClick={closeMenu} className="global-nav__link">
               Logged out · Sign in
             </Link>
           )}
