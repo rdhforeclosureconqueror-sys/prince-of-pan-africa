@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import LogoutButton from "../components/LogoutButton";
-import { API_BASE_URL } from "../config";
+import { api } from "../api/api";
 import "../styles/MufasaShell.css";
 
 export default function MufasaShell({ children }) {
@@ -34,8 +34,7 @@ export default function MufasaShell({ children }) {
   useEffect(() => {
     async function fetchUser() {
       try {
-        const res = await fetch(`${API_BASE_URL}/auth/me`, { credentials: "include" });
-        const data = await res.json();
+        const data = await api("/auth/me", { method: "GET" });
         if (data?.user && (data.authenticated || data.auth || data.ok)) setUser(data.user);
       } catch (err) {
         console.error("Error loading user:", err);

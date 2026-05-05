@@ -17,15 +17,15 @@ import PilotDeferredPage from "./pages/PilotDeferredPage";
 import StudyPage from "./pages/StudyPage";
 import BrainTraining from "./pages/BrainTraining";
 import { getBackgroundForPath } from "./utils/backgroundSystem";
-import { API_BASE_URL, API_DEBUG, ENABLE_TEXT_BOOK_ORGANIZER } from "./config";
+import { API_DEBUG, ENABLE_TEXT_BOOK_ORGANIZER } from "./config";
+import { api } from "./api/api";
 import "./styles/backgroundSystem.css";
 
-const API = API_BASE_URL;
 
 function AppRoutes({ user, isAdmin, refreshAuth, dashboardElement }) {
   return (
     <>
-      <GlobalNav isAdmin={isAdmin} isAuthed={!!user} />
+      <GlobalNav isAdmin={isAdmin} user={user} />
       <Routes>
         <Route path="/" element={<Home user={user} isAdmin={isAdmin} onAuthChange={refreshAuth} />} />
         <Route path="/dashboard" element={dashboardElement} />
@@ -97,14 +97,9 @@ export default function App() {
   const refreshAuth = useCallback(async () => {
     try {
       if (API_DEBUG) {
-        console.info("[runtime] auth/me request URL", `${API}/auth/me`);
+        console.info("[runtime] auth/me request path", "/auth/me");
       }
-      const res = await fetch(`${API}/auth/me`, {
-        method: "GET",
-        credentials: "include",
-        headers: { Accept: "application/json" },
-      });
-      const data = res.ok ? await res.json() : null;
+      const data = await api("/auth/me", { method: "GET", headers: { Accept: "application/json" } });
       setUser(data?.user || null);
     } catch {
       setUser(null);

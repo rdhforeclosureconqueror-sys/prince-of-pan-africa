@@ -1,5 +1,5 @@
 import React, { useState, useEffect, Suspense } from "react";
-import { API_BASE_URL } from "../config"; // ✅ import base URL
+import { api } from "../api/api";
 import "./ledgerV2.css";
 
 import IdentityPanel from "./components/IdentityPanel";
@@ -29,11 +29,7 @@ export default function LedgerV2Page() {
   useEffect(() => {
     async function fetchUser() {
       try {
-        const res = await fetch(`${API_BASE_URL}/auth/me`, {
-          credentials: "include",
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
+        const data = await api("/auth/me", { method: "GET" });
         if (data.ok && data.auth) {
           setUser(data.user);
           setMemberId(data.user?.id || data.user?.member_id);

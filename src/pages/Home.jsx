@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import VoiceControls from "../components/VoiceControls";
 import { sendChatMessage, sendVoiceMessage } from "../api/mufasaClient";
 import { API_BASE_URL, API_DEBUG } from "../config";
+import { api } from "../api/api";
 import "../styles/home.css";
 
 const API_BASE = API_BASE_URL;
@@ -94,14 +95,10 @@ export default function Home({ user, isAdmin, onAuthChange }) {
       if (API_DEBUG) {
         console.info("[runtime] auth request URL", `${API_BASE}${endpoint}`);
       }
-      const res = await fetch(`${API_BASE}${endpoint}`, {
+      await api(endpoint, {
         method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.detail || "Authentication failed");
 
       setAuthStatus(authMode === "join" ? "Member account created." : "Signed in.");
       setPassword("");
@@ -112,7 +109,7 @@ export default function Home({ user, isAdmin, onAuthChange }) {
   }
 
   async function logout() {
-    await fetch(`${API_BASE}/auth/logout`, { method: "POST", credentials: "include" });
+    await api("/auth/logout", { method: "POST" });
     setAuthStatus("Signed out.");
     await onAuthChange();
   }

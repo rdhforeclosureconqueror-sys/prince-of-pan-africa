@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { api } from "../api/api";
+import { API_BASE_URL } from "../config";
 import "../styles/library.css";
 
 export default function LibraryOrganizer() {
@@ -21,16 +22,19 @@ export default function LibraryOrganizer() {
     try {
       const ingest = await api("/audiobooks/organizer/ingest-text", {
         method: "POST",
+        credentials: "include",
         body: JSON.stringify({ title, text }),
       });
 
       const plan = await api("/audiobooks/organizer/propose-plan", {
         method: "POST",
+        credentials: "include",
         body: JSON.stringify({ document_id: ingest.document.id, plan_name: "Default plan" }),
       });
 
       const phase3Preview = await api("/audiobooks/organizer/preview", {
         method: "POST",
+        credentials: "include",
         body: JSON.stringify({ document_id: ingest.document.id, plan_id: plan.plan_id }),
       });
 
@@ -50,10 +54,12 @@ export default function LibraryOrganizer() {
     if (!documentId || !planId) return;
     const reviewed = await api("/audiobooks/organizer/review-structure", {
       method: "POST",
+      credentials: "include",
       body: JSON.stringify({ document_id: documentId, plan_id: planId, plan_name: "Reviewed plan", ...payload }),
     });
     const nextPreview = await api("/audiobooks/organizer/preview", {
       method: "POST",
+      credentials: "include",
       body: JSON.stringify({ document_id: documentId, plan_id: reviewed.plan_id }),
     });
     setPlanId(reviewed.plan_id);
@@ -65,7 +71,7 @@ export default function LibraryOrganizer() {
     setDownloadingTxt(true);
     setError("");
     try {
-      const res = await fetch(`/audiobooks/organizer/export-txt`, {
+      const res = await fetch(`${API_BASE_URL}/audiobooks/organizer/export-txt`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
