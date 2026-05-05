@@ -8,7 +8,7 @@ const EXTERNAL_LINKS = [
   { label: "Yoruba Lesson", href: "/languages/yoruba.html" },
 ];
 
-export default function GlobalNav({ isAdmin }) {
+export default function GlobalNav({ isAdmin, user }) {
   const [open, setOpen] = useState(false);
   const location = useLocation();
 
@@ -53,6 +53,17 @@ export default function GlobalNav({ isAdmin }) {
               Verification Center
             </Link>
           ) : null}
+
+
+        <div className="global-nav__auth-state">
+          {user?.email ? (
+            <span>Logged in as: {user.email}</span>
+          ) : (
+            <Link to="/" onClick={closeMenu} className="global-nav__link">
+              Logged out · Sign in
+            </Link>
+          )}
+        </div>
 
           {EXTERNAL_LINKS.map((link) => (
             <a key={link.href} href={link.href} className="global-nav__link" onClick={closeMenu}>

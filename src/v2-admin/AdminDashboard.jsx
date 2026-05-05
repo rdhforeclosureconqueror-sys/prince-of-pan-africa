@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { API_BASE_URL } from "../config"; // ✅ use centralized API base
+import { api } from "../api/api";
 import "./adminDashboard.css";
 
 export default function AdminDashboard() {
@@ -10,16 +10,7 @@ export default function AdminDashboard() {
   useEffect(() => {
     async function loadAdminData() {
       try {
-        const res = await fetch(`${API_BASE_URL}/admin/overview`, {
-          credentials: "include",
-        });
-
-        if (!res.ok) {
-          const text = await res.text();
-          throw new Error(`HTTP ${res.status}: ${text.slice(0, 100)}`);
-        }
-
-        const json = await res.json();
+        const json = await api("/admin/overview", { method: "GET" });
         if (json.ok) setData(json);
         else throw new Error(json.error || "Failed to load");
       } catch (err) {
