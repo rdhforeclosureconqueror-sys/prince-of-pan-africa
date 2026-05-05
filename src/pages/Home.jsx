@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import VoiceControls from "../components/VoiceControls";
 import { sendChatMessage, sendVoiceMessage } from "../api/mufasaClient";
 import { API_BASE_URL, API_DEBUG } from "../config";
@@ -12,6 +12,7 @@ export default function Home({ user, isAdmin, onAuthChange }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [searchParams] = useSearchParams();
   const [authMode, setAuthMode] = useState("join");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -21,6 +22,14 @@ export default function Home({ user, isAdmin, onAuthChange }) {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+
+  useEffect(() => {
+    const requestedAuthMode = (searchParams.get("auth") || "").toLowerCase();
+    if (requestedAuthMode === "login" || requestedAuthMode === "join") {
+      setAuthMode(requestedAuthMode);
+    }
+  }, [searchParams]);
 
   const authTitle = useMemo(() => {
     if (user?.role === "admin" || user?.role === "superadmin") return "Admin access active";

@@ -42,7 +42,7 @@ export const APP_BASE_URL =
 // -----------------------------
 // 🔌 WEBSOCKET BASE (Realtime)
 // -----------------------------
-const PROD_WS = "wss://api.simbawaujamaa.com";
+const PROD_WS = "wss://prince-of-pan-africa-backend.onrender.com";
 const DEV_WS = "ws://localhost:3000";
 
 export const WS_BASE_URL =

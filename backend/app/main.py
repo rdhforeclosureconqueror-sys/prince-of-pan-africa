@@ -39,7 +39,6 @@ default_origins = [
     "https://prince-of-pan-africa.onrender.com",
     "https://prince-of-pan-africa-frontend.onrender.com",
     "https://mufasa-knowledge-bank.onrender.com",
-    "https://api.simbawaujamaa.com",
     "https://simbawaujamaa.com",
     "https://www.simbawaujamaa.com",
     "https://simbawajamaa.com",

@@ -16,7 +16,7 @@ This prevented direct verification of live deployment behavior.
 - `curl -sS https://mufasa-knowledge-bank.onrender.com/`
 - `curl -I -sS https://prince-of-pan-africa.onrender.com`
 - `curl -I -sS https://prince-of-pan-africa-frontend.onrender.com`
-- `curl -I -sS https://api.simbawaujamaa.com`
+- `curl -I -sS https://prince-of-pan-africa-backend.onrender.com`
 
 ## Checklist status
 1. Render env vars present (`SESSION_SECRET`, `DATABASE_URL`, API keys): **UNVERIFIED (network-blocked)**

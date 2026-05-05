@@ -1,7 +1,7 @@
 # Repo-Wide Route/Data Wiring Trace Report (2026-05-02)
 
 ## Executive summary
-- Primary frontend runtime API origin is centralized at `API_BASE_URL` and defaults to `https://api.simbawaujamaa.com` in non-local hosts; many calls use shared `api()` client with cookies forced on (`credentials: include`).
+- Primary frontend runtime API origin is centralized at `API_BASE_URL` and defaults to `https://prince-of-pan-africa-backend.onrender.com` in non-local hosts; many calls use shared `api()` client with cookies forced on (`credentials: include`).
 - Operations Deck endpoints are real and mounted (`/admin/ai/overview`, `/admin/overview`, `/admin/activity-stream`) and require RBAC permissions. Browser 401s are most likely session cookie transport/parsing issues, not missing route mounts.
 - There is a critical auth mismatch in audiobook routes: they parse the session cookie as `int`, but auth now writes signed cookie payloads. This can silently downgrade signed-in users to guest-mode data paths.
 - Assessment frontend calls do not include credentials, while backend requires auth permissions, creating likely 401 behavior for submit/results/dashboard.
@@ -29,11 +29,11 @@
 
 ## API base URL inventory
 - `src/config.js`
-  - `API_BASE_URL`: env `VITE_API_BASE_URL` or localhost fallback, else `https://api.simbawaujamaa.com`.
-  - `WS_BASE_URL`: env or `wss://api.simbawaujamaa.com`.
+  - `API_BASE_URL`: env `VITE_API_BASE_URL` or localhost fallback, else `https://prince-of-pan-africa-backend.onrender.com`.
+  - `WS_BASE_URL`: env or `wss://prince-of-pan-africa-backend.onrender.com`.
   - Other external services: `MUFASA_API_URL`, `OPENVOICE_API_URL` (Render domains).
 - Hardcoded backend/service origins found:
-  - `https://api.simbawaujamaa.com` (primary API default).
+  - `https://prince-of-pan-africa-backend.onrender.com` (primary API default).
   - `https://mufasa-knowledge-bank.onrender.com` (knowledge bank service).
   - `https://aivoice-wmrv.onrender.com` (voice service).
 - Mixed-origin risk:

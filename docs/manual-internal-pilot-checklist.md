@@ -6,7 +6,7 @@ Use this checklist to validate the live deployment through the browser only (no 
 - A **normal member** account (non-admin role).
 - An **admin or superadmin** account.
 - Live frontend URL (example: `https://prince-of-pan-africa.onrender.com`).
-- Live backend URL (example: `https://api.simbawaujamaa.com`).
+- Live backend URL (example: `https://prince-of-pan-africa-backend.onrender.com`).
 
 ## Required Render environment variables (must be set)
 - `SESSION_SECRET` (required for signed session cookies and login sessions)
