@@ -34,6 +34,11 @@ function mapSentenceTimings(sentences, duration) {
   });
 }
 
+function absoluteApiUrl(path) {
+  if (!path) return "";
+  return path.startsWith("http") ? path : `${API_BASE_URL}${path}`;
+}
+
 export default function StudyPage() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -65,6 +70,7 @@ export default function StudyPage() {
   const [reflectionNote, setReflectionNote] = useState("");
   const [reflectionPrompt, setReflectionPrompt] = useState("");
   const [reflectionSummary, setReflectionSummary] = useState("");
+  const [savedAudioNotice, setSavedAudioNotice] = useState("");
 
   const audioRef = useRef(null);
   const sentenceRefs = useRef([]);
@@ -73,6 +79,8 @@ export default function StudyPage() {
     if (!selectedBook?.chapters?.length) return null;
     return selectedBook.chapters[activeChapterIndex] || null;
   }, [selectedBook, activeChapterIndex]);
+
+  const activeSavedAudio = activeChapter?.saved_audio || null;
 
   const chapterSentences = useMemo(() => {
     if (!activeChapter?.text) return [];
@@ -159,6 +167,36 @@ export default function StudyPage() {
   useEffect(() => {
     sentenceRefs.current = [];
   }, [activeChapter?.id]);
+
+  useEffect(() => {
+    if (!selectedBook?.id || !activeChapter?.id) return;
+    let cancelled = false;
+    async function loadSavedAudioMetadata() {
+      try {
+        const response = await api(`/api/audio/book/${selectedBook.id}/chapter/${activeChapter.id}`, { method: "GET", credentials: "include" });
+        if (cancelled || !response?.audio) return;
+        setSavedAudioNotice(response.message || "Saved audio already exists. Use saved audio or regenerate?");
+        setSelectedBook((prev) => {
+          if (!prev?.chapters) return prev;
+          return {
+            ...prev,
+            chapters: prev.chapters.map((chapter) =>
+              chapter.id === activeChapter.id
+                ? { ...chapter, audio_url: response.audio.audioUrl || chapter.audio_url, saved_audio: response.audio, audio_asset_id: response.audio.id }
+                : chapter,
+            ),
+          };
+        });
+      } catch (err) {
+        if (err.status !== 404) setError(err.message || "No saved audio found for this chapter.");
+        if (!cancelled && err.status === 404) setSavedAudioNotice("");
+      }
+    }
+    loadSavedAudioMetadata();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedBook?.id, activeChapter?.id]);
 
   useEffect(() => {
     if (!audioRef.current || !activeChapter) return;
@@ -250,18 +288,92 @@ export default function StudyPage() {
     }
   }
 
-  async function generateActiveChapterAudio() {
+  async function generateActiveChapterAudio({ regenerate = false } = {}) {
     if (!selectedBook?.id || !activeChapter?.chapter_index) return;
-    setStatus(`Generating chapter ${activeChapter.chapter_index}...`);
+    if (activeSavedAudio && !regenerate) {
+      setStatus("Saved audio already exists. Use saved audio or regenerate? Defaulting to saved audio.");
+      await useSavedAudio();
+      return;
+    }
+    if (regenerate && !window.confirm("Regenerating may use a new AI voice request. Continue?")) return;
+    setStatus(`${regenerate ? "Regenerating" : "Generating"} chapter ${activeChapter.chapter_index}...`);
     setError("");
     try {
-      await api(`/audiobooks/${selectedBook.id}/chapters/${activeChapter.chapter_index}/generate`, { method: "POST", credentials: "include" });
-      setStatus(`Chapter ${activeChapter.chapter_index} generated.`);
+      const suffix = regenerate ? "?regenerate=true" : "";
+      const response = await api(`/audiobooks/${selectedBook.id}/chapters/${activeChapter.chapter_index}/generate${suffix}`, { method: "POST", credentials: "include" });
+      setStatus(response.message || `Chapter ${activeChapter.chapter_index} ${regenerate ? "regenerated" : "generated"}.`);
       await loadBook(selectedBook.id);
       await loadLibrary();
     } catch (err) {
       setError(err.message || "Failed to generate this chapter.");
     }
+  }
+
+  async function useSavedAudio() {
+    if (!selectedBook?.id || !activeChapter?.id) return;
+    setError("");
+    try {
+      const response = await api(`/api/audio/book/${selectedBook.id}/chapter/${activeChapter.id}`, { method: "GET", credentials: "include" });
+      setSelectedBook((prev) => ({
+        ...prev,
+        chapters: prev.chapters.map((chapter) =>
+          chapter.id === activeChapter.id
+            ? { ...chapter, audio_url: response.audio.audioUrl, saved_audio: response.audio, audio_asset_id: response.audio.id, status: "completed" }
+            : chapter,
+        ),
+      }));
+      setStatus("Using saved audio. AI voice provider was not called.");
+    } catch (err) {
+      setError(err.message || "No saved audio found for this chapter.");
+    }
+  }
+
+  async function saveActiveAudio() {
+    if (!selectedBook?.id || !activeChapter?.id || !activeChapter?.audio_url) return;
+    setError("");
+    try {
+      const response = await api("/api/audio/save", {
+        method: "POST",
+        credentials: "include",
+        body: JSON.stringify({
+          bookId: selectedBook.id,
+          chapterId: activeChapter.id,
+          title: activeChapter.title,
+          voice: selectedBook.voice,
+          model: selectedBook.voice,
+          duration: Math.floor(duration || 0),
+          format: "mp3",
+          audioUrl: activeChapter.audio_url,
+        }),
+      });
+      setSelectedBook((prev) => ({
+        ...prev,
+        chapters: prev.chapters.map((chapter) =>
+          chapter.id === activeChapter.id ? { ...chapter, saved_audio: response.audio, audio_asset_id: response.audio.id } : chapter,
+        ),
+      }));
+      setStatus("Audio saved. Download is now available.");
+    } catch (err) {
+      setError(err.message || "Audio save failed. Please try again.");
+    }
+  }
+
+  async function playSavedAudio() {
+    await useSavedAudio();
+    window.setTimeout(async () => {
+      if (audioRef.current) {
+        await audioRef.current.play();
+        setIsPlaying(true);
+      }
+    }, 0);
+  }
+
+  function downloadSavedAudio() {
+    if (!activeSavedAudio?.downloadUrl) {
+      setError("Audio download failed. Please try again.");
+      return;
+    }
+    window.location.href = absoluteApiUrl(activeSavedAudio.downloadUrl);
   }
 
   async function persistProgress(positionOverride) {
@@ -509,7 +621,7 @@ export default function StudyPage() {
                   </button>
                 )}
                 {!activeChapter?.audio_url && (
-                  <button className="focus-toggle" onClick={generateActiveChapterAudio}>
+                  <button className="focus-toggle" onClick={() => generateActiveChapterAudio()}>
                     Generate Next Chapter
                   </button>
                 )}
@@ -559,6 +671,14 @@ export default function StudyPage() {
             </div>
 
             <div className="player-shell">
+              <div className="player-controls-row">
+                {activeSavedAudio && <button onClick={useSavedAudio}>Use Saved Audio</button>}
+                {activeSavedAudio && <button onClick={playSavedAudio}>Play Saved Audio</button>}
+                {activeChapter?.audio_url && !activeSavedAudio && <button onClick={saveActiveAudio}>Save Audio</button>}
+                {activeSavedAudio && <button onClick={downloadSavedAudio}>Download Audio</button>}
+                <button onClick={() => generateActiveChapterAudio({ regenerate: true })}>Regenerate Audio</button>
+              </div>
+              {savedAudioNotice && activeSavedAudio && <p className="study-status">{savedAudioNotice}</p>}
               <div className="player-controls-row">
                 <button onClick={playPrev}>Prev</button>
                 <button onClick={togglePlayPause}>{isPlaying ? "Pause" : "Play"}</button>
