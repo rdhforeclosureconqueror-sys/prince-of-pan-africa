@@ -98,6 +98,21 @@ def _run_sqlite_compat_migrations() -> None:
         if progress_cols and "completed_chapters" not in progress_cols:
             conn.execute(text("ALTER TABLE audiobook_progress ADD COLUMN completed_chapters TEXT NOT NULL DEFAULT '[]'"))
 
+        audio_asset_cols = [row[1] for row in conn.execute(text("PRAGMA table_info(audio_assets)"))]
+        audio_asset_compat_columns = {
+            "audiobook_id": "INTEGER",
+            "chapter_id": "INTEGER",
+            "title": "TEXT",
+            "model": "TEXT",
+            "duration_seconds": "INTEGER",
+            "format": "TEXT NOT NULL DEFAULT 'mp3'",
+            "storage_key": "TEXT",
+            "filename": "TEXT",
+        }
+        for column, column_type in audio_asset_compat_columns.items():
+            if audio_asset_cols and column not in audio_asset_cols:
+                conn.execute(text(f"ALTER TABLE audio_assets ADD COLUMN {column} {column_type}"))
+
 
 # =========================
 # DATABASE TYPE DETECTION
@@ -167,6 +182,32 @@ def reset_local_sqlite_database() -> dict:
 
 
 # =========================
+# LIGHTWEIGHT COMPAT MIGRATIONS
+# =========================
+def _run_generic_compat_migrations() -> None:
+    if IS_SQLITE:
+        return
+
+    with engine.begin() as conn:
+        dialect = engine.dialect.name
+        if dialect != "postgresql":
+            return
+
+        audio_asset_columns = {
+            "audiobook_id": "INTEGER",
+            "chapter_id": "INTEGER",
+            "title": "TEXT",
+            "model": "TEXT",
+            "duration_seconds": "INTEGER",
+            "format": "TEXT NOT NULL DEFAULT 'mp3'",
+            "storage_key": "TEXT",
+            "filename": "TEXT",
+        }
+        for column, column_type in audio_asset_columns.items():
+            conn.execute(text(f"ALTER TABLE audio_assets ADD COLUMN IF NOT EXISTS {column} {column_type}"))
+
+
+# =========================
 # INIT DB (UNIFIED VERSION)
 # =========================
 def init_db() -> None:
@@ -178,3 +219,4 @@ def init_db() -> None:
 
     Base.metadata.create_all(bind=engine)
     _run_sqlite_compat_migrations()
+    _run_generic_compat_migrations()

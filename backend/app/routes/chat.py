@@ -1,4 +1,5 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException, Request
+from mimetypes import guess_extension
 from openai import OpenAI
 import requests
 import tempfile
@@ -68,6 +69,29 @@ def cache_audio_filename(text: str, voice: str, ext: str = "mp3") -> Path:
     return STATIC_AUDIO_DIR / f"{digest}.{ext}"
 
 
+def infer_audio_format_from_content_type(content_type: str | None, fallback: str = "mp3") -> str:
+    lowered = (content_type or "").split(";", 1)[0].strip().lower()
+    if lowered in {"audio/mpeg", "audio/mp3", "application/mp3"}:
+        return "mp3"
+    if lowered in {"audio/mp4", "audio/x-m4a", "audio/m4a"}:
+        return "m4a"
+    if lowered in {"audio/wav", "audio/x-wav", "audio/wave"}:
+        return "wav"
+    guessed = guess_extension(lowered or "")
+    if guessed:
+        normalized = guessed.lstrip(".").lower()
+        return "m4a" if normalized == "mp4" else normalized
+    return fallback
+
+
+def infer_audio_format_from_url(audio_url: str | None, fallback: str = "mp3") -> str:
+    path = (audio_url or "").split("?", 1)[0].rstrip("/")
+    ext = Path(path).suffix.lstrip(".").lower()
+    if ext in {"mp3", "m4a", "wav"}:
+        return ext
+    return fallback
+
+
 def build_audio_url(request: Request | None, audio_file: Path, base_url: str | None = None) -> str:
     if request is not None:
         return str(request.url_for("static", path=f"audio/{audio_file.name}"))
@@ -83,7 +107,7 @@ def normalize_tts_text(text: str) -> str:
     return normalized.strip()
 
 
-def generate_tts_audio_url(*, request: Request | None, text: str, voice: str = "alloy", base_url: str | None = None) -> tuple[str, bool]:
+def generate_tts_audio_url(*, request: Request | None, text: str, voice: str = "alloy", base_url: str | None = None, force: bool = False) -> tuple[str, bool]:
     normalized_text = normalize_tts_text(text)
     if not normalized_text:
         raise HTTPException(status_code=400, detail="No text provided for TTS.")
@@ -91,10 +115,11 @@ def generate_tts_audio_url(*, request: Request | None, text: str, voice: str = "
     cached_file = cache_audio_filename(text=normalized_text, voice=voice)
     cached = cached_file.exists()
 
-    if not cached:
-        audio_bytes = request_aivoice_tts(text=normalized_text, voice=voice)
+    if force or not cached:
+        audio_bytes = request_aivoice_tts(text=normalized_text, voice=voice, format="mp3")
         with open(cached_file, "wb") as f:
             f.write(audio_bytes)
+        cached = False
 
     audio_url = build_audio_url(request, cached_file, base_url=base_url)
     return audio_url, cached

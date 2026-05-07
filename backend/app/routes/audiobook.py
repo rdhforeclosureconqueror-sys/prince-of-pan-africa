@@ -17,7 +17,7 @@ from app.database import SessionLocal, get_db
 from app.models import AudioAsset, Audiobook, AudiobookChapter, AudiobookChapterReflection, AudiobookProgress, BookOrganizationPlan, BookOrganizerBlock, BookOrganizerDocument, User, compute_text_checksum
 from app.config import settings
 from app.session import SESSION_COOKIE, parse_session_cookie_value, should_use_secure_cookie
-from app.routes.chat import generate_tts_audio_url, normalize_tts_text
+from app.routes.chat import generate_tts_audio_url, infer_audio_format_from_url, normalize_tts_text
 
 router = APIRouter(prefix="/audiobooks", tags=["Audiobooks"])
 
@@ -364,6 +364,47 @@ def _ensure_generation_slot(user_id: int) -> None:
         _generation_counts[user_id] = current + 1
 
 
+
+def _audio_storage_key(audio_url: str | None) -> str | None:
+    if not audio_url:
+        return None
+    path = audio_url.split("?", 1)[0]
+    marker = "/static/audio/"
+    if marker in path:
+        return f"audio/{path.rsplit(marker, 1)[1]}"
+    return path.rstrip("/").rsplit("/", 1)[-1] or None
+
+
+def _hydrate_audio_asset(asset: AudioAsset, book: Audiobook, chapter: AudiobookChapter, duration_seconds: int | None = None) -> AudioAsset:
+    asset.audiobook_id = book.id
+    asset.chapter_id = chapter.id
+    asset.title = chapter.title
+    asset.model = asset.model or book.voice
+    asset.duration_seconds = duration_seconds if duration_seconds is not None else asset.duration_seconds
+    asset.format = asset.format or infer_audio_format_from_url(asset.audio_url, fallback="mp3")
+    asset.storage_key = asset.storage_key or _audio_storage_key(asset.audio_url)
+    return asset
+
+
+def _serialize_audio_asset(asset: AudioAsset | None, book: Audiobook | None = None, chapter: AudiobookChapter | None = None) -> dict | None:
+    if not asset:
+        return None
+    return {
+        "id": asset.id,
+        "audioId": asset.id,
+        "bookId": asset.audiobook_id or (book.id if book else None),
+        "chapterId": asset.chapter_id or (chapter.id if chapter else None),
+        "title": asset.title or (chapter.title if chapter else None),
+        "voice": asset.voice,
+        "model": asset.model or asset.voice,
+        "duration": asset.duration_seconds,
+        "format": asset.format or infer_audio_format_from_url(asset.audio_url, fallback="mp3"),
+        "createdAt": asset.created_at.isoformat() if asset.created_at else None,
+        "audioUrl": asset.audio_url,
+        "storageKey": asset.storage_key or _audio_storage_key(asset.audio_url),
+        "downloadUrl": f"/api/audio/download/{asset.id}",
+    }
+
 def _serialize_audiobook(book: Audiobook, include_text: bool = False) -> dict:
     ordered_chapters = sorted(book.chapters, key=lambda chapter: chapter.chapter_index)
     completed_audio = sum(1 for chapter in ordered_chapters if chapter.audio_url)
@@ -390,6 +431,34 @@ def _serialize_audiobook(book: Audiobook, include_text: bool = False) -> dict:
                 "character_count": chapter.character_count,
                 "status": chapter.status,
                 "audio_url": chapter.audio_url,
+                "audio_asset_id": chapter.audio_asset_id,
+                "saved_audio": (
+                    _serialize_audio_asset(
+                        next((asset for asset in getattr(book, "_prefetched_audio_assets", []) if asset.id == chapter.audio_asset_id), None),
+                        book,
+                        chapter,
+                    )
+                    if getattr(book, "_prefetched_audio_assets", None)
+                    else (
+                        {
+                            "id": chapter.audio_asset_id,
+                            "audioId": chapter.audio_asset_id,
+                            "bookId": book.id,
+                            "chapterId": chapter.id,
+                            "title": chapter.title,
+                            "voice": book.voice,
+                            "model": book.voice,
+                            "duration": None,
+                            "format": infer_audio_format_from_url(chapter.audio_url, fallback="mp3"),
+                            "createdAt": None,
+                            "audioUrl": chapter.audio_url,
+                            "storageKey": _audio_storage_key(chapter.audio_url),
+                            "downloadUrl": f"/api/audio/download/{chapter.audio_asset_id}" if chapter.audio_asset_id else None,
+                        }
+                        if chapter.audio_asset_id and chapter.audio_url
+                        else None
+                    )
+                ),
                 **({"text": chapter.text} if include_text else {}),
             }
             for chapter in ordered_chapters
@@ -484,6 +553,7 @@ def _generate_audio_for_book_job(*, audiobook_id: int, user_id: int, base_url: s
                     chapter.audio_url = existing_asset.audio_url
                     chapter.status = "completed"
                     chapter.audio_asset_id = existing_asset.id
+                    _hydrate_audio_asset(existing_asset, book, chapter)
                     db.commit()
                     continue
 
@@ -494,6 +564,7 @@ def _generate_audio_for_book_job(*, audiobook_id: int, user_id: int, base_url: s
                 asset = AudioAsset(text_hash=chapter.text_hash, voice=book.voice, audio_url=audio_url)
                 db.add(asset)
                 db.flush()
+                _hydrate_audio_asset(asset, book, chapter)
 
                 chapter.audio_url = audio_url
                 chapter.audio_asset_id = asset.id
@@ -1105,7 +1176,7 @@ def get_generation_status(audiobook_id: int, request: Request, db: Session = Dep
 
 
 @router.post("/{audiobook_id}/chapters/{chapter_index}/generate")
-def generate_single_chapter(audiobook_id: int, chapter_index: int, request: Request, db: Session = Depends(get_db)):
+def generate_single_chapter(audiobook_id: int, chapter_index: int, request: Request, regenerate: bool = False, db: Session = Depends(get_db)):
     user, _ = _resolve_audiobook_user(request, db)
     book = db.query(Audiobook).filter(Audiobook.id == audiobook_id, Audiobook.user_id == user.id).first()
     if not book:
@@ -1113,23 +1184,59 @@ def generate_single_chapter(audiobook_id: int, chapter_index: int, request: Requ
     chapter = db.query(AudiobookChapter).filter(AudiobookChapter.audiobook_id == audiobook_id, AudiobookChapter.chapter_index == chapter_index).first()
     if not chapter:
         raise HTTPException(status_code=404, detail="Chapter not found.")
-    if chapter.audio_url:
+
+    saved_asset = None
+    if chapter.audio_asset_id:
+        saved_asset = db.query(AudioAsset).filter(AudioAsset.id == chapter.audio_asset_id, AudioAsset.voice == book.voice).first()
+    if not saved_asset:
+        saved_asset = db.query(AudioAsset).filter(AudioAsset.text_hash == chapter.text_hash, AudioAsset.voice == book.voice).first()
+
+    if saved_asset and not regenerate:
+        chapter.audio_asset_id = saved_asset.id
+        chapter.audio_url = saved_asset.audio_url
+        chapter.status = "completed"
+        _hydrate_audio_asset(saved_asset, book, chapter)
+        db.commit()
+        return {
+            "ok": True,
+            "chapter_index": chapter_index,
+            "status": chapter.status,
+            "audio_url": chapter.audio_url,
+            "audio": _serialize_audio_asset(saved_asset, book, chapter),
+            "provider_called": False,
+            "message": "Saved audio already exists. Use saved audio or regenerate?",
+            "default_action": "use_saved_audio",
+        }
+
+    if chapter.audio_url and not regenerate:
         chapter.status = "completed"
         db.commit()
-        return {"ok": True, "chapter_index": chapter_index, "status": chapter.status, "audio_url": chapter.audio_url}
+        return {"ok": True, "chapter_index": chapter_index, "status": chapter.status, "audio_url": chapter.audio_url, "provider_called": False}
 
     chapter.status = "generating"
     db.commit()
     try:
-        audio_url, _ = generate_tts_audio_url(request=None, text=chapter.text, voice=book.voice, base_url=str(request.base_url))
-        asset = AudioAsset(text_hash=chapter.text_hash, voice=book.voice, audio_url=audio_url)
-        db.add(asset)
-        db.flush()
+        audio_url, cached = generate_tts_audio_url(request=None, text=chapter.text, voice=book.voice, base_url=str(request.base_url), force=regenerate)
+        asset = saved_asset or db.query(AudioAsset).filter(AudioAsset.text_hash == chapter.text_hash, AudioAsset.voice == book.voice).first()
+        if not asset:
+            asset = AudioAsset(text_hash=chapter.text_hash, voice=book.voice, audio_url=audio_url)
+            db.add(asset)
+            db.flush()
+        asset.audio_url = audio_url
+        _hydrate_audio_asset(asset, book, chapter)
         chapter.audio_asset_id = asset.id
         chapter.audio_url = audio_url
         chapter.status = "completed"
         db.commit()
-        return {"ok": True, "chapter_index": chapter_index, "status": chapter.status, "audio_url": chapter.audio_url}
+        return {
+            "ok": True,
+            "chapter_index": chapter_index,
+            "status": chapter.status,
+            "audio_url": chapter.audio_url,
+            "audio": _serialize_audio_asset(asset, book, chapter),
+            "provider_called": not cached,
+            "regenerated": regenerate,
+        }
     except Exception as exc:
         chapter.status = "failed"
         db.commit()
