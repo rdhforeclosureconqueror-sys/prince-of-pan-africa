@@ -17,12 +17,31 @@ import PilotDeferredPage from "./pages/PilotDeferredPage";
 import StudyPage from "./pages/StudyPage";
 import BrainTraining from "./pages/BrainTraining";
 import { getBackgroundForPath } from "./utils/backgroundSystem";
-import { API_DEBUG, ENABLE_TEXT_BOOK_ORGANIZER } from "./config";
+import { API_DEBUG, AUTH_DEBUG, ENABLE_TEXT_BOOK_ORGANIZER } from "./config";
 import { api } from "./api/api";
 import { canAccessTextBookOrganizer, isAdminUser } from "./authz";
 import "./styles/backgroundSystem.css";
 
-function DashboardRoute({ authChecked, user, isAdmin }) {
+function DashboardRoute({ authChecked, user, rbac, isAdmin }) {
+  const location = useLocation();
+
+  useEffect(() => {
+    if (!AUTH_DEBUG) return;
+
+    const roles = Array.isArray(rbac?.roles) ? rbac.roles : [];
+    const permissions = Array.isArray(rbac?.permissions) ? rbac.permissions : [];
+    console.info("[auth-debug] dashboard route decision", {
+      route: location.pathname,
+      authChecked,
+      email: user?.email || null,
+      role: user?.role || null,
+      roles,
+      permissionCount: permissions.length,
+      isAdmin,
+      decision: !authChecked ? "loading" : !user ? "redirect-login" : isAdmin ? "operations-deck" : "member-dashboard",
+    });
+  }, [authChecked, user, rbac, isAdmin, location.pathname]);
+
   if (!authChecked) return <div className="admin-loading">Loading your dashboard...</div>;
   if (!user) return <Navigate to="/?auth=login" replace />;
   return isAdmin ? <AdminOperationsDashboard /> : <MemberDashboard />;
@@ -43,13 +62,63 @@ function OrganizerAccessNotice({ title, detail }) {
   );
 }
 
+function OrganizerRoute({ authChecked, user, rbac, canAccessOrganizer }) {
+  const location = useLocation();
+
+  useEffect(() => {
+    if (!AUTH_DEBUG) return;
+
+    const roles = Array.isArray(rbac?.roles) ? rbac.roles : [];
+    const permissions = Array.isArray(rbac?.permissions) ? rbac.permissions : [];
+    console.info("[auth-debug] organizer route decision", {
+      route: location.pathname,
+      authChecked,
+      email: user?.email || null,
+      role: user?.role || null,
+      roles,
+      permissionCount: permissions.length,
+      isAdmin: isAdminUser(user, rbac),
+      canAccessOrganizer,
+      decision: !ENABLE_TEXT_BOOK_ORGANIZER
+        ? "feature-disabled"
+        : !authChecked
+          ? "loading"
+          : !user
+            ? "redirect-login"
+            : canAccessOrganizer
+              ? "organizer"
+              : "access-required",
+    });
+  }, [authChecked, user, rbac, canAccessOrganizer, location.pathname]);
+
+  if (!ENABLE_TEXT_BOOK_ORGANIZER) {
+    return (
+      <OrganizerAccessNotice
+        title="Text Book Organizer is not enabled"
+        detail="The organizer route is registered, but VITE_ENABLE_TEXT_BOOK_ORGANIZER is not enabled for this deployment."
+      />
+    );
+  }
+
+  if (!authChecked) return <div className="admin-loading">Checking your Text Book Organizer access...</div>;
+  if (!user) return <Navigate to="/?auth=login" replace />;
+  if (canAccessOrganizer) return <LibraryOrganizer />;
+
+  return (
+    <OrganizerAccessNotice
+      title="Text Book Organizer access required"
+      detail="Upgrade to a subscriber account or contact support if your account should include book_organizer:create_self."
+    />
+  );
+}
+
 function AppRoutes({ user, rbac, isAdmin, canAccessOrganizer, authChecked, refreshAuth }) {
   return (
     <>
       <GlobalNav user={user} rbac={rbac} canAccessOrganizer={canAccessOrganizer} authChecked={authChecked} />
       <Routes>
         <Route path="/" element={<Home user={user} isAdmin={isAdmin} canAccessOrganizer={canAccessOrganizer} authChecked={authChecked} onAuthChange={refreshAuth} />} />
-        <Route path="/dashboard" element={<DashboardRoute authChecked={authChecked} user={user} isAdmin={isAdmin} />} />
+        <Route path="/dashboard" element={<DashboardRoute authChecked={authChecked} user={user} rbac={rbac} isAdmin={isAdmin} />} />
         <Route path="/admin" element={<Navigate to="/dashboard" replace />} />
         <Route path="/admin-legacy" element={<Navigate to="/dashboard" replace />} />
         <Route
@@ -85,23 +154,12 @@ function AppRoutes({ user, rbac, isAdmin, canAccessOrganizer, authChecked, refre
         <Route
           path="/library/organizer"
           element={
-            !ENABLE_TEXT_BOOK_ORGANIZER ? (
-              <OrganizerAccessNotice
-                title="Text Book Organizer is not enabled"
-                detail="The organizer route is registered, but VITE_ENABLE_TEXT_BOOK_ORGANIZER is not enabled for this deployment."
-              />
-            ) : !authChecked ? (
-              <div className="admin-loading">Checking your Text Book Organizer access...</div>
-            ) : !user ? (
-              <Navigate to="/?auth=login" replace />
-            ) : canAccessOrganizer ? (
-              <LibraryOrganizer />
-            ) : (
-              <OrganizerAccessNotice
-                title="Text Book Organizer access required"
-                detail="Upgrade to a subscriber account or contact support if your account should include book_organizer:create_self."
-              />
-            )
+            <OrganizerRoute
+              authChecked={authChecked}
+              user={user}
+              rbac={rbac}
+              canAccessOrganizer={canAccessOrganizer}
+            />
           }
         />
         <Route path="/portal/decolonize" element={<PortalDecolonize />} />
@@ -158,17 +216,17 @@ export default function App() {
   );
 
   useEffect(() => {
-    if (!API_DEBUG) return;
+    if (!AUTH_DEBUG) return;
 
     const roles = Array.isArray(rbac?.roles) ? rbac.roles : [];
     const permissions = Array.isArray(rbac?.permissions) ? rbac.permissions : [];
 
-    console.info("[runtime] auth access state", {
+    console.info("[auth-debug] auth access state", {
       authChecked,
       email: user?.email || null,
       role: user?.role || null,
       roles,
-      permissions,
+      permissionCount: permissions.length,
       isAdmin,
       canAccessOrganizer,
     });

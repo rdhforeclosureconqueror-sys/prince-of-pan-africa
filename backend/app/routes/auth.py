@@ -55,9 +55,11 @@ def _set_session_cookie(response: Response, user_id: int) -> None:
 
 
 def _computed_is_admin(role_names: list[str], permissions: list[str]) -> bool:
+    normalized_roles = {str(role).strip().lower() for role in role_names}
+    normalized_permissions = {str(permission).strip().lower() for permission in permissions}
     return bool(
-        {"admin", "superadmin"}.intersection(role_names)
-        or "admin:read_dashboard" in permissions
+        {"admin", "superadmin"}.intersection(normalized_roles)
+        or "admin:read_dashboard" in normalized_permissions
     )
 
 
@@ -183,8 +185,16 @@ def auth_join(payload: AuthPayload, response: Response, db: Session = Depends(ge
     )
     db.commit()
 
+    payload_user, profile, role_names, permissions, _, _ = _authorization_payload(db, user)
     _set_session_cookie(response, user.id)
-    return {"ok": True, "joined": True, "user": _serialize_user(user)}
+    return {
+        "ok": True,
+        "joined": True,
+        "user": payload_user,
+        "company": (profile.attributes or {}).get("company") if profile else None,
+        "member_profile_role": profile.role if profile else None,
+        "rbac": {"roles": role_names, "permissions": permissions},
+    }
 
 
 @router.post("/login")
@@ -203,8 +213,16 @@ def auth_login(payload: AuthPayload, response: Response, db: Session = Depends(g
         db.add(user)
         db.commit()
 
+    payload_user, profile, role_names, permissions, _, _ = _authorization_payload(db, user)
     _set_session_cookie(response, user.id)
-    return {"ok": True, "authenticated": True, "user": _serialize_user(user)}
+    return {
+        "ok": True,
+        "authenticated": True,
+        "user": payload_user,
+        "company": (profile.attributes or {}).get("company") if profile else None,
+        "member_profile_role": profile.role if profile else None,
+        "rbac": {"roles": role_names, "permissions": permissions},
+    }
 
 
 @router.post("/logout")

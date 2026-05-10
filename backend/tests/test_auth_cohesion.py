@@ -43,6 +43,7 @@ class AuthCohesionTests(unittest.TestCase):
     def setUp(self):
         from app.authz import seed_rbac_defaults
         from app.models import MemberProfile, Permission, Role, RolePermission, User, UserRole
+        from app.security import hash_password
 
         db = self.SessionLocal()
         try:
@@ -55,7 +56,7 @@ class AuthCohesionTests(unittest.TestCase):
             db.commit()
 
             users = [
-                User(email="cohesion-admin@example.com", password_hash="x", role="admin"),
+                User(email="cohesion-admin@example.com", password_hash=hash_password("password123"), role="admin"),
                 User(email="cohesion-superadmin@example.com", password_hash="x", role="superadmin"),
                 User(email="cohesion-subscriber@example.com", password_hash="x", role="subscriber"),
                 User(email="cohesion-member@example.com", password_hash="x", role="member"),
@@ -87,6 +88,30 @@ class AuthCohesionTests(unittest.TestCase):
         self.assertIn("admin", data["rbac"]["roles"])
         self.assertTrue(REQUIRED_ADMIN_PERMISSIONS.issubset(set(data["rbac"]["permissions"])))
 
+    def test_auth_me_admin_returns_admin_payload(self):
+        data = self._auth_me(self.admin_id)
+
+        self.assertEqual(data["user"]["email"], "cohesion-admin@example.com")
+        self.assertEqual(data["user"]["role"], "admin")
+        self.assertTrue(data["user"]["is_admin"])
+        self.assertIn("admin", data["rbac"]["roles"])
+        self.assertIn("admin:read_dashboard", data["rbac"]["permissions"])
+        self.assertIn("book_organizer:create_self", data["rbac"]["permissions"])
+
+    def test_login_admin_returns_canonical_admin_payload_and_cookie(self):
+        response = self.client.post(
+            "/auth/login",
+            json={"email": "cohesion-admin@example.com", "password": "password123"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("mufasa_session=", response.headers.get("set-cookie", ""))
+        data = response.json()
+        self.assertTrue(data["user"]["is_admin"])
+        self.assertIn("admin", data["rbac"]["roles"])
+        self.assertIn("admin:read_dashboard", data["rbac"]["permissions"])
+        self.assertIn("book_organizer:create_self", data["rbac"]["permissions"])
+
     def test_auth_me_superadmin_returns_all_permissions(self):
         from app.authz import DEFAULT_PERMISSION_NAMES
 
@@ -115,14 +140,37 @@ class AuthCohesionTests(unittest.TestCase):
         self.assertTrue(REQUIRED_MEMBER_PERMISSIONS.issubset(permissions))
         self.assertTrue(REQUIRED_ORGANIZER_PERMISSIONS.isdisjoint(permissions))
 
-    def test_admin_permission_required_for_operations_deck_api(self):
+    def test_admin_role_included_when_user_roles_exist(self):
+        from app.models import Role, UserRole
+
+        db = self.SessionLocal()
+        try:
+            subscriber_role = db.query(Role).filter(Role.name == "subscriber").one()
+            db.add(UserRole(user_id=self.admin_id, role_id=subscriber_role.id))
+            db.commit()
+        finally:
+            db.close()
+
+        data = self._auth_me(self.admin_id)
+
+        self.assertIn("admin", data["rbac"]["roles"])
+        self.assertIn("subscriber", data["rbac"]["roles"])
+        self.assertIn("admin:read_dashboard", data["rbac"]["permissions"])
+
+    def test_admin_has_dashboard_and_organizer_permissions(self):
+        data = self._auth_me(self.admin_id)
+        permissions = set(data["rbac"]["permissions"])
+
+        self.assertTrue(REQUIRED_ADMIN_PERMISSIONS.issubset(permissions))
+
+    def test_dashboard_api_requires_admin_permission(self):
         member_response = self.client.get("/admin/ai/overview", cookies=session_cookie(self.member_id))
         admin_response = self.client.get("/admin/ai/overview", cookies=session_cookie(self.admin_id))
 
         self.assertEqual(member_response.status_code, 403)
         self.assertEqual(admin_response.status_code, 200)
 
-    def test_auth_debug_me_returns_safe_current_user_trace(self):
+    def test_auth_debug_me_admin_trace(self):
         data = self.client.get("/auth/debug/me", cookies=session_cookie(self.admin_id)).json()
 
         self.assertEqual(data["email"], "cohesion-admin@example.com")
