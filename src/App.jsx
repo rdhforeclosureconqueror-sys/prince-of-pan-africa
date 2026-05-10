@@ -21,6 +21,47 @@ import { API_DEBUG, ENABLE_TEXT_BOOK_ORGANIZER } from "./config";
 import { api } from "./api/api";
 import "./styles/backgroundSystem.css";
 
+function normalizeList(values) {
+  return Array.isArray(values) ? values.map((value) => String(value).toLowerCase()) : [];
+}
+
+export function isAdminUser(user, rbac) {
+  if (!user) return false;
+
+  const userRole = String(user?.role || "").toLowerCase();
+  const roles = normalizeList(rbac?.roles);
+  const permissions = normalizeList(rbac?.permissions);
+  const adminEmails = normalizeList(
+    (import.meta.env.VITE_ADMIN_EMAILS || "")
+      .split(",")
+      .map((email) => email.trim())
+      .filter(Boolean),
+  );
+
+  return (
+    userRole === "admin" ||
+    userRole === "superadmin" ||
+    user?.is_admin === true ||
+    roles.includes("admin") ||
+    roles.includes("superadmin") ||
+    permissions.includes("admin:read_dashboard") ||
+    (user?.email && adminEmails.includes(String(user.email).toLowerCase()))
+  );
+}
+
+export function canAccessTextBookOrganizer(user, rbac, organizerEnabled, authChecked) {
+  const permissions = normalizeList(rbac?.permissions);
+
+  return Boolean(
+    organizerEnabled &&
+    authChecked &&
+    user &&
+    (
+      isAdminUser(user, rbac) ||
+      permissions.includes("book_organizer:create_self")
+    )
+  );
+}
 
 function DashboardRoute({ authChecked, user, isAdmin }) {
   if (!authChecked) return <div className="admin-loading">Loading your dashboard...</div>;
@@ -50,6 +91,7 @@ function AppRoutes({ user, isAdmin, canAccessOrganizer, authChecked, refreshAuth
       <Routes>
         <Route path="/" element={<Home user={user} isAdmin={isAdmin} canAccessOrganizer={canAccessOrganizer} authChecked={authChecked} onAuthChange={refreshAuth} />} />
         <Route path="/dashboard" element={<DashboardRoute authChecked={authChecked} user={user} isAdmin={isAdmin} />} />
+        <Route path="/admin" element={<Navigate to="/dashboard" replace />} />
         <Route path="/admin-legacy" element={<Navigate to="/dashboard" replace />} />
         <Route
           path="/fitness"
@@ -128,14 +170,6 @@ export default function App() {
   const user = auth.user;
   const rbac = auth.rbac;
 
-  const adminEmails = useMemo(() => {
-    const raw = import.meta.env.VITE_ADMIN_EMAILS || "";
-    return raw
-      .split(",")
-      .map((email) => email.trim().toLowerCase())
-      .filter(Boolean);
-  }, []);
-
   const refreshAuth = useCallback(async () => {
     try {
       if (API_DEBUG) {
@@ -157,22 +191,29 @@ export default function App() {
     refreshAuth();
   }, [refreshAuth]);
 
-  const isAdmin = useMemo(() => {
-    if (!user) return false;
-    const roles = Array.isArray(rbac?.roles) ? rbac.roles : [];
-    const permissions = Array.isArray(rbac?.permissions) ? rbac.permissions : [];
-    if (user?.role === "admin" || user?.role === "superadmin" || user?.is_admin) return true;
-    if (roles.includes("admin") || roles.includes("superadmin")) return true;
-    if (permissions.includes("admin:read_dashboard")) return true;
-    if (user?.email && adminEmails.includes(user.email.toLowerCase())) return true;
-    return false;
-  }, [user, rbac, adminEmails]);
+  const isAdmin = useMemo(() => isAdminUser(user, rbac), [user, rbac]);
 
   const canAccessOrganizer = useMemo(
-    () => Boolean(rbac?.permissions?.includes("book_organizer:create_self")),
-    [rbac],
+    () => canAccessTextBookOrganizer(user, rbac, ENABLE_TEXT_BOOK_ORGANIZER, authChecked),
+    [user, rbac, authChecked, ENABLE_TEXT_BOOK_ORGANIZER],
   );
 
+  useEffect(() => {
+    if (!API_DEBUG) return;
+
+    const roles = Array.isArray(rbac?.roles) ? rbac.roles : [];
+    const permissions = Array.isArray(rbac?.permissions) ? rbac.permissions : [];
+
+    console.info("[runtime] auth access state", {
+      authChecked,
+      email: user?.email || null,
+      role: user?.role || null,
+      roles,
+      permissions,
+      isAdmin,
+      canAccessOrganizer,
+    });
+  }, [authChecked, user, rbac, isAdmin, canAccessOrganizer]);
 
   return (
     <Router>
