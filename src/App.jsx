@@ -13,6 +13,7 @@ import MemberDashboard from "./pages/MemberDashboard";
 import LeadershipAssessmentPage from "./pages/LeadershipAssessmentPage";
 import LeadershipResultsPage from "./pages/LeadershipResultsPage";
 import SystemVerificationPage from "./pages/SystemVerificationPage";
+import AuthDebugPage from "./pages/AuthDebugPage";
 import PilotDeferredPage from "./pages/PilotDeferredPage";
 import StudyPage from "./pages/StudyPage";
 import BrainTraining from "./pages/BrainTraining";
@@ -149,6 +150,7 @@ function AppRoutes({ user, rbac, isAdmin, canAccessOrganizer, authChecked, refre
         <Route path="/leadership" element={<LeadershipAssessmentPage />} />
         <Route path="/results" element={<LeadershipResultsPage />} />
         <Route path="/ops/verification" element={<SystemVerificationPage />} />
+        <Route path="/debug/auth" element={<AuthDebugPage authChecked={authChecked} user={user} rbac={rbac} />} />
         <Route path="/decolonize" element={<Navigate to="/library" replace />} />
         <Route path="/library" element={<LibraryDecolonize canAccessOrganizer={canAccessOrganizer} authChecked={authChecked} user={user} />} />
         <Route
