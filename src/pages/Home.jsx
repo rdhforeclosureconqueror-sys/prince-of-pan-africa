@@ -34,10 +34,10 @@ export default function Home({ user, isAdmin, canAccessOrganizer = false, authCh
   }, [searchParams]);
 
   const authTitle = useMemo(() => {
-    if (user?.role === "admin" || user?.role === "superadmin") return "Admin access active";
+    if (isAdmin) return "Admin access active";
     if (user) return "Member access active";
     return authMode === "join" ? "Join as a member" : "Sign in";
-  }, [authMode, user]);
+  }, [authMode, isAdmin, user]);
 
   const handleSend = async () => {
     if (!input.trim() || loading) return;
@@ -138,7 +138,10 @@ export default function Home({ user, isAdmin, canAccessOrganizer = false, authCh
         <div className="hero-cta-row">
           <Link to="/library" className="hero-btn">Books & Audiobooks Library</Link>
           {user && ENABLE_TEXT_BOOK_ORGANIZER && canAccessOrganizer ? (
-            <Link to="/library/organizer" className="hero-btn hero-btn--secondary">Format a Book</Link>
+            <>
+              <Link to="/library/organizer" className="hero-btn hero-btn--secondary">Format a Book</Link>
+              <Link to="/library/organizer" className="hero-btn hero-btn--secondary">Upload Book Text</Link>
+            </>
           ) : null}
           {authChecked && user ? (
             <Link to="/dashboard" className="hero-btn hero-btn--ghost">{isAdmin ? "Operations Deck" : "Member Dashboard"}</Link>

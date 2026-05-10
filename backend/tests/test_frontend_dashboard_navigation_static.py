@@ -3,21 +3,27 @@ from pathlib import Path
 
 
 class DashboardOrganizerNavigationStaticTests(unittest.TestCase):
-    def test_global_nav_hides_dashboard_until_authenticated_and_gates_organizer_by_permission(self):
+    def test_global_nav_hides_dashboard_until_authenticated_and_gates_organizer_by_access_state(self):
         src = Path("src/components/GlobalNav.jsx").read_text()
         self.assertIn('if (link.to === "/dashboard" && (!authChecked || !user)) return null;', src)
         self.assertIn('isAdmin ? "Operations Deck" : "Member Dashboard"', src)
-        self.assertIn('ENABLE_TEXT_BOOK_ORGANIZER && authChecked && canAccessOrganizer', src)
+        self.assertIn('ENABLE_TEXT_BOOK_ORGANIZER && canAccessOrganizer', src)
         self.assertIn('to="/library/organizer"', src)
         self.assertIn('Text Book Organizer', src)
+        self.assertIn('Sign In', src)
+        self.assertNotIn('Logged out · Sign in', src)
 
     def test_dashboard_admin_detection_uses_rbac_roles_and_admin_permission(self):
         src = Path("src/App.jsx").read_text()
-        self.assertIn('const roles = Array.isArray(rbac?.roles) ? rbac.roles : [];', src)
-        self.assertIn('const permissions = Array.isArray(rbac?.permissions) ? rbac.permissions : [];', src)
-        self.assertIn('roles.includes("admin") || roles.includes("superadmin")', src)
+        self.assertIn('export function isAdminUser(user, rbac)', src)
+        self.assertIn('const roles = normalizeList(rbac?.roles);', src)
+        self.assertIn('const permissions = normalizeList(rbac?.permissions);', src)
+        self.assertIn('roles.includes("admin")', src)
+        self.assertIn('roles.includes("superadmin")', src)
         self.assertIn('permissions.includes("admin:read_dashboard")', src)
-        self.assertIn('rbac?.permissions?.includes("book_organizer:create_self")', src)
+        self.assertIn('export function canAccessTextBookOrganizer(user, rbac, organizerEnabled, authChecked)', src)
+        self.assertIn('isAdminUser(user, rbac) ||', src)
+        self.assertIn('permissions.includes("book_organizer:create_self")', src)
         self.assertIn('return isAdmin ? <AdminOperationsDashboard /> : <MemberDashboard />;', src)
 
     def test_text_book_organizer_frontend_flag_defaults_on_for_production_only(self):

@@ -51,7 +51,7 @@ export default function GlobalNav({ isAdmin, user, canAccessOrganizer = false, a
             );
           })}
 
-          {ENABLE_TEXT_BOOK_ORGANIZER && authChecked && canAccessOrganizer ? (
+          {ENABLE_TEXT_BOOK_ORGANIZER && canAccessOrganizer ? (
             <Link
               to="/library/organizer"
               onClick={closeMenu}
@@ -77,7 +77,7 @@ export default function GlobalNav({ isAdmin, user, canAccessOrganizer = false, a
             <span>Logged in as: {user.email}</span>
           ) : (
             <Link to="/?auth=login" onClick={closeMenu} className="global-nav__link">
-              Logged out · Sign in
+              Sign In
             </Link>
           )}
         </div>
