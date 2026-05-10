@@ -140,7 +140,9 @@ export default function Home({ user, isAdmin, canAccessOrganizer = false, authCh
           {user && ENABLE_TEXT_BOOK_ORGANIZER && canAccessOrganizer ? (
             <Link to="/library/organizer" className="hero-btn hero-btn--secondary">Format a Book</Link>
           ) : null}
-          <Link to="/dashboard" className="hero-btn hero-btn--ghost">{isAdmin ? "Operations Deck" : "Member Dashboard"}</Link>
+          {authChecked && user ? (
+            <Link to="/dashboard" className="hero-btn hero-btn--ghost">{isAdmin ? "Operations Deck" : "Member Dashboard"}</Link>
+          ) : null}
           <Link to="/leadership" className="hero-btn hero-btn--ghost">Leadership Assessment</Link>
         </div>
       </section>

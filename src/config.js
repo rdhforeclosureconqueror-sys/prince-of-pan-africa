@@ -77,9 +77,12 @@ export const ENV = {
   isProd: !isDev,
 };
 
-export const ENABLE_TEXT_BOOK_ORGANIZER = ["1", "true", "yes", "on"].includes(
-  String(import.meta.env.VITE_ENABLE_TEXT_BOOK_ORGANIZER || "").trim().toLowerCase(),
-);
+const TEXT_BOOK_ORGANIZER_FLAG = import.meta.env.VITE_ENABLE_TEXT_BOOK_ORGANIZER;
+const normalizedTextBookOrganizerFlag = String(TEXT_BOOK_ORGANIZER_FLAG || "").trim().toLowerCase();
+
+export const ENABLE_TEXT_BOOK_ORGANIZER = TEXT_BOOK_ORGANIZER_FLAG === undefined
+  ? !isDev
+  : ["1", "true", "yes", "on"].includes(normalizedTextBookOrganizerFlag);
 
 // -----------------------------
 // ✅ LOG CONFIG SUMMARY (Dev only)
