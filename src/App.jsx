@@ -159,10 +159,14 @@ export default function App() {
 
   const isAdmin = useMemo(() => {
     if (!user) return false;
+    const roles = Array.isArray(rbac?.roles) ? rbac.roles : [];
+    const permissions = Array.isArray(rbac?.permissions) ? rbac.permissions : [];
     if (user?.role === "admin" || user?.role === "superadmin" || user?.is_admin) return true;
+    if (roles.includes("admin") || roles.includes("superadmin")) return true;
+    if (permissions.includes("admin:read_dashboard")) return true;
     if (user?.email && adminEmails.includes(user.email.toLowerCase())) return true;
     return false;
-  }, [user, adminEmails]);
+  }, [user, rbac, adminEmails]);
 
   const canAccessOrganizer = useMemo(
     () => Boolean(rbac?.permissions?.includes("book_organizer:create_self")),

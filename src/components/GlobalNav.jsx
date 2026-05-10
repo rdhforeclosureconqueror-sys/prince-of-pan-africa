@@ -35,6 +35,8 @@ export default function GlobalNav({ isAdmin, user, canAccessOrganizer = false, a
 
         <nav id="global-nav-menu" className={`global-nav__links ${open ? "is-open" : ""}`}>
           {PILOT_NAV_LINKS.map((link) => {
+            if (link.to === "/dashboard" && (!authChecked || !user)) return null;
+
             const label = link.to === "/dashboard" ? (isAdmin ? "Operations Deck" : "Member Dashboard") : link.label;
 
             return (
