@@ -64,21 +64,30 @@ class RBACPhase1Tests(unittest.TestCase):
         db = self.SessionLocal()
         try:
             member = User(email="p1-member@example.com", password_hash="x", role="member")
+            subscriber = User(email="p1-subscriber@example.com", password_hash="x", role="subscriber")
             admin = User(email="p1-admin@example.com", password_hash="x", role="admin")
             superadmin = User(email="p1-superadmin@example.com", password_hash="x", role="superadmin")
-            db.add_all([member, admin, superadmin])
+            db.add_all([member, subscriber, admin, superadmin])
             db.commit()
 
             seed_rbac_defaults(db)
 
             member_perms = get_user_permissions(db, member)
+            subscriber_perms = get_user_permissions(db, subscriber)
             admin_perms = get_user_permissions(db, admin)
             superadmin_perms = get_user_permissions(db, superadmin)
 
             self.assertIn("member:read_self", member_perms)
             self.assertNotIn("admin:manage_users", member_perms)
+            self.assertNotIn("book_organizer:create_self", member_perms)
+
+            self.assertIn("member:read_self", subscriber_perms)
+            self.assertIn("book_organizer:create_self", subscriber_perms)
+            self.assertIn("book_organizer:export_self", subscriber_perms)
+            self.assertNotIn("admin:manage_users", subscriber_perms)
 
             self.assertIn("member:read_self", admin_perms)
+            self.assertIn("book_organizer:create_self", admin_perms)
             self.assertIn("admin:manage_users", admin_perms)
             self.assertIn("assessment:read_analytics", admin_perms)
 

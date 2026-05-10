@@ -22,7 +22,7 @@ import { api } from "./api/api";
 import "./styles/backgroundSystem.css";
 
 
-function AppRoutes({ user, isAdmin, refreshAuth, dashboardElement }) {
+function AppRoutes({ user, isAdmin, canAccessOrganizer, authChecked, refreshAuth, dashboardElement }) {
   return (
     <>
       <GlobalNav isAdmin={isAdmin} user={user} />
@@ -59,10 +59,22 @@ function AppRoutes({ user, isAdmin, refreshAuth, dashboardElement }) {
         <Route path="/results" element={<LeadershipResultsPage />} />
         <Route path="/ops/verification" element={<SystemVerificationPage />} />
         <Route path="/decolonize" element={<Navigate to="/library" replace />} />
-        <Route path="/library" element={<LibraryDecolonize />} />
+        <Route path="/library" element={<LibraryDecolonize canAccessOrganizer={canAccessOrganizer} />} />
         <Route
           path="/library/organizer"
-          element={ENABLE_TEXT_BOOK_ORGANIZER ? <LibraryOrganizer /> : <Navigate to="/library" replace />}
+          element={
+            !ENABLE_TEXT_BOOK_ORGANIZER ? (
+              <Navigate to="/library" replace />
+            ) : !authChecked ? (
+              null
+            ) : !user ? (
+              <Navigate to="/?auth=login" replace />
+            ) : canAccessOrganizer ? (
+              <LibraryOrganizer />
+            ) : (
+              <Navigate to="/library" replace />
+            )
+          }
         />
         <Route path="/portal/decolonize" element={<PortalDecolonize />} />
         <Route path="/holistic" element={<Navigate to="/dashboard" replace />} />
@@ -84,7 +96,10 @@ function CosmicBackgroundLayer() {
 }
 
 export default function App() {
-  const [user, setUser] = useState(null);
+  const [auth, setAuth] = useState({ user: null, rbac: { roles: [], permissions: [] } });
+  const [authChecked, setAuthChecked] = useState(false);
+  const user = auth.user;
+  const rbac = auth.rbac;
 
   const adminEmails = useMemo(() => {
     const raw = import.meta.env.VITE_ADMIN_EMAILS || "";
@@ -100,9 +115,14 @@ export default function App() {
         console.info("[runtime] auth/me request path", "/auth/me");
       }
       const data = await api("/auth/me", { method: "GET", headers: { Accept: "application/json" } });
-      setUser(data?.user || null);
+      setAuth({
+        user: data?.user || null,
+        rbac: data?.rbac || { roles: [], permissions: [] },
+      });
     } catch {
-      setUser(null);
+      setAuth({ user: null, rbac: { roles: [], permissions: [] } });
+    } finally {
+      setAuthChecked(true);
     }
   }, []);
 
@@ -117,6 +137,11 @@ export default function App() {
     return false;
   }, [user, adminEmails]);
 
+  const canAccessOrganizer = useMemo(
+    () => Boolean(rbac?.permissions?.includes("book_organizer:create_self")),
+    [rbac],
+  );
+
   const dashboardElement = isAdmin ? <AdminOperationsDashboard /> : <MemberDashboard />;
 
   return (
@@ -125,6 +150,8 @@ export default function App() {
       <AppRoutes
         user={user}
         isAdmin={isAdmin}
+        canAccessOrganizer={canAccessOrganizer}
+        authChecked={authChecked}
         refreshAuth={refreshAuth}
         dashboardElement={dashboardElement}
       />

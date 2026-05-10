@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal, get_db
+from app.dependencies.auth import require_permission
 from app.models import AudioAsset, Audiobook, AudiobookChapter, AudiobookChapterReflection, AudiobookProgress, BookOrganizationPlan, BookOrganizerBlock, BookOrganizerDocument, User, compute_text_checksum
 from app.config import settings
 from app.session import SESSION_COOKIE, parse_session_cookie_value, should_use_secure_cookie
@@ -776,13 +777,14 @@ async def upload_audiobook(
 
 
 @router.post("/organizer/ingest-text")
-def ingest_text_for_organizer(payload: OrganizerTextIngestRequest, request: Request, db: Session = Depends(get_db)):
+def ingest_text_for_organizer(
+    payload: OrganizerTextIngestRequest,
+    request: Request,
+    user: User = Depends(require_permission("book_organizer:create_self")),
+    db: Session = Depends(get_db),
+):
     if not settings.ENABLE_TEXT_BOOK_ORGANIZER:
         raise HTTPException(status_code=404, detail="Not found.")
-
-    user = _resolve_session_user(request, db)
-    if not user:
-        raise HTTPException(status_code=401, detail="Authentication required")
 
     raw_text = payload.text or ""
     if not raw_text.strip():
@@ -833,13 +835,14 @@ def ingest_text_for_organizer(payload: OrganizerTextIngestRequest, request: Requ
 
 
 @router.post("/organizer/propose-plan")
-def propose_organization_plan(payload: OrganizerPlanProposalRequest, request: Request, db: Session = Depends(get_db)):
+def propose_organization_plan(
+    payload: OrganizerPlanProposalRequest,
+    request: Request,
+    user: User = Depends(require_permission("book_organizer:update_self")),
+    db: Session = Depends(get_db),
+):
     if not settings.ENABLE_TEXT_BOOK_ORGANIZER:
         raise HTTPException(status_code=404, detail="Not found.")
-
-    user = _resolve_session_user(request, db)
-    if not user:
-        raise HTTPException(status_code=401, detail="Authentication required")
 
     document = (
         db.query(BookOrganizerDocument)
@@ -937,13 +940,14 @@ def _build_organizer_chapters_from_plan(plan: BookOrganizationPlan, block_map: d
 
 
 @router.post("/organizer/review-structure")
-def review_structure_for_organizer(payload: OrganizerStructureEditRequest, request: Request, db: Session = Depends(get_db)):
+def review_structure_for_organizer(
+    payload: OrganizerStructureEditRequest,
+    request: Request,
+    user: User = Depends(require_permission("book_organizer:update_self")),
+    db: Session = Depends(get_db),
+):
     if not settings.ENABLE_TEXT_BOOK_ORGANIZER:
         raise HTTPException(status_code=404, detail="Not found.")
-
-    user = _resolve_session_user(request, db)
-    if not user:
-        raise HTTPException(status_code=401, detail="Authentication required")
 
     document = (
         db.query(BookOrganizerDocument)
@@ -1038,13 +1042,14 @@ def review_structure_for_organizer(payload: OrganizerStructureEditRequest, reque
 
 
 @router.post("/organizer/preview")
-def preview_organization(payload: OrganizerPreviewRequest, request: Request, db: Session = Depends(get_db)):
+def preview_organization(
+    payload: OrganizerPreviewRequest,
+    request: Request,
+    user: User = Depends(require_permission("book_organizer:read_self")),
+    db: Session = Depends(get_db),
+):
     if not settings.ENABLE_TEXT_BOOK_ORGANIZER:
         raise HTTPException(status_code=404, detail="Not found.")
-
-    user = _resolve_session_user(request, db)
-    if not user:
-        raise HTTPException(status_code=401, detail="Authentication required")
 
     document = (
         db.query(BookOrganizerDocument)
@@ -1076,12 +1081,14 @@ def preview_organization(payload: OrganizerPreviewRequest, request: Request, db:
 
 
 @router.post("/organizer/export-txt")
-def export_organization_txt(payload: OrganizerPreviewRequest, request: Request, db: Session = Depends(get_db)):
+def export_organization_txt(
+    payload: OrganizerPreviewRequest,
+    request: Request,
+    user: User = Depends(require_permission("book_organizer:export_self")),
+    db: Session = Depends(get_db),
+):
     if not settings.ENABLE_TEXT_BOOK_ORGANIZER:
         raise HTTPException(status_code=404, detail="Not found.")
-    user = _resolve_session_user(request, db)
-    if not user:
-        raise HTTPException(status_code=401, detail="Authentication required")
     document = (
         db.query(BookOrganizerDocument)
         .filter(BookOrganizerDocument.id == payload.document_id, BookOrganizerDocument.user_id == user.id)

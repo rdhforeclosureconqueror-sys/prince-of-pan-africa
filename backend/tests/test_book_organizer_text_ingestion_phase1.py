@@ -26,7 +26,7 @@ class BookOrganizerTextIngestionPhase1Tests(unittest.TestCase):
         cls.client = TestClient(app)
 
     def setUp(self):
-        from app.models import BookOrganizationPlan, BookOrganizerBlock, BookOrganizerDocument, User
+        from app.models import BookOrganizationPlan, BookOrganizerBlock, BookOrganizerDocument, User, UserRole
         from app.security import hash_password
         from app.config import settings
 
@@ -36,13 +36,17 @@ class BookOrganizerTextIngestionPhase1Tests(unittest.TestCase):
             db.query(BookOrganizationPlan).delete()
             db.query(BookOrganizerBlock).delete()
             db.query(BookOrganizerDocument).delete()
+            db.query(UserRole).delete()
             db.query(User).delete()
             db.commit()
 
-            u1 = User(email='organizer1@example.com', password_hash=hash_password('password123'), role='member')
-            u2 = User(email='organizer2@example.com', password_hash=hash_password('password123'), role='member')
+            u1 = User(email='organizer1@example.com', password_hash=hash_password('password123'), role='subscriber')
+            u2 = User(email='organizer2@example.com', password_hash=hash_password('password123'), role='subscriber')
             db.add_all([u1, u2])
             db.commit()
+
+            from app.authz import seed_rbac_defaults
+            seed_rbac_defaults(db)
 
     def _authed_client(self, email: str) -> TestClient:
         res = self.client.post('/auth/login', json={'email': email, 'password': 'password123'})
@@ -51,6 +55,53 @@ class BookOrganizerTextIngestionPhase1Tests(unittest.TestCase):
         client = TestClient(self.client.app)
         client.cookies.set('mufasa_session', cookie)
         return client
+
+
+    def _add_user(self, email: str, role: str) -> None:
+        from app.authz import seed_rbac_defaults
+        from app.models import User
+        from app.security import hash_password
+
+        with self.SessionLocal() as db:
+            db.add(User(email=email, password_hash=hash_password('password123'), role=role))
+            db.commit()
+            seed_rbac_defaults(db)
+
+    def test_free_member_cannot_ingest_text(self):
+        self._add_user('free-member@example.com', 'member')
+        authed = self._authed_client('free-member@example.com')
+        res = authed.post('/audiobooks/organizer/ingest-text', json={'title': 'No Access', 'text': 'Para 1'})
+        self.assertEqual(res.status_code, 403)
+
+    def test_admin_can_ingest_text(self):
+        self._add_user('organizer-admin@example.com', 'admin')
+        authed = self._authed_client('organizer-admin@example.com')
+        res = authed.post('/audiobooks/organizer/ingest-text', json={'title': 'Admin Access', 'text': 'Para 1'})
+        self.assertEqual(res.status_code, 200)
+
+    def test_auth_me_returns_rbac_permissions_for_paid_user(self):
+        authed = self._authed_client('organizer1@example.com')
+        res = authed.get('/auth/me')
+        self.assertEqual(res.status_code, 200)
+        permissions = res.json()['rbac']['permissions']
+        self.assertIn('book_organizer:create_self', permissions)
+
+    def test_cannot_access_other_users_document(self):
+        owner = self._authed_client('organizer1@example.com')
+        other = self._authed_client('organizer2@example.com')
+
+        ingest = owner.post('/audiobooks/organizer/ingest-text', json={'title': 'Private', 'text': 'A\n\nB'})
+        self.assertEqual(ingest.status_code, 200)
+        document_id = ingest.json()['document']['id']
+
+        plan = owner.post('/audiobooks/organizer/propose-plan', json={'document_id': document_id})
+        self.assertEqual(plan.status_code, 200)
+
+        proposal = other.post('/audiobooks/organizer/propose-plan', json={'document_id': document_id})
+        self.assertEqual(proposal.status_code, 404)
+
+        preview = other.post('/audiobooks/organizer/preview', json={'document_id': document_id, 'plan_id': plan.json()['plan_id']})
+        self.assertEqual(preview.status_code, 404)
 
     def test_feature_flag_off_rejects_endpoint(self):
         from app.config import settings
