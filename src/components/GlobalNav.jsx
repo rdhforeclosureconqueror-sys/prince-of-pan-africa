@@ -3,15 +3,17 @@ import { Link, useLocation } from "react-router-dom";
 import "../styles/globalNav.css";
 import { ENABLE_TEXT_BOOK_ORGANIZER } from "../config";
 import { PILOT_NAV_LINKS } from "../pilotScope";
+import { getDashboardLabel, isAdminUser } from "../authz";
 
 const EXTERNAL_LINKS = [
   { label: "Swahili Lesson", href: "/languages/swahili.html" },
   { label: "Yoruba Lesson", href: "/languages/yoruba.html" },
 ];
 
-export default function GlobalNav({ isAdmin, user, canAccessOrganizer = false, authChecked = false }) {
+export default function GlobalNav({ user, rbac, canAccessOrganizer = false, authChecked = false }) {
   const [open, setOpen] = useState(false);
   const location = useLocation();
+  const isAdmin = isAdminUser(user, rbac);
 
   const handleToggle = () => setOpen((prev) => !prev);
   const closeMenu = () => setOpen(false);
@@ -34,59 +36,60 @@ export default function GlobalNav({ isAdmin, user, canAccessOrganizer = false, a
         </button>
 
         <nav id="global-nav-menu" className={`global-nav__links ${open ? "is-open" : ""}`}>
-          {PILOT_NAV_LINKS.map((link) => {
-            if (link.to === "/dashboard" && (!authChecked || !user)) return null;
+          {authChecked && user ? (
+            <>
+              {PILOT_NAV_LINKS.map((link) => {
+                const label = link.to === "/dashboard" ? getDashboardLabel(user, rbac) : link.label;
 
-            const label = link.to === "/dashboard" ? (isAdmin ? "Operations Deck" : "Member Dashboard") : link.label;
+                return (
+                  <Link
+                    key={link.to}
+                    to={link.to}
+                    onClick={closeMenu}
+                    className={location.pathname === link.to ? "global-nav__link is-active" : "global-nav__link"}
+                  >
+                    {label}
+                  </Link>
+                );
+              })}
 
-            return (
-              <Link
-                key={link.to}
-                to={link.to}
-                onClick={closeMenu}
-                className={location.pathname === link.to ? "global-nav__link is-active" : "global-nav__link"}
-              >
-                {label}
-              </Link>
-            );
-          })}
+              {ENABLE_TEXT_BOOK_ORGANIZER && canAccessOrganizer ? (
+                <Link
+                  to="/library/organizer"
+                  onClick={closeMenu}
+                  className={location.pathname === "/library/organizer" ? "global-nav__link is-active" : "global-nav__link"}
+                >
+                  Text Book Organizer
+                </Link>
+              ) : null}
 
-          {ENABLE_TEXT_BOOK_ORGANIZER && canAccessOrganizer ? (
-            <Link
-              to="/library/organizer"
-              onClick={closeMenu}
-              className={location.pathname === "/library/organizer" ? "global-nav__link is-active" : "global-nav__link"}
-            >
-              Text Book Organizer
-            </Link>
-          ) : null}
+              {isAdmin ? (
+                <Link
+                  to="/ops/verification"
+                  onClick={closeMenu}
+                  className={location.pathname === "/ops/verification" ? "global-nav__link is-active" : "global-nav__link"}
+                >
+                  Verification Center
+                </Link>
+              ) : null}
 
-          {isAdmin ? (
-            <Link
-              to="/ops/verification"
-              onClick={closeMenu}
-              className={location.pathname === "/ops/verification" ? "global-nav__link is-active" : "global-nav__link"}
-            >
-              Verification Center
-            </Link>
-          ) : null}
+              <div className="global-nav__auth-state">
+                <span>Logged in as: {user.email}</span>
+              </div>
 
-
-        <div className="global-nav__auth-state">
-          {user?.email ? (
-            <span>Logged in as: {user.email}</span>
+              {EXTERNAL_LINKS.map((link) => (
+                <a key={link.href} href={link.href} className="global-nav__link" onClick={closeMenu}>
+                  {link.label}
+                </a>
+              ))}
+            </>
           ) : (
-            <Link to="/?auth=login" onClick={closeMenu} className="global-nav__link">
-              Sign In
-            </Link>
+            <div className="global-nav__auth-state">
+              <Link to="/?auth=login" onClick={closeMenu} className="global-nav__link">
+                Sign In
+              </Link>
+            </div>
           )}
-        </div>
-
-          {EXTERNAL_LINKS.map((link) => (
-            <a key={link.href} href={link.href} className="global-nav__link" onClick={closeMenu}>
-              {link.label}
-            </a>
-          ))}
         </nav>
       </div>
     </header>

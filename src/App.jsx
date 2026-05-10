@@ -19,49 +19,8 @@ import BrainTraining from "./pages/BrainTraining";
 import { getBackgroundForPath } from "./utils/backgroundSystem";
 import { API_DEBUG, ENABLE_TEXT_BOOK_ORGANIZER } from "./config";
 import { api } from "./api/api";
+import { canAccessTextBookOrganizer, isAdminUser } from "./authz";
 import "./styles/backgroundSystem.css";
-
-function normalizeList(values) {
-  return Array.isArray(values) ? values.map((value) => String(value).toLowerCase()) : [];
-}
-
-export function isAdminUser(user, rbac) {
-  if (!user) return false;
-
-  const userRole = String(user?.role || "").toLowerCase();
-  const roles = normalizeList(rbac?.roles);
-  const permissions = normalizeList(rbac?.permissions);
-  const adminEmails = normalizeList(
-    (import.meta.env.VITE_ADMIN_EMAILS || "")
-      .split(",")
-      .map((email) => email.trim())
-      .filter(Boolean),
-  );
-
-  return (
-    userRole === "admin" ||
-    userRole === "superadmin" ||
-    user?.is_admin === true ||
-    roles.includes("admin") ||
-    roles.includes("superadmin") ||
-    permissions.includes("admin:read_dashboard") ||
-    (user?.email && adminEmails.includes(String(user.email).toLowerCase()))
-  );
-}
-
-export function canAccessTextBookOrganizer(user, rbac, organizerEnabled, authChecked) {
-  const permissions = normalizeList(rbac?.permissions);
-
-  return Boolean(
-    organizerEnabled &&
-    authChecked &&
-    user &&
-    (
-      isAdminUser(user, rbac) ||
-      permissions.includes("book_organizer:create_self")
-    )
-  );
-}
 
 function DashboardRoute({ authChecked, user, isAdmin }) {
   if (!authChecked) return <div className="admin-loading">Loading your dashboard...</div>;
@@ -84,10 +43,10 @@ function OrganizerAccessNotice({ title, detail }) {
   );
 }
 
-function AppRoutes({ user, isAdmin, canAccessOrganizer, authChecked, refreshAuth }) {
+function AppRoutes({ user, rbac, isAdmin, canAccessOrganizer, authChecked, refreshAuth }) {
   return (
     <>
-      <GlobalNav isAdmin={isAdmin} user={user} canAccessOrganizer={canAccessOrganizer} authChecked={authChecked} />
+      <GlobalNav user={user} rbac={rbac} canAccessOrganizer={canAccessOrganizer} authChecked={authChecked} />
       <Routes>
         <Route path="/" element={<Home user={user} isAdmin={isAdmin} canAccessOrganizer={canAccessOrganizer} authChecked={authChecked} onAuthChange={refreshAuth} />} />
         <Route path="/dashboard" element={<DashboardRoute authChecked={authChecked} user={user} isAdmin={isAdmin} />} />
@@ -220,6 +179,7 @@ export default function App() {
       <CosmicBackgroundLayer />
       <AppRoutes
         user={user}
+        rbac={rbac}
         isAdmin={isAdmin}
         canAccessOrganizer={canAccessOrganizer}
         authChecked={authChecked}
