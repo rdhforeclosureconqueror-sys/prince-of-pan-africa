@@ -6,6 +6,8 @@ class DashboardOrganizerNavigationStaticTests(unittest.TestCase):
     def test_global_nav_uses_centralized_helpers_and_logged_out_sign_in_only(self):
         src = Path("src/components/GlobalNav.jsx").read_text()
         self.assertIn('import { getDashboardLabel, isAdminUser } from "../authz";', src)
+        self.assertIn('import { AUTH_DEBUG, ENABLE_TEXT_BOOK_ORGANIZER } from "../config";', src)
+        self.assertIn('[auth-debug] global nav decision', src)
         self.assertIn('authChecked && user ? (', src)
         self.assertIn('getDashboardLabel(user, rbac)', src)
         self.assertIn('ENABLE_TEXT_BOOK_ORGANIZER && canAccessOrganizer', src)
@@ -38,10 +40,15 @@ class DashboardOrganizerNavigationStaticTests(unittest.TestCase):
     def test_app_imports_helpers_instead_of_defining_scattered_checks(self):
         src = Path("src/App.jsx").read_text()
         self.assertIn('import { canAccessTextBookOrganizer, isAdminUser } from "./authz";', src)
+        self.assertIn('import { API_DEBUG, AUTH_DEBUG, ENABLE_TEXT_BOOK_ORGANIZER } from "./config";', src)
         self.assertNotIn('export function isAdminUser', src)
         self.assertNotIn('VITE_ADMIN_EMAILS', src)
+        self.assertIn('if (!authChecked) return <div className="admin-loading">Loading your dashboard...</div>;', src)
         self.assertIn('return isAdmin ? <AdminOperationsDashboard /> : <MemberDashboard />;', src)
+        self.assertIn('[auth-debug] dashboard route decision', src)
         self.assertIn('canAccessTextBookOrganizer(user, rbac, ENABLE_TEXT_BOOK_ORGANIZER, authChecked)', src)
+        self.assertIn('function OrganizerRoute({ authChecked, user, rbac, canAccessOrganizer })', src)
+        self.assertIn('[auth-debug] organizer route decision', src)
 
     def test_text_book_organizer_frontend_flag_defaults_on_for_production_only(self):
         src = Path("src/config.js").read_text()
@@ -49,6 +56,8 @@ class DashboardOrganizerNavigationStaticTests(unittest.TestCase):
         self.assertIn('TEXT_BOOK_ORGANIZER_FLAG === undefined', src)
         self.assertIn('? !isDev', src)
         self.assertIn('["1", "true", "yes", "on"].includes(normalizedTextBookOrganizerFlag)', src)
+        self.assertIn('export const AUTH_DEBUG', src)
+        self.assertIn('VITE_AUTH_DEBUG', src)
 
     def test_home_and_library_keep_organizer_entry_points_permission_gated_by_props(self):
         home = Path("src/pages/Home.jsx").read_text()

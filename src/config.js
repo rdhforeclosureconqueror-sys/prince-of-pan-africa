@@ -19,8 +19,15 @@ export const API_BASE_URL =
   (hostname === "localhost" ? DEV_API : PROD_API);
 
 const runtimeSearchParams = new URLSearchParams(window?.location?.search || "");
+const AUTH_DEBUG_FLAG = String(import.meta.env.VITE_AUTH_DEBUG || "").trim().toLowerCase();
+
+export const AUTH_DEBUG =
+  ["1", "true", "yes", "on"].includes(AUTH_DEBUG_FLAG) ||
+  runtimeSearchParams.get("authDebug") === "1" ||
+  window?.localStorage?.getItem("authDebug") === "1";
+
 export const API_DEBUG =
-  runtimeSearchParams.get("apiDebug") === "1" || window?.localStorage?.getItem("apiDebug") === "1";
+  AUTH_DEBUG || runtimeSearchParams.get("apiDebug") === "1" || window?.localStorage?.getItem("apiDebug") === "1";
 
 if (API_DEBUG) {
   console.info("[runtime] resolved API_BASE_URL", API_BASE_URL);

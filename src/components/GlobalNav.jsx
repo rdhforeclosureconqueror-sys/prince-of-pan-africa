@@ -1,7 +1,7 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import "../styles/globalNav.css";
-import { ENABLE_TEXT_BOOK_ORGANIZER } from "../config";
+import { AUTH_DEBUG, ENABLE_TEXT_BOOK_ORGANIZER } from "../config";
 import { PILOT_NAV_LINKS } from "../pilotScope";
 import { getDashboardLabel, isAdminUser } from "../authz";
 
@@ -14,6 +14,25 @@ export default function GlobalNav({ user, rbac, canAccessOrganizer = false, auth
   const [open, setOpen] = useState(false);
   const location = useLocation();
   const isAdmin = isAdminUser(user, rbac);
+
+  useEffect(() => {
+    if (!AUTH_DEBUG) return;
+
+    const roles = Array.isArray(rbac?.roles) ? rbac.roles : [];
+    const permissions = Array.isArray(rbac?.permissions) ? rbac.permissions : [];
+    console.info("[auth-debug] global nav decision", {
+      route: location.pathname,
+      authChecked,
+      email: user?.email || null,
+      role: user?.role || null,
+      roles,
+      permissionCount: permissions.length,
+      isAdmin,
+      canAccessOrganizer,
+      dashboardLabel: user ? getDashboardLabel(user, rbac) : null,
+      visiblePrimaryAction: authChecked && user ? getDashboardLabel(user, rbac) : "Sign In",
+    });
+  }, [authChecked, user, rbac, isAdmin, canAccessOrganizer, location.pathname]);
 
   const handleToggle = () => setOpen((prev) => !prev);
   const closeMenu = () => setOpen(false);
