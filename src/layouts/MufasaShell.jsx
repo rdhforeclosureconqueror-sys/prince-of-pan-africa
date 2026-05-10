@@ -1,13 +1,13 @@
 // ✅ src/layouts/MufasaShell.jsx
 import React, { useEffect, useState } from "react";
-import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 import LogoutButton from "../components/LogoutButton";
 import { api } from "../api/api";
+import { isAdminUser } from "../authz";
 import "../styles/MufasaShell.css";
 
 export default function MufasaShell({ children }) {
-  const [user, setUser] = useState(null);
-  const navigate = useNavigate();
+  const [auth, setAuth] = useState({ user: null, rbac: { roles: [], permissions: [] } });
   const location = useLocation();
 
   // 🌌 Dynamic Background (Galaxy / Fitness / Language)
@@ -35,7 +35,9 @@ export default function MufasaShell({ children }) {
     async function fetchUser() {
       try {
         const data = await api("/auth/me", { method: "GET" });
-        if (data?.user && (data.authenticated || data.auth || data.ok)) setUser(data.user);
+        if (data?.user && (data.authenticated || data.auth || data.ok)) {
+          setAuth({ user: data.user, rbac: data.rbac || { roles: [], permissions: [] } });
+        }
       } catch (err) {
         console.error("Error loading user:", err);
       }
@@ -44,7 +46,8 @@ export default function MufasaShell({ children }) {
   }, []);
 
   const linkClass = ({ isActive }) => `nav-item${isActive ? " active" : ""}`;
-  const hasAdminAccess = user?.role === "admin" || user?.role === "superadmin";
+  const user = auth.user;
+  const hasAdminAccess = isAdminUser(auth.user, auth.rbac);
 
   return (
     <div className="mufasa-shell">

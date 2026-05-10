@@ -1,14 +1,5 @@
-import React, { useEffect } from "react";
+import React from "react";
 
-export default function LionGate({ children, onAuth }) {
-  useEffect(() => {
-    if (onAuth) {
-      onAuth({
-        email: "rdhforeclosureconqueror@gmail.com",
-        role: "admin",
-      });
-    }
-  }, [onAuth]);
-
+export default function LionGate({ children }) {
   return <>{children}</>;
 }

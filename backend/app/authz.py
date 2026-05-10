@@ -87,7 +87,7 @@ def normalize_role_name(role_name: str | None) -> str:
 
 
 def get_user_role_names(db: Session, user: User) -> list[str]:
-    role_names = [
+    role_names = {
         name
         for (name,) in (
             db.query(Role.name)
@@ -95,10 +95,9 @@ def get_user_role_names(db: Session, user: User) -> list[str]:
             .filter(UserRole.user_id == user.id)
             .all()
         )
-    ]
-    if role_names:
-        return sorted(set(role_names))
-    return [normalize_role_name(user.role)]
+    }
+    role_names.add(normalize_role_name(user.role))
+    return sorted(role_names)
 
 
 def get_user_permissions(db: Session, user: User) -> set[str]:
