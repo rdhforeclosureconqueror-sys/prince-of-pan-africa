@@ -86,3 +86,10 @@
 .phase-desc { margin-top: 6px; opacity: 0.9; font-size: 13px; }
 .phase-link-wrap { margin-top: 10px; }
 .phase-link { display: inline-flex; align-items: center; gap: 8px; padding: 9px 12px; border-color: rgba(214, 178, 94, 0.35); }
+
+.library-access-note {
+  align-self: center;
+  color: #fde68a;
+  font-size: 0.9rem;
+  font-weight: 700;
+}

@@ -32,7 +32,7 @@ const PHASES = [
   },
 ];
 
-export default function LibraryDecolonize({ canAccessOrganizer = false }) {
+export default function LibraryDecolonize({ canAccessOrganizer = false, authChecked = false, user = null }) {
   const [items, setItems] = useState([]);
 
   useEffect(() => {
@@ -61,10 +61,13 @@ export default function LibraryDecolonize({ canAccessOrganizer = false }) {
           <Link to="/portal/decolonize" className="library-pill library-pill--gold">
             Open Decolonization Portal
           </Link>
-          {ENABLE_TEXT_BOOK_ORGANIZER && canAccessOrganizer ? (
+          {ENABLE_TEXT_BOOK_ORGANIZER && authChecked && canAccessOrganizer ? (
             <Link to="/library/organizer" className="library-pill">
-              Open Text Organizer
+              Text Book Organizer · Upload Book Text
             </Link>
+          ) : null}
+          {ENABLE_TEXT_BOOK_ORGANIZER && authChecked && user && !canAccessOrganizer ? (
+            <span className="library-access-note">Text Book Organizer requires subscriber or admin access.</span>
           ) : null}
         </div>
 

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import "../styles/globalNav.css";
+import { ENABLE_TEXT_BOOK_ORGANIZER } from "../config";
 import { PILOT_NAV_LINKS } from "../pilotScope";
 
 const EXTERNAL_LINKS = [
@@ -8,7 +9,7 @@ const EXTERNAL_LINKS = [
   { label: "Yoruba Lesson", href: "/languages/yoruba.html" },
 ];
 
-export default function GlobalNav({ isAdmin, user }) {
+export default function GlobalNav({ isAdmin, user, canAccessOrganizer = false, authChecked = false }) {
   const [open, setOpen] = useState(false);
   const location = useLocation();
 
@@ -33,16 +34,30 @@ export default function GlobalNav({ isAdmin, user }) {
         </button>
 
         <nav id="global-nav-menu" className={`global-nav__links ${open ? "is-open" : ""}`}>
-          {PILOT_NAV_LINKS.map((link) => (
+          {PILOT_NAV_LINKS.map((link) => {
+            const label = link.to === "/dashboard" ? (isAdmin ? "Operations Deck" : "Member Dashboard") : link.label;
+
+            return (
+              <Link
+                key={link.to}
+                to={link.to}
+                onClick={closeMenu}
+                className={location.pathname === link.to ? "global-nav__link is-active" : "global-nav__link"}
+              >
+                {label}
+              </Link>
+            );
+          })}
+
+          {ENABLE_TEXT_BOOK_ORGANIZER && authChecked && canAccessOrganizer ? (
             <Link
-              key={link.to}
-              to={link.to}
+              to="/library/organizer"
               onClick={closeMenu}
-              className={location.pathname === link.to ? "global-nav__link is-active" : "global-nav__link"}
+              className={location.pathname === "/library/organizer" ? "global-nav__link is-active" : "global-nav__link"}
             >
-              {link.label}
+              Text Book Organizer
             </Link>
-          ))}
+          ) : null}
 
           {isAdmin ? (
             <Link
