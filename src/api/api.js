@@ -15,7 +15,7 @@ export async function api(path, options = {}) {
     hasLoggedApiBase = true;
   }
 
-  if (["/admin/ai/overview", "/admin/overview", "/admin/activity-stream", "/auth/me"].includes(path)) {
+  if (["/admin/ai/overview", "/admin/overview", "/admin/activity-stream", "/auth/me", "/member/overview", "/member/activity"].includes(path)) {
     console.info("[api] request", { path, url });
   }
   const isFormData = options.body instanceof FormData;
