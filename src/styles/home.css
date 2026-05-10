@@ -112,3 +112,10 @@
   .hero-cta-row .hero-btn,
   .auth-form .hero-btn { width: 100%; text-align: center; }
 }
+
+.access-note {
+  align-self: center;
+  color: #fde68a;
+  font-size: 0.9rem;
+  font-weight: 700;
+}

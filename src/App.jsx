@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate, Link, useLocation } from "react-router-dom";
 import GlobalNav from "./components/GlobalNav";
 import UniverseOverlay from "./components/UniverseOverlay";
 import AdminOperationsDashboard from "./pages/AdminOperationsDashboard";
@@ -28,12 +28,27 @@ function DashboardRoute({ authChecked, user, isAdmin }) {
   return isAdmin ? <AdminOperationsDashboard /> : <MemberDashboard />;
 }
 
+function OrganizerAccessNotice({ title, detail }) {
+  return (
+    <main className="library-shell">
+      <div className="library-inner cosmic-readable-shell">
+        <h1>{title}</h1>
+        <p>{detail}</p>
+        <div className="library-actions">
+          <Link to="/library" className="library-pill library-pill--green">Back to Library</Link>
+          <Link to="/?auth=login" className="library-pill">Sign in</Link>
+        </div>
+      </div>
+    </main>
+  );
+}
+
 function AppRoutes({ user, isAdmin, canAccessOrganizer, authChecked, refreshAuth }) {
   return (
     <>
-      <GlobalNav isAdmin={isAdmin} user={user} />
+      <GlobalNav isAdmin={isAdmin} user={user} canAccessOrganizer={canAccessOrganizer} authChecked={authChecked} />
       <Routes>
-        <Route path="/" element={<Home user={user} isAdmin={isAdmin} onAuthChange={refreshAuth} />} />
+        <Route path="/" element={<Home user={user} isAdmin={isAdmin} canAccessOrganizer={canAccessOrganizer} authChecked={authChecked} onAuthChange={refreshAuth} />} />
         <Route path="/dashboard" element={<DashboardRoute authChecked={authChecked} user={user} isAdmin={isAdmin} />} />
         <Route path="/admin-legacy" element={<Navigate to="/dashboard" replace />} />
         <Route
@@ -65,20 +80,26 @@ function AppRoutes({ user, isAdmin, canAccessOrganizer, authChecked, refreshAuth
         <Route path="/results" element={<LeadershipResultsPage />} />
         <Route path="/ops/verification" element={<SystemVerificationPage />} />
         <Route path="/decolonize" element={<Navigate to="/library" replace />} />
-        <Route path="/library" element={<LibraryDecolonize canAccessOrganizer={canAccessOrganizer} />} />
+        <Route path="/library" element={<LibraryDecolonize canAccessOrganizer={canAccessOrganizer} authChecked={authChecked} user={user} />} />
         <Route
           path="/library/organizer"
           element={
             !ENABLE_TEXT_BOOK_ORGANIZER ? (
-              <Navigate to="/library" replace />
+              <OrganizerAccessNotice
+                title="Text Book Organizer is not enabled"
+                detail="The organizer route is registered, but VITE_ENABLE_TEXT_BOOK_ORGANIZER is not enabled for this deployment."
+              />
             ) : !authChecked ? (
-              null
+              <div className="admin-loading">Checking your Text Book Organizer access...</div>
             ) : !user ? (
               <Navigate to="/?auth=login" replace />
             ) : canAccessOrganizer ? (
               <LibraryOrganizer />
             ) : (
-              <Navigate to="/library" replace />
+              <OrganizerAccessNotice
+                title="Text Book Organizer access required"
+                detail="Upgrade to a subscriber account or contact support if your account should include book_organizer:create_self."
+              />
             )
           }
         />

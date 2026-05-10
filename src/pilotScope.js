@@ -6,6 +6,7 @@ export const PILOT_INCLUDED_ROUTES = [
   "/languages",
   "/decolonize",
   "/library",
+  "/library/organizer",
   "/portal/decolonize",
   "/leadership",
   "/results",

@@ -2,13 +2,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import VoiceControls from "../components/VoiceControls";
 import { sendChatMessage, sendVoiceMessage } from "../api/mufasaClient";
-import { API_BASE_URL, API_DEBUG } from "../config";
+import { API_BASE_URL, API_DEBUG, ENABLE_TEXT_BOOK_ORGANIZER } from "../config";
 import { api } from "../api/api";
 import "../styles/home.css";
 
 const API_BASE = API_BASE_URL;
 
-export default function Home({ user, isAdmin, onAuthChange }) {
+export default function Home({ user, isAdmin, canAccessOrganizer = false, authChecked = false, onAuthChange }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -20,8 +20,10 @@ export default function Home({ user, isAdmin, onAuthChange }) {
   const chatEndRef = useRef(null);
 
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    if (messages.length > 0) {
+      chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages.length]);
 
 
   useEffect(() => {
@@ -135,7 +137,10 @@ export default function Home({ user, isAdmin, onAuthChange }) {
         </p>
         <div className="hero-cta-row">
           <Link to="/library" className="hero-btn">Books & Audiobooks Library</Link>
-          <Link to="/dashboard" className="hero-btn hero-btn--secondary">Operations Deck</Link>
+          {user && ENABLE_TEXT_BOOK_ORGANIZER && canAccessOrganizer ? (
+            <Link to="/library/organizer" className="hero-btn hero-btn--secondary">Format a Book</Link>
+          ) : null}
+          <Link to="/dashboard" className="hero-btn hero-btn--ghost">{isAdmin ? "Operations Deck" : "Member Dashboard"}</Link>
           <Link to="/leadership" className="hero-btn hero-btn--ghost">Leadership Assessment</Link>
         </div>
       </section>
@@ -149,7 +154,13 @@ export default function Home({ user, isAdmin, onAuthChange }) {
                 Signed in as <strong>{user.email}</strong> ({isAdmin ? "admin" : "member"}).
               </p>
               <div className="hero-cta-row">
-                <Link to="/dashboard" className="hero-btn">Open dashboard</Link>
+                {ENABLE_TEXT_BOOK_ORGANIZER && canAccessOrganizer ? (
+                  <Link to="/library/organizer" className="hero-btn">Upload Book Text</Link>
+                ) : null}
+                <Link to="/dashboard" className="hero-btn hero-btn--secondary">{isAdmin ? "Open Operations Deck" : "Open Member Dashboard"}</Link>
+                {authChecked && ENABLE_TEXT_BOOK_ORGANIZER && user && !canAccessOrganizer ? (
+                  <span className="access-note">Text Book Organizer is available to subscriber, admin, and superadmin accounts.</span>
+                ) : null}
                 <button type="button" onClick={logout} className="hero-btn hero-btn--ghost">Sign out</button>
               </div>
             </>
