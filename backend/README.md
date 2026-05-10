@@ -18,3 +18,25 @@ Coordinates OpenAI GPT and OpenVoice APIs for text, speech, and structured porta
 - `OPENAI_API_KEY`
 - `OPENVOICE_URL` (default: https://ffmpeg-9xhs.onrender.com)
 - `ALLOWED_ORIGINS` (comma-separated list of frontend URLs for CORS)
+
+## Paid subscriber access audit/migration
+
+Use `backend/scripts/paid_subscriber_access.py` when paid customers from an external billing export need to be checked against application RBAC. The script is dry-run by default and expects an authoritative paid-user source because the application database does not currently store billing records.
+
+Create a CSV with an `email` column from the payment system, then audit:
+
+```bash
+PYTHONPATH=backend DATABASE_URL=postgresql://... python backend/scripts/paid_subscriber_access.py \
+  --paid-users-csv paid_users.csv
+```
+
+After reviewing the table of `email`, `users.role`, `user_roles`, and missing subscriber access, assign subscriber access by adding `subscriber` rows to `user_roles`:
+
+```bash
+PYTHONPATH=backend DATABASE_URL=postgresql://... python backend/scripts/paid_subscriber_access.py \
+  --paid-users-csv paid_users.csv \
+  --apply \
+  --confirm ASSIGN_SUBSCRIBER
+```
+
+If production operations require updating the legacy `users.role` column instead, add `--assignment-mode users-role` to the apply command.
