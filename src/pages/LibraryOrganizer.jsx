@@ -15,6 +15,13 @@ export default function LibraryOrganizer() {
   const [splitBoundary, setSplitBoundary] = useState({});
   const [downloadingTxt, setDownloadingTxt] = useState(false);
 
+  function organizerErrorMessage(err, fallback) {
+    if (err?.status === 401) return "Please sign in again.";
+    if (err?.status === 403) return "Your account does not have access to the Text Book Organizer.";
+    if (err?.status === 404) return "Text Book Organizer is unavailable or the requested document was not found.";
+    return err?.message || fallback;
+  }
+
   async function handleOrganize() {
     setLoading(true);
     setError("");
@@ -44,7 +51,7 @@ export default function LibraryOrganizer() {
       setTitleEdits({});
       setSplitBoundary({});
     } catch (err) {
-      setError(err?.message || "Organizer request failed.");
+      setError(organizerErrorMessage(err, "Organizer request failed."));
     } finally {
       setLoading(false);
     }
@@ -52,18 +59,23 @@ export default function LibraryOrganizer() {
 
   async function applyStructureEdits(payload) {
     if (!documentId || !planId) return;
-    const reviewed = await api("/audiobooks/organizer/review-structure", {
-      method: "POST",
-      credentials: "include",
-      body: JSON.stringify({ document_id: documentId, plan_id: planId, plan_name: "Reviewed plan", ...payload }),
-    });
-    const nextPreview = await api("/audiobooks/organizer/preview", {
-      method: "POST",
-      credentials: "include",
-      body: JSON.stringify({ document_id: documentId, plan_id: reviewed.plan_id }),
-    });
-    setPlanId(reviewed.plan_id);
-    setPreview(nextPreview);
+    setError("");
+    try {
+      const reviewed = await api("/audiobooks/organizer/review-structure", {
+        method: "POST",
+        credentials: "include",
+        body: JSON.stringify({ document_id: documentId, plan_id: planId, plan_name: "Reviewed plan", ...payload }),
+      });
+      const nextPreview = await api("/audiobooks/organizer/preview", {
+        method: "POST",
+        credentials: "include",
+        body: JSON.stringify({ document_id: documentId, plan_id: reviewed.plan_id }),
+      });
+      setPlanId(reviewed.plan_id);
+      setPreview(nextPreview);
+    } catch (err) {
+      setError(organizerErrorMessage(err, "Organizer request failed."));
+    }
   }
 
   async function handleDownloadTxt() {
@@ -85,7 +97,9 @@ export default function LibraryOrganizer() {
         } catch (_err) {
           msg = `TXT export failed (${res.status}).`;
         }
-        throw new Error(msg);
+        const error = new Error(msg);
+        error.status = res.status;
+        throw error;
       }
       const blob = await res.blob();
       const disposition = res.headers.get("content-disposition") || "";
@@ -100,7 +114,7 @@ export default function LibraryOrganizer() {
       anchor.remove();
       URL.revokeObjectURL(url);
     } catch (err) {
-      setError(err?.message || "TXT export failed.");
+      setError(organizerErrorMessage(err, "TXT export failed."));
     } finally {
       setDownloadingTxt(false);
     }

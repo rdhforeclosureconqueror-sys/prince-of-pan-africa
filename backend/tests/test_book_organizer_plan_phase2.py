@@ -26,7 +26,7 @@ class BookOrganizerPlanPhase2Tests(unittest.TestCase):
         cls.client = TestClient(app)
 
     def setUp(self):
-        from app.models import BookOrganizationPlan, BookOrganizerBlock, BookOrganizerDocument, User
+        from app.models import BookOrganizationPlan, BookOrganizerBlock, BookOrganizerDocument, User, UserRole
         from app.security import hash_password
         from app.config import settings
 
@@ -36,12 +36,16 @@ class BookOrganizerPlanPhase2Tests(unittest.TestCase):
             db.query(BookOrganizationPlan).delete()
             db.query(BookOrganizerBlock).delete()
             db.query(BookOrganizerDocument).delete()
+            db.query(UserRole).delete()
             db.query(User).delete()
             db.commit()
 
-            u1 = User(email='organizer1@example.com', password_hash=hash_password('password123'), role='member')
+            u1 = User(email='organizer1@example.com', password_hash=hash_password('password123'), role='subscriber')
             db.add(u1)
             db.commit()
+
+            from app.authz import seed_rbac_defaults
+            seed_rbac_defaults(db)
 
     def _authed_client(self) -> TestClient:
         res = self.client.post('/auth/login', json={'email': 'organizer1@example.com', 'password': 'password123'})

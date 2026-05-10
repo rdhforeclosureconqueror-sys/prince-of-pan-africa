@@ -32,7 +32,7 @@ const PHASES = [
   },
 ];
 
-export default function LibraryDecolonize() {
+export default function LibraryDecolonize({ canAccessOrganizer = false }) {
   const [items, setItems] = useState([]);
 
   useEffect(() => {
@@ -61,7 +61,7 @@ export default function LibraryDecolonize() {
           <Link to="/portal/decolonize" className="library-pill library-pill--gold">
             Open Decolonization Portal
           </Link>
-          {ENABLE_TEXT_BOOK_ORGANIZER ? (
+          {ENABLE_TEXT_BOOK_ORGANIZER && canAccessOrganizer ? (
             <Link to="/library/organizer" className="library-pill">
               Open Text Organizer
             </Link>

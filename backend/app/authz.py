@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.models import Permission, Role, User, UserRole
 
 DEFAULT_ROLE_NAME = "member"
-DEFAULT_ROLE_NAMES = ("member", "admin", "superadmin")
+DEFAULT_ROLE_NAMES = ("member", "subscriber", "admin", "superadmin")
 
 DEFAULT_PERMISSION_NAMES = (
     "system:read_health",
@@ -25,6 +25,10 @@ DEFAULT_PERMISSION_NAMES = (
     "audiobook:update_self",
     "audiobook:generate_audio_self",
     "audiobook:reflect_self",
+    "book_organizer:create_self",
+    "book_organizer:read_self",
+    "book_organizer:update_self",
+    "book_organizer:export_self",
     "chat:use",
     "voice:use_tts",
     "voice:use_stt",
@@ -33,6 +37,13 @@ DEFAULT_PERMISSION_NAMES = (
     "admin:manage_users",
     "admin:read_activity",
 )
+
+BOOK_ORGANIZER_PERMISSION_NAMES = {
+    "book_organizer:create_self",
+    "book_organizer:read_self",
+    "book_organizer:update_self",
+    "book_organizer:export_self",
+}
 
 MEMBER_PERMISSION_NAMES = {
     "member:read_self",
@@ -51,6 +62,8 @@ MEMBER_PERMISSION_NAMES = {
     "voice:use_stt",
 }
 
+SUBSCRIBER_PERMISSION_NAMES = MEMBER_PERMISSION_NAMES | BOOK_ORGANIZER_PERMISSION_NAMES
+
 ADMIN_EXTRA_PERMISSION_NAMES = {
     "admin:read_dashboard",
     "admin:read_users",
@@ -62,7 +75,8 @@ ADMIN_EXTRA_PERMISSION_NAMES = {
 
 ROLE_PERMISSION_NAMES = {
     "member": MEMBER_PERMISSION_NAMES,
-    "admin": MEMBER_PERMISSION_NAMES | ADMIN_EXTRA_PERMISSION_NAMES,
+    "subscriber": SUBSCRIBER_PERMISSION_NAMES,
+    "admin": SUBSCRIBER_PERMISSION_NAMES | ADMIN_EXTRA_PERMISSION_NAMES,
     "superadmin": set(DEFAULT_PERMISSION_NAMES),
 }
 

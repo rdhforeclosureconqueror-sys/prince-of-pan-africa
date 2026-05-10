@@ -10,6 +10,8 @@ services:
         sync: false
       - key: SESSION_SECRET
         sync: false
+      - key: ENABLE_TEXT_BOOK_ORGANIZER
+        value: "true"
       - key: AIVOICE_BASE_URL
         value: https://aivoice-wmrv.onrender.com
       - key: OPENVOICE_URL
@@ -27,3 +29,5 @@ services:
     envVars:
       - key: VITE_API_BASE_URL
         value: https://prince-of-pan-africa-backend.onrender.com
+      - key: VITE_ENABLE_TEXT_BOOK_ORGANIZER
+        value: "true"
