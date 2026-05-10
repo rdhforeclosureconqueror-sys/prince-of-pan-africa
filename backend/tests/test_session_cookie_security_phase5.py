@@ -16,6 +16,8 @@ class SessionCookieSecurityPhase5Tests(unittest.TestCase):
         os.environ["DATABASE_URL"] = f"sqlite:///{db_path}"
         os.environ["ENVIRONMENT"] = "test"
         os.environ["SESSION_SECRET"] = "test-session-secret"
+        os.environ.pop("SESSION_COOKIE_DOMAIN", None)
+        os.environ.pop("SESSION_COOKIE_SAMESITE", None)
 
         from app import models  # noqa: F401
         from app.database import Base, SessionLocal, engine
@@ -60,21 +62,69 @@ class SessionCookieSecurityPhase5Tests(unittest.TestCase):
         self.assertIn("mufasa_session=", response.headers.get("set-cookie", ""))
         self.assertIn("Max-Age=0", response.headers.get("set-cookie", ""))
 
-    def test_production_cookie_uses_secure_true(self):
+    def test_production_cookie_uses_secure_lax_path_and_host_only_by_default(self):
         original_env = os.environ.get("ENVIRONMENT")
+        original_samesite = os.environ.get("SESSION_COOKIE_SAMESITE")
+        original_domain = os.environ.get("SESSION_COOKIE_DOMAIN")
         try:
             os.environ["ENVIRONMENT"] = "production"
+            os.environ.pop("SESSION_COOKIE_SAMESITE", None)
+            os.environ.pop("SESSION_COOKIE_DOMAIN", None)
             join_response = self.client.post(
                 "/auth/join",
                 json={"email": "phase5-user@example.com", "password": "password123"},
             )
             self.assertEqual(join_response.status_code, 201)
-            self.assertIn("Secure", join_response.headers.get("set-cookie", ""))
+            set_cookie = join_response.headers.get("set-cookie", "")
+            self.assertIn("Secure", set_cookie)
+            self.assertIn("HttpOnly", set_cookie)
+            self.assertIn("SameSite=lax", set_cookie)
+            self.assertIn("Path=/", set_cookie)
+            self.assertNotIn("Domain=", set_cookie)
         finally:
             if original_env is None:
                 os.environ.pop("ENVIRONMENT", None)
             else:
                 os.environ["ENVIRONMENT"] = original_env
+            if original_samesite is None:
+                os.environ.pop("SESSION_COOKIE_SAMESITE", None)
+            else:
+                os.environ["SESSION_COOKIE_SAMESITE"] = original_samesite
+            if original_domain is None:
+                os.environ.pop("SESSION_COOKIE_DOMAIN", None)
+            else:
+                os.environ["SESSION_COOKIE_DOMAIN"] = original_domain
+
+    def test_production_cookie_can_use_configured_parent_domain(self):
+        original_env = os.environ.get("ENVIRONMENT")
+        original_samesite = os.environ.get("SESSION_COOKIE_SAMESITE")
+        original_domain = os.environ.get("SESSION_COOKIE_DOMAIN")
+        try:
+            os.environ["ENVIRONMENT"] = "production"
+            os.environ["SESSION_COOKIE_SAMESITE"] = "lax"
+            os.environ["SESSION_COOKIE_DOMAIN"] = ".simbawaujamaa.com"
+            join_response = self.client.post(
+                "/auth/join",
+                json={"email": "phase5-domain@example.com", "password": "password123"},
+            )
+            self.assertEqual(join_response.status_code, 201)
+            set_cookie = join_response.headers.get("set-cookie", "")
+            self.assertIn("Secure", set_cookie)
+            self.assertIn("SameSite=lax", set_cookie)
+            self.assertIn("Domain=.simbawaujamaa.com", set_cookie)
+        finally:
+            if original_env is None:
+                os.environ.pop("ENVIRONMENT", None)
+            else:
+                os.environ["ENVIRONMENT"] = original_env
+            if original_samesite is None:
+                os.environ.pop("SESSION_COOKIE_SAMESITE", None)
+            else:
+                os.environ["SESSION_COOKIE_SAMESITE"] = original_samesite
+            if original_domain is None:
+                os.environ.pop("SESSION_COOKIE_DOMAIN", None)
+            else:
+                os.environ["SESSION_COOKIE_DOMAIN"] = original_domain
 
 
 if __name__ == "__main__":

@@ -18,6 +18,9 @@ Coordinates OpenAI GPT and OpenVoice APIs for text, speech, and structured porta
 - `OPENAI_API_KEY`
 - `OPENVOICE_URL` (default: https://ffmpeg-9xhs.onrender.com)
 - `ALLOWED_ORIGINS` (comma-separated list of frontend URLs for CORS)
+- `SESSION_SECRET` (required outside local/test environments)
+- `SESSION_COOKIE_SAMESITE` (defaults to `lax`; set to `none` only for unavoidable cross-site API deployments)
+- `SESSION_COOKIE_DOMAIN` (optional; use `.simbawaujamaa.com` after the API is served from `api.simbawaujamaa.com`)
 
 ## Paid subscriber access audit/migration
 
