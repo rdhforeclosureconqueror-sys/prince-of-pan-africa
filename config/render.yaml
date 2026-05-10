@@ -17,7 +17,11 @@ services:
       - key: OPENVOICE_URL
         value: https://ffmpeg-9xhs.onrender.com
       - key: ALLOWED_ORIGINS
-        value: https://prince-of-pan-africa.onrender.com,https://prince-of-pan-africa-frontend.onrender.com,https://mufasa-knowledge-bank.onrender.com,https://simbawaujamaa.com,https://www.simbawaujamaa.com
+        value: https://simbawaujamaa.com,https://www.simbawaujamaa.com
+      - key: SESSION_COOKIE_SAMESITE
+        value: lax
+      - key: SESSION_COOKIE_DOMAIN
+        value: .simbawaujamaa.com
       - key: PYTHON_VERSION
         value: 3.11
 
@@ -28,6 +32,6 @@ services:
     staticPublishPath: dist
     envVars:
       - key: VITE_API_BASE_URL
-        value: https://prince-of-pan-africa-backend.onrender.com
+        value: https://api.simbawaujamaa.com
       - key: VITE_ENABLE_TEXT_BOOK_ORGANIZER
         value: "true"

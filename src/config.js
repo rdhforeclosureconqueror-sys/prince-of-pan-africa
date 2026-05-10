@@ -11,7 +11,7 @@ const hostname = window?.location?.hostname || "production";
 // -----------------------------
 // 🔗 PRIMARY BACKEND (Simba Waa Ujamaa API)
 // -----------------------------
-const PROD_API = "https://prince-of-pan-africa-backend.onrender.com";
+const PROD_API = "https://api.simbawaujamaa.com";
 const DEV_API = "http://localhost:3000";
 
 export const API_BASE_URL =
@@ -49,7 +49,7 @@ export const APP_BASE_URL =
 // -----------------------------
 // 🔌 WEBSOCKET BASE (Realtime)
 // -----------------------------
-const PROD_WS = "wss://prince-of-pan-africa-backend.onrender.com";
+const PROD_WS = "wss://api.simbawaujamaa.com";
 const DEV_WS = "ws://localhost:3000";
 
 export const WS_BASE_URL =

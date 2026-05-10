@@ -14,6 +14,8 @@ from app.session import (
     SESSION_COOKIE,
     SESSION_MAX_AGE_SECONDS,
     build_session_cookie_value,
+    get_session_cookie_domain,
+    get_session_cookie_samesite,
     parse_session_cookie_value,
     should_use_secure_cookie,
 )
@@ -42,15 +44,25 @@ def _find_user_by_email(db: Session, email: str) -> User | None:
 
 
 def _set_session_cookie(response: Response, user_id: int) -> None:
-    cross_site_cookie = should_use_secure_cookie()
-    same_site = "none" if cross_site_cookie else "lax"
+    secure_cookie = should_use_secure_cookie()
+    cookie_domain = get_session_cookie_domain()
+    same_site = get_session_cookie_samesite()
     response.set_cookie(
         key=SESSION_COOKIE,
         value=build_session_cookie_value(user_id),
         httponly=True,
         samesite=same_site,
-        secure=cross_site_cookie,
+        secure=secure_cookie,
         max_age=SESSION_MAX_AGE_SECONDS,
+        path="/",
+        domain=cookie_domain,
+    )
+    logger.info(
+        "session_cookie_set user_id=%s secure=%s samesite=%s domain=%s",
+        user_id,
+        secure_cookie,
+        same_site,
+        cookie_domain or "host-only",
     )
 
 
@@ -227,7 +239,13 @@ def auth_login(payload: AuthPayload, response: Response, db: Session = Depends(g
 
 @router.post("/logout")
 def auth_logout(response: Response):
-    cross_site_cookie = should_use_secure_cookie()
-    same_site = "none" if cross_site_cookie else "lax"
-    response.delete_cookie(SESSION_COOKIE, samesite=same_site, secure=cross_site_cookie)
+    secure_cookie = should_use_secure_cookie()
+    same_site = get_session_cookie_samesite()
+    response.delete_cookie(
+        SESSION_COOKIE,
+        samesite=same_site,
+        secure=secure_cookie,
+        path="/",
+        domain=get_session_cookie_domain(),
+    )
     return {"ok": True, "logged_out": True}

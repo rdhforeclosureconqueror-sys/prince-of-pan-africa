@@ -25,12 +25,18 @@ def get_session_secret() -> str:
     if secret:
         return secret
 
-    insecure_ok = os.getenv("ALLOW_INSECURE_DEV_SESSION_SECRET", "").strip().lower() in {"1", "true", "yes", "on"}
+    insecure_ok = os.getenv("ALLOW_INSECURE_DEV_SESSION_SECRET", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
     if insecure_ok and not should_use_secure_cookie():
         return "dev-insecure-session-secret"
 
     raise SessionValidationError(
-        "SESSION_SECRET is required. Set SESSION_SECRET in production; for local/dev/test only, "        "you may set ALLOW_INSECURE_DEV_SESSION_SECRET=true to use an explicit fallback."
+        "SESSION_SECRET is required. Set SESSION_SECRET in production; for local/dev/test only, "
+        "you may set ALLOW_INSECURE_DEV_SESSION_SECRET=true to use an explicit fallback."
     )
 
 
@@ -93,6 +99,26 @@ def parse_session_cookie_value(cookie_value: str | None) -> dict[str, int]:
     return {"user_id": user_id, "issued_at": issued_at}
 
 
-def should_use_secure_cookie() -> bool:
+def is_production_like_cookie_environment() -> bool:
     env = (os.getenv("ENVIRONMENT") or os.getenv("APP_ENV") or "").strip().lower()
     return env not in {"", "local", "dev", "development", "test", "testing"}
+
+
+def should_use_secure_cookie() -> bool:
+    return is_production_like_cookie_environment()
+
+
+def get_session_cookie_domain() -> str | None:
+    domain = os.getenv("SESSION_COOKIE_DOMAIN", "").strip()
+    return domain or None
+
+
+def get_session_cookie_samesite() -> str:
+    configured = os.getenv("SESSION_COOKIE_SAMESITE", "").strip().lower()
+    if configured in {"lax", "strict", "none"}:
+        return configured
+
+    # Production is intended to run the browser-facing API on api.simbawaujamaa.com,
+    # which is same-site with simbawaujamaa.com and works with Lax cookies. If a
+    # temporary cross-site API URL is unavoidable, set SESSION_COOKIE_SAMESITE=None.
+    return "lax"
