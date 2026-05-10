@@ -104,7 +104,14 @@ async def log_tts_preflight(request: Request, call_next):
 async def log_admin_request_context(request: Request, call_next):
     response = await call_next(request)
 
-    tracked_paths = {"/admin/ai/overview", "/admin/overview", "/admin/activity-stream", "/auth/me"}
+    tracked_paths = {
+        "/admin/ai/overview",
+        "/admin/overview",
+        "/admin/activity-stream",
+        "/auth/me",
+        "/member/overview",
+        "/member/activity",
+    }
     if request.url.path in tracked_paths:
         user_id = None
         cookie_present = False

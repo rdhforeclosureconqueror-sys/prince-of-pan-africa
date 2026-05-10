@@ -13,8 +13,8 @@ export default function MemberDashboard() {
     (async () => {
       try {
         const [overviewRes, activityRes] = await Promise.all([
-          api("/member/overview"),
-          api("/member/activity"),
+          api("/member/overview", { method: "GET" }),
+          api("/member/activity", { method: "GET" }),
         ]);
 
         if (!mounted) return;
@@ -22,7 +22,13 @@ export default function MemberDashboard() {
         setActivity(activityRes?.activity || activityRes?.items || []);
       } catch (err) {
         if (!mounted) return;
-        setError(err.message || "Unable to load your experience data yet.");
+        if (err.status === 401) {
+          setError("Authentication required. Please log in again to load your member dashboard.");
+        } else if (err.status === 403) {
+          setError("Your account is signed in but does not have member dashboard access. Please contact support.");
+        } else {
+          setError(err.message || "Unable to load your experience data yet.");
+        }
       } finally {
         if (mounted) setLoading(false);
       }

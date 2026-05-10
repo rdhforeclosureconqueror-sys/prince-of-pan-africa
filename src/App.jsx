@@ -22,13 +22,19 @@ import { api } from "./api/api";
 import "./styles/backgroundSystem.css";
 
 
-function AppRoutes({ user, isAdmin, canAccessOrganizer, authChecked, refreshAuth, dashboardElement }) {
+function DashboardRoute({ authChecked, user, isAdmin }) {
+  if (!authChecked) return <div className="admin-loading">Loading your dashboard...</div>;
+  if (!user) return <Navigate to="/?auth=login" replace />;
+  return isAdmin ? <AdminOperationsDashboard /> : <MemberDashboard />;
+}
+
+function AppRoutes({ user, isAdmin, canAccessOrganizer, authChecked, refreshAuth }) {
   return (
     <>
       <GlobalNav isAdmin={isAdmin} user={user} />
       <Routes>
         <Route path="/" element={<Home user={user} isAdmin={isAdmin} onAuthChange={refreshAuth} />} />
-        <Route path="/dashboard" element={dashboardElement} />
+        <Route path="/dashboard" element={<DashboardRoute authChecked={authChecked} user={user} isAdmin={isAdmin} />} />
         <Route path="/admin-legacy" element={<Navigate to="/dashboard" replace />} />
         <Route
           path="/fitness"
@@ -142,7 +148,6 @@ export default function App() {
     [rbac],
   );
 
-  const dashboardElement = isAdmin ? <AdminOperationsDashboard /> : <MemberDashboard />;
 
   return (
     <Router>
@@ -153,7 +158,6 @@ export default function App() {
         canAccessOrganizer={canAccessOrganizer}
         authChecked={authChecked}
         refreshAuth={refreshAuth}
-        dashboardElement={dashboardElement}
       />
     </Router>
   );
