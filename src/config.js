@@ -11,12 +11,23 @@ const hostname = window?.location?.hostname || "production";
 // -----------------------------
 // 🔗 PRIMARY BACKEND (Simba Waa Ujamaa API)
 // -----------------------------
-const PROD_API = "https://api.simbawaujamaa.com";
+const CUSTOM_API_DOMAIN = "api.simbawaujamaa.com";
+// Production fallback must stay on the active Render backend until the custom
+// API domain is attached to that service, serving TLS, and returning backend
+// health/auth responses instead of a suspended-service page.
+const PROD_API = "https://prince-of-pan-africa-backend.onrender.com";
 const DEV_API = "http://localhost:3000";
+const explicitApiBaseUrl = String(import.meta.env.VITE_API_BASE_URL || "").trim();
 
 export const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ||
+  explicitApiBaseUrl ||
   (hostname === "localhost" ? DEV_API : PROD_API);
+
+if (API_BASE_URL.includes(CUSTOM_API_DOMAIN)) {
+  console.warn(
+    `[runtime] ${CUSTOM_API_DOMAIN} must not be used in production until the custom backend domain is active, attached to prince-of-pan-africa-backend, serving HTTPS, and no longer suspended.`
+  );
+}
 
 const runtimeSearchParams = new URLSearchParams(window?.location?.search || "");
 const AUTH_DEBUG_FLAG = String(import.meta.env.VITE_AUTH_DEBUG || "").trim().toLowerCase();
@@ -49,12 +60,18 @@ export const APP_BASE_URL =
 // -----------------------------
 // 🔌 WEBSOCKET BASE (Realtime)
 // -----------------------------
-const PROD_WS = "wss://api.simbawaujamaa.com";
+const PROD_WS = API_BASE_URL.replace(/^http/, "ws");
 const DEV_WS = "ws://localhost:3000";
 
 export const WS_BASE_URL =
   import.meta.env.VITE_WS_BASE_URL ||
   (hostname === "localhost" ? DEV_WS : PROD_WS);
+
+if (WS_BASE_URL.includes(CUSTOM_API_DOMAIN)) {
+  console.warn(
+    `[runtime] WebSocket host ${CUSTOM_API_DOMAIN} must not be used until the custom backend domain is active and no longer suspended.`
+  );
+}
 
 // -----------------------------
 // 🧠 SECONDARY SERVICES (AI + Voice + Knowledge)

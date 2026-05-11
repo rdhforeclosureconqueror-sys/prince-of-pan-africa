@@ -19,8 +19,12 @@ Coordinates OpenAI GPT and OpenVoice APIs for text, speech, and structured porta
 - `OPENVOICE_URL` (default: https://ffmpeg-9xhs.onrender.com)
 - `ALLOWED_ORIGINS` (comma-separated list of frontend URLs for CORS)
 - `SESSION_SECRET` (required outside local/test environments)
-- `SESSION_COOKIE_SAMESITE` (defaults to `lax`; set to `none` only for unavoidable cross-site API deployments)
-- `SESSION_COOKIE_DOMAIN` (optional; use `.simbawaujamaa.com` after the API is served from `api.simbawaujamaa.com`)
+- `SESSION_COOKIE_SAMESITE` (defaults to `lax`; set to `none` for the current cross-site Render fallback)
+- `SESSION_COOKIE_DOMAIN` (optional; leave unset/empty while the browser-facing backend is `prince-of-pan-africa-backend.onrender.com`; use `.simbawaujamaa.com` only after the API is served from a live `api.simbawaujamaa.com`)
+
+## Production API host note
+
+Current frontend production fallback should use `https://prince-of-pan-africa-backend.onrender.com`. Do not point production to `https://api.simbawaujamaa.com` until Render has attached that custom domain to `prince-of-pan-africa-backend`, TLS is active, `GET /health` returns the backend response, and the suspended-service page is gone.
 
 ## Paid subscriber access audit/migration
 
