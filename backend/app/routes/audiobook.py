@@ -105,6 +105,7 @@ ORGANIZER_PLAN_CHAPTER_BLOCKS = 5
 BOOK_ORGANIZER_OVER_SPLIT_WARNING_THRESHOLD = 80
 BOOK_ORGANIZER_OVER_SPLIT_REVIEW_THRESHOLD = 100
 BOOK_ORGANIZER_MIN_CHAPTER_WORDS = 500
+BOOK_ORGANIZER_EXPORT_APPROVAL_MESSAGE = "Please review and approve book structure before exporting."
 
 
 
@@ -1199,7 +1200,9 @@ def propose_organization_plan(
         "chapters": chapters,
         "chapter_count": len(chapters),
         "detection_mode": "explicit_chapter_markers" if explicit_mode else "paragraph_chunks",
-        "requires_review": len(chapters) > BOOK_ORGANIZER_OVER_SPLIT_REVIEW_THRESHOLD,
+        "requires_review": True,
+        "review_status": "pending",
+        "approved": False,
         "warnings": warnings,
     }
 
@@ -1229,8 +1232,10 @@ def _clean_organizer_chapter_paragraphs(chapter: dict, raw_paragraphs: list[dict
     cleaned: list[dict] = []
     marker = chapter.get("marker")
     title = chapter.get("title")
+    chapter_title = chapter.get("chapter_title")
     marker_removed = not marker
     title_removed = not title
+    chapter_title_removed = not chapter_title
     for paragraph in raw_paragraphs:
         lines = (paragraph.get("text", "") or "").replace("\r\n", "\n").replace("\r", "\n").split("\n")
         while lines and not lines[0].strip():
@@ -1243,6 +1248,11 @@ def _clean_organizer_chapter_paragraphs(chapter: dict, raw_paragraphs: list[dict
         if lines and not title_removed and lines[0].strip().casefold() == str(title).strip().casefold():
             lines.pop(0)
             title_removed = True
+            while lines and not lines[0].strip():
+                lines.pop(0)
+        if lines and not chapter_title_removed and lines[0].strip().casefold() == str(chapter_title).strip().casefold():
+            lines.pop(0)
+            chapter_title_removed = True
             while lines and not lines[0].strip():
                 lines.pop(0)
         text = "\n".join(lines).strip()
@@ -1326,6 +1336,20 @@ def _resolve_organizer_export_project(
         .all()
     )
     block_map = {block.block_id: block for block in blocks}
+    approved = bool(plan.structure.get("approved") or plan.structure.get("review_status") == "approved")
+    if not approved:
+        chapter_count = len(plan.structure.get("chapters", []))
+        logger.warning(
+            "organizer_export_blocked document_id=%s plan_id=%s chapter_count=%s epilogue_count=%s source_text_checksum=%s review_status=%s approved=%s",
+            document.id,
+            plan.id,
+            chapter_count,
+            len([chapter for chapter in plan.structure.get("chapters", []) if chapter.get("type") == "epilogue"]),
+            document.source_text_hash,
+            plan.structure.get("review_status", "pending"),
+            approved,
+        )
+        raise HTTPException(status_code=400, detail=BOOK_ORGANIZER_EXPORT_APPROVAL_MESSAGE)
     chapter_dicts = _build_organizer_chapters_from_plan(plan, block_map)
     title = _clean_metadata_value(getattr(payload, "title", None) or plan.structure.get("title_candidate") or document.title or "Untitled") or "Untitled"
     subtitle = _clean_metadata_value(getattr(payload, "subtitle", None))
@@ -1370,6 +1394,26 @@ def _resolve_organizer_export_project(
         ],
     )
     return document, plan, project
+
+
+def _log_organizer_export(
+    *,
+    document: BookOrganizerDocument,
+    plan: BookOrganizationPlan,
+    project: BookProject,
+    export_format: str,
+) -> None:
+    logger.info(
+        "organizer_export document_id=%s plan_id=%s chapter_count=%s epilogue_count=%s source_text_checksum=%s review_status=%s approved=%s export_format=%s",
+        document.id,
+        plan.id,
+        len(project.chapters),
+        len([chapter for chapter in project.chapters if chapter.kind == "epilogue"]),
+        document.source_text_hash,
+        plan.structure.get("review_status", "pending"),
+        bool(plan.structure.get("approved") or plan.structure.get("review_status") == "approved"),
+        export_format,
+    )
 
 def _canonical_plaintext(project: BookProject) -> str:
     parts: list[str] = []
@@ -1741,7 +1785,9 @@ def review_structure_for_organizer(
         "chapters": chapters,
         "chapter_count": len(chapters),
         "detection_mode": plan.structure.get("detection_mode"),
-        "requires_review": len(chapters) > BOOK_ORGANIZER_OVER_SPLIT_REVIEW_THRESHOLD or bool(plan.structure.get("requires_review", False)),
+        "requires_review": False,
+        "review_status": "approved",
+        "approved": True,
         "warnings": [*plan.structure.get("warnings", []), *_book_organizer_structure_warnings(len(chapters))],
     }
     new_plan = BookOrganizationPlan(
@@ -1799,6 +1845,8 @@ def preview_organization(
         "chapter_titles": chapter_titles,
         "warnings": plan.structure.get("warnings", []),
         "requires_review": bool(plan.structure.get("requires_review", False)),
+        "review_status": plan.structure.get("review_status", "pending"),
+        "approved": bool(plan.structure.get("approved") or plan.structure.get("review_status") == "approved"),
         "detection_mode": plan.structure.get("detection_mode"),
         "chapters": chapters,
     }
@@ -1811,7 +1859,8 @@ def export_organization_txt(
     user: User = Depends(require_permission("book_organizer:export_self")),
     db: Session = Depends(get_db),
 ):
-    document, _plan, project = _resolve_organizer_export_project(payload=payload, user=user, db=db)
+    document, plan, project = _resolve_organizer_export_project(payload=payload, user=user, db=db)
+    _log_organizer_export(document=document, plan=plan, project=project, export_format="txt")
     safe_title = _safe_export_basename(project.title or document.title)
     return PlainTextResponse(
         content=_canonical_plaintext(project),
@@ -1827,7 +1876,8 @@ def export_organization_markdown(
     user: User = Depends(require_permission("book_organizer:export_self")),
     db: Session = Depends(get_db),
 ):
-    document, _plan, project = _resolve_organizer_export_project(payload=payload, user=user, db=db)
+    document, plan, project = _resolve_organizer_export_project(payload=payload, user=user, db=db)
+    _log_organizer_export(document=document, plan=plan, project=project, export_format="markdown")
     safe_title = _safe_export_basename(project.title or document.title)
     return PlainTextResponse(
         content=_canonical_markdown(project),
@@ -1843,7 +1893,8 @@ def export_organization_docx(
     user: User = Depends(require_permission("book_organizer:export_self")),
     db: Session = Depends(get_db),
 ):
-    document, _plan, project = _resolve_organizer_export_project(payload=payload, user=user, db=db)
+    document, plan, project = _resolve_organizer_export_project(payload=payload, user=user, db=db)
+    _log_organizer_export(document=document, plan=plan, project=project, export_format="docx")
     export = BookExport(
         filename=f"{_safe_export_basename(project.title or document.title)}.docx",
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -1859,7 +1910,8 @@ def export_organization_epub(
     user: User = Depends(require_permission("book_organizer:export_self")),
     db: Session = Depends(get_db),
 ):
-    document, _plan, project = _resolve_organizer_export_project(payload=payload, user=user, db=db)
+    document, plan, project = _resolve_organizer_export_project(payload=payload, user=user, db=db)
+    _log_organizer_export(document=document, plan=plan, project=project, export_format="epub")
     export = BookExport(
         filename=f"{_safe_export_basename(project.title or document.title)}.epub",
         media_type="application/epub+zip",
@@ -1875,7 +1927,8 @@ def export_organization_print_pdf(
     user: User = Depends(require_permission("book_organizer:export_self")),
     db: Session = Depends(get_db),
 ):
-    document, _plan, project = _resolve_organizer_export_project(payload=payload, user=user, db=db)
+    document, plan, project = _resolve_organizer_export_project(payload=payload, user=user, db=db)
+    _log_organizer_export(document=document, plan=plan, project=project, export_format="print_pdf")
     export = BookExport(
         filename=f"{_safe_export_basename(project.title or document.title)}-print-interior.pdf",
         media_type="application/pdf",

@@ -86,6 +86,11 @@ export default function LibraryOrganizer() {
 
   async function handleDownloadExport(exportKind, endpoint, fallbackFilename) {
     if (!documentId || !planId) return;
+    if (!preview?.approved) {
+      setError("Please review and approve book structure before exporting.");
+      setDownloadStatus("");
+      return;
+    }
     if (!author.trim()) {
       setError("Please enter an author name before exporting. Metadata will not use Unknown silently.");
       setDownloadStatus("");
@@ -196,21 +201,22 @@ export default function LibraryOrganizer() {
                 <input value={copyrightYear} onChange={(e) => setCopyrightYear(e.target.value)} className="save-input" placeholder="Optional, e.g. 2026" />
               </label>
             </div>
+            {!preview?.approved ? <p className="saved-empty">Please review and approve book structure before exporting.</p> : null}
             {!author.trim() ? <p className="saved-empty">Author metadata is required before final export so readers do not show “Unknown.”</p> : null}
             <div className="library-actions">
-              <button type="button" className="library-pill" onClick={() => handleDownloadExport("DOCX", "/audiobooks/organizer/export-docx", "manuscript.docx")} disabled={!!downloadingExport}>
+              <button type="button" className="library-pill" onClick={() => handleDownloadExport("DOCX", "/audiobooks/organizer/export-docx", "manuscript.docx")} disabled={!!downloadingExport || !preview?.approved}>
                 {downloadingExport === "DOCX" ? "Preparing DOCX..." : "Download DOCX"}
               </button>
               <span className="saved-book-meta">Editable manuscript for author/editor revisions.</span>
-              <button type="button" className="library-pill" onClick={() => handleDownloadExport("EPUB", "/audiobooks/organizer/export-epub", "manuscript.epub")} disabled={!!downloadingExport}>
+              <button type="button" className="library-pill" onClick={() => handleDownloadExport("EPUB", "/audiobooks/organizer/export-epub", "manuscript.epub")} disabled={!!downloadingExport || !preview?.approved}>
                 {downloadingExport === "EPUB" ? "Preparing EPUB..." : "Download EPUB"}
               </button>
               <span className="saved-book-meta">Ebook with reflowable chapters and clickable navigation. On iPhone/iPad, tap Share → Books to open the EPUB.</span>
-              <button type="button" className="library-pill" onClick={() => handleDownloadExport("Print PDF", "/audiobooks/organizer/export-print-pdf", "manuscript-print-interior.pdf")} disabled={!!downloadingExport}>
+              <button type="button" className="library-pill" onClick={() => handleDownloadExport("Print PDF", "/audiobooks/organizer/export-print-pdf", "manuscript-print-interior.pdf")} disabled={!!downloadingExport || !preview?.approved}>
                 {downloadingExport === "Print PDF" ? "Preparing Print PDF..." : "Download Print PDF"}
               </button>
               <span className="saved-book-meta">Physical book / paperback interior PDF, default 6×9 inches.</span>
-              <button type="button" className="library-pill" onClick={() => handleDownloadExport("TXT/Markdown", "/audiobooks/organizer/export-txt", "manuscript.txt")} disabled={!!downloadingExport}>
+              <button type="button" className="library-pill" onClick={() => handleDownloadExport("TXT/Markdown", "/audiobooks/organizer/export-txt", "manuscript.txt")} disabled={!!downloadingExport || !preview?.approved}>
                 {downloadingExport === "TXT/Markdown" ? "Preparing TXT..." : "Download TXT/Markdown"}
               </button>
               <span className="saved-book-meta">Plain text backup only; no page formatting expectations.</span>
@@ -233,6 +239,11 @@ export default function LibraryOrganizer() {
                   {warning.message}
                 </p>
               ))}
+              <div className="library-actions">
+                <button type="button" className="library-pill library-pill--green" onClick={() => applyStructureEdits({})}>
+                  {preview?.approved ? "Structure approved" : "Approve reviewed structure"}
+                </button>
+              </div>
               <ol>
                 {preview.chapters.map((chapter) => (
                   <li key={`summary-${chapter.chapter_index}`}>

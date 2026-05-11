@@ -116,6 +116,8 @@ class BookOrganizerReviewPhase5Tests(unittest.TestCase):
             chapters = [dict(ch) for ch in structure['chapters']]
             chapters[0]['block_ids'] = ['p99999']
             structure['chapters'] = chapters
+            structure['approved'] = True
+            structure['review_status'] = 'approved'
             plan.structure = structure
             db.commit()
 
@@ -146,13 +148,14 @@ class BookOrganizerReviewPhase5Tests(unittest.TestCase):
 
         client = self._authed_client()
         document_id, plan_id = self._doc_and_plan(client)
+        revised = client.post('/audiobooks/organizer/review-structure', json={'document_id': document_id, 'plan_id': plan_id}).json()
         with self.SessionLocal() as db:
             block = db.query(BookOrganizerBlock).filter(BookOrganizerBlock.document_id == document_id, BookOrganizerBlock.block_id == 'p00001').first()
             db.execute(
                 BookOrganizerBlock.__table__.update().where(BookOrganizerBlock.id == block.id).values(checksum='bad-checksum')
             )
             db.commit()
-        exported = client.post('/audiobooks/organizer/export-txt', json={'document_id': document_id, 'plan_id': plan_id})
+        exported = client.post('/audiobooks/organizer/export-txt', json={'document_id': document_id, 'plan_id': revised['plan_id']})
         self.assertEqual(exported.status_code, 422)
         self.assertEqual(exported.json()['detail']['checksum_mismatch_block_ids'], ['p00001'])
 
@@ -167,19 +170,31 @@ class BookOrganizerReviewPhase5Tests(unittest.TestCase):
             chapters = [dict(ch) for ch in structure['chapters']]
             chapters[0]['block_ids'] = ['p99999']
             structure['chapters'] = chapters
+            structure['approved'] = True
+            structure['review_status'] = 'approved'
             plan.structure = structure
             db.commit()
         exported = client.post('/audiobooks/organizer/export-txt', json={'document_id': document_id, 'plan_id': plan_id})
         self.assertEqual(exported.status_code, 422)
         self.assertEqual(exported.json()['detail']['invalid_block_ids'], ['p99999'])
 
+    def test_export_before_review_without_canonical_approval_returns_clear_400(self):
+        client = self._authed_client()
+        document_id, plan_id = self._doc_and_plan(client)
+
+        exported = client.post('/audiobooks/organizer/export-epub', json={'document_id': document_id, 'plan_id': plan_id})
+
+        self.assertEqual(exported.status_code, 400)
+        self.assertEqual(exported.json()['detail'], 'Please review and approve book structure before exporting.')
+
     def test_export_txt_body_matches_preview_body_text(self):
         client = self._authed_client()
         ingest = client.post('/audiobooks/organizer/ingest-text', json={'title': 'Source', 'text': 'Para A\n\nPara B\n\nPara C'})
         document_id = ingest.json()['document']['id']
         plan_id = client.post('/audiobooks/organizer/propose-plan', json={'document_id': document_id}).json()['plan_id']
-        preview = client.post('/audiobooks/organizer/preview', json={'document_id': document_id, 'plan_id': plan_id}).json()
-        exported = client.post('/audiobooks/organizer/export-txt', json={'document_id': document_id, 'plan_id': plan_id})
+        revised = client.post('/audiobooks/organizer/review-structure', json={'document_id': document_id, 'plan_id': plan_id}).json()
+        preview = client.post('/audiobooks/organizer/preview', json={'document_id': document_id, 'plan_id': revised['plan_id']}).json()
+        exported = client.post('/audiobooks/organizer/export-txt', json={'document_id': document_id, 'plan_id': revised['plan_id']})
         self.assertEqual(exported.status_code, 200)
         preview_parts = []
         for chapter in preview['chapters']:
@@ -197,9 +212,10 @@ class BookOrganizerReviewPhase5Tests(unittest.TestCase):
         ingest = client.post('/audiobooks/organizer/ingest-text', json={'title': 'roughsource', 'text': 'Para A\n\nPara B\n\nPara C'})
         document_id = ingest.json()['document']['id']
         plan_id = client.post('/audiobooks/organizer/propose-plan', json={'document_id': document_id}).json()['plan_id']
+        revised = client.post('/audiobooks/organizer/review-structure', json={'document_id': document_id, 'plan_id': plan_id}).json()
         metadata = {
             'document_id': document_id,
-            'plan_id': plan_id,
+            'plan_id': revised['plan_id'],
             'title': 'Who Really Freed the Slaves?',
             'subtitle': 'A Prince of Pan Africa Reader',
             'author': 'Mufasa Study Circle',
