@@ -150,8 +150,27 @@ export default function LibraryOrganizer() {
         {error ? <p className="saved-empty">{error}</p> : null}
 
         {preview?.chapters?.length ? (
-          <section className="saved-library-grid">
-            {preview.chapters.map((chapter) => (
+          <>
+            <section className="saved-book-card">
+              <h2>Detected structure preview</h2>
+              <p>
+                Detected {preview.detected_chapter_count ?? preview.chapters.length} chapters for the book structure preview.
+              </p>
+              {preview.warnings?.map((warning) => (
+                <p key={`${warning.code}-${warning.chapter_count ?? warning.message}`} className="saved-empty">
+                  {warning.message}
+                </p>
+              ))}
+              <ol>
+                {preview.chapters.map((chapter) => (
+                  <li key={`summary-${chapter.chapter_index}`}>
+                    {chapter.chapter_title} — {chapter.word_count ?? 0} words
+                  </li>
+                ))}
+              </ol>
+            </section>
+            <section className="saved-library-grid">
+              {preview.chapters.map((chapter) => (
               <article key={chapter.chapter_index} className="saved-book-card">
                 <h3>{chapter.chapter_title}</h3>
                 <input
@@ -198,8 +217,9 @@ export default function LibraryOrganizer() {
                   <p key={paragraph.block_id}>{paragraph.text}</p>
                 ))}
               </article>
-            ))}
-          </section>
+              ))}
+            </section>
+          </>
         ) : null}
       </div>
     </main>
