@@ -19,11 +19,9 @@ services:
       - key: ALLOWED_ORIGINS
         value: https://simbawaujamaa.com,https://www.simbawaujamaa.com
       - key: SESSION_COOKIE_SAMESITE
-        value: none
-      # Leave unset/empty while the browser-facing backend is onrender.com;
-      # onrender.com cannot set cookies for simbawaujamaa.com.
+        value: lax
       - key: SESSION_COOKIE_DOMAIN
-        value: ""
+        value: .simbawaujamaa.com
       - key: PYTHON_VERSION
         value: 3.11
 
@@ -34,6 +32,6 @@ services:
     staticPublishPath: dist
     envVars:
       - key: VITE_API_BASE_URL
-        value: https://prince-of-pan-africa-backend.onrender.com
+        value: https://api.simbawaujamaa.com
       - key: VITE_ENABLE_TEXT_BOOK_ORGANIZER
         value: "true"
