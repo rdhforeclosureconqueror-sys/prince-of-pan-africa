@@ -88,6 +88,20 @@ class OrganizerStructureEditRequest(BaseModel):
 GUEST_EMAIL = "pilot.audiobook.guest@local"
 MAX_ORGANIZER_TEXT_CHARS = 1_200_000
 ORGANIZER_PLAN_CHAPTER_BLOCKS = 5
+BOOK_ORGANIZER_OVER_SPLIT_WARNING_THRESHOLD = 80
+BOOK_ORGANIZER_OVER_SPLIT_REVIEW_THRESHOLD = 100
+BOOK_ORGANIZER_MIN_CHAPTER_WORDS = 500
+
+BOOK_ORGANIZER_CHAPTER_WORD_NUMBERS = (
+    "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+    "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen",
+    "eighteen", "nineteen", "twenty", "twenty-one", "twenty two", "thirty", "forty", "fifty",
+)
+BOOK_ORGANIZER_CHAPTER_MARKER_RE = re.compile(
+    r"^(?P<marker>chapter\s+(?:(?:" + "|".join(re.escape(word) for word in BOOK_ORGANIZER_CHAPTER_WORD_NUMBERS) + r")|\d+|[ivxlcdm]+)|prologue|epilogue|introduction|conclusion)\s*$",
+    re.IGNORECASE,
+)
+BOOK_ORGANIZER_SPECIAL_STRUCTURE_TYPES = {"prologue", "epilogue", "introduction", "conclusion"}
 
 
 def _allow_guest_audiobooks() -> bool:
@@ -282,6 +296,210 @@ def _split_into_chapters(text: str) -> tuple[list[dict], str]:
     strategy = "detected_headings" if found_heading else "auto_partitioned"
     return chapters, strategy
 
+
+def _normalize_book_manuscript_text(text: str) -> str:
+    return (text or "").replace("\r\n", "\n").replace("\r", "\n").strip()
+
+
+def _book_organizer_word_count(text: str) -> int:
+    return len(re.findall(r"\b\S+\b", text or ""))
+
+
+def _book_organizer_explicit_marker(line: str) -> str | None:
+    """Return only explicit, user-facing book structure boundary markers."""
+    normalized = (line or "").strip()
+    if not normalized or len(normalized) > 80:
+        return None
+    match = BOOK_ORGANIZER_CHAPTER_MARKER_RE.match(normalized)
+    if not match:
+        return None
+    return re.sub(r"\s+", " ", match.group("marker")).strip()
+
+
+def _book_organizer_chapter_type(marker: str) -> str:
+    first = (marker or "").strip().split(maxsplit=1)[0].lower()
+    return first if first in BOOK_ORGANIZER_SPECIAL_STRUCTURE_TYPES else "chapter"
+
+
+def _book_organizer_display_title_case(value: str) -> str:
+    words = (value or "").strip().title().split()
+    minor_words = {"A", "An", "And", "At", "But", "By", "For", "From", "In", "Nor", "Of", "On", "Or", "The", "To", "With"}
+    adjusted = [word.lower() if index > 0 and word in minor_words else word for index, word in enumerate(words)]
+    return " ".join(adjusted)
+
+
+def _book_organizer_format_chapter_title(marker: str, title: str | None = None) -> str:
+    marker_text = _book_organizer_display_title_case(re.sub(r"\s+", " ", (marker or "Chapter").strip()))
+    title_text = _book_organizer_display_title_case((title or "").strip())
+    if title_text:
+        return f"{marker_text}: {title_text}"
+    return marker_text
+
+
+def _book_organizer_is_section_heading(line: str) -> bool:
+    normalized = (line or "").strip()
+    if not normalized or _book_organizer_explicit_marker(normalized):
+        return False
+    if normalized in {"⸻", "---", "***", "* * *"}:
+        return False
+    if normalized.startswith(("- ", "* ", "• ", "1. ")):
+        return False
+    if len(normalized) > 90 or normalized.endswith(('.', ',', ';', ':')):
+        return False
+    words = normalized.split()
+    if len(words) > 10:
+        return False
+    return bool(re.search(r"[A-Za-z]", normalized))
+
+
+def _book_organizer_extract_sections(body: str) -> list[dict]:
+    sections: list[dict] = []
+    current_title: str | None = None
+    current_lines: list[str] = []
+    for raw_line in (body or "").split("\n"):
+        stripped = raw_line.strip()
+        if _book_organizer_is_section_heading(stripped):
+            if current_title or any(line.strip() for line in current_lines):
+                sections.append({"title": current_title or "Opening", "body": "\n".join(current_lines).strip()})
+            current_title = stripped
+            current_lines = []
+            continue
+        current_lines.append(raw_line)
+    if current_title or any(line.strip() for line in current_lines):
+        sections.append({"title": current_title or "Opening", "body": "\n".join(current_lines).strip()})
+    return sections
+
+
+def _book_organizer_structure_warnings(chapter_count: int) -> list[dict]:
+    warnings: list[dict] = []
+    if chapter_count > BOOK_ORGANIZER_OVER_SPLIT_WARNING_THRESHOLD:
+        warnings.append({
+            "code": "possible_over_splitting",
+            "message": "Possible over-splitting detected",
+            "chapter_count": chapter_count,
+        })
+    if chapter_count > BOOK_ORGANIZER_OVER_SPLIT_REVIEW_THRESHOLD:
+        warnings.append({
+            "code": "review_required",
+            "message": "Detected more than 100 chapters automatically; review before creating book formatting records.",
+            "chapter_count": chapter_count,
+        })
+    return warnings
+
+
+def _detect_book_organizer_explicit_chapters(text: str) -> list[dict]:
+    clean = _normalize_book_manuscript_text(text)
+    if not clean:
+        return []
+    lines = clean.split("\n")
+    markers: list[dict] = []
+    for line_index, raw_line in enumerate(lines):
+        marker = _book_organizer_explicit_marker(raw_line)
+        if marker:
+            markers.append({"marker": marker, "line_index": line_index})
+    if len(markers) < 2:
+        return []
+
+    chapters: list[dict] = []
+    for idx, marker_info in enumerate(markers):
+        start = marker_info["line_index"]
+        end = markers[idx + 1]["line_index"] if idx + 1 < len(markers) else len(lines)
+        marker = marker_info["marker"]
+        content_lines = lines[start + 1:end]
+
+        title = ""
+        title_line_offset: int | None = None
+        for offset, candidate in enumerate(content_lines):
+            stripped = candidate.strip()
+            if stripped:
+                title = stripped
+                title_line_offset = offset
+                break
+
+        body_lines = content_lines[(title_line_offset + 1) if title_line_offset is not None else 0:]
+        body = "\n".join(body_lines).strip()
+        word_count = _book_organizer_word_count(body)
+        chapter_type = _book_organizer_chapter_type(marker)
+        chapters.append({
+            "index": len(chapters) + 1,
+            "marker": marker,
+            "title": title,
+            "chapter_title": _book_organizer_format_chapter_title(marker, title),
+            "type": chapter_type,
+            "body": body,
+            "sections": _book_organizer_extract_sections(body),
+            "word_count": word_count,
+            "warnings": [] if word_count >= BOOK_ORGANIZER_MIN_CHAPTER_WORDS or chapter_type in BOOK_ORGANIZER_SPECIAL_STRUCTURE_TYPES else [{
+                "code": "short_chapter",
+                "message": "Chapter is under 500 words; confirm this is an intentional book chapter.",
+                "word_count": word_count,
+            }],
+        })
+    return chapters
+
+
+def _build_explicit_book_organizer_plan(blocks: list[BookOrganizerBlock], excluded_block_ids: set[str] | None = None) -> tuple[list[dict], list[dict], bool]:
+    excluded = excluded_block_ids or set()
+    line_entries: list[dict] = []
+    for block in blocks:
+        if block.block_id in excluded:
+            continue
+        for raw_line in (block.text or "").replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+            line_entries.append({"line": raw_line, "block_id": block.block_id})
+
+    marker_positions: list[dict] = []
+    for line_index, entry in enumerate(line_entries):
+        marker = _book_organizer_explicit_marker(entry["line"])
+        if marker:
+            marker_positions.append({"marker": marker, "line_index": line_index, "block_id": entry["block_id"]})
+
+    if len(marker_positions) < 2:
+        return [], [], False
+
+    block_order = [block.block_id for block in blocks if block.block_id not in excluded]
+    block_to_index = {block_id: index for index, block_id in enumerate(block_order)}
+    chapters: list[dict] = []
+    warnings: list[dict] = []
+
+    for marker_index, marker_info in enumerate(marker_positions):
+        start_block_index = block_to_index[marker_info["block_id"]]
+        end_block_index = (
+            block_to_index[marker_positions[marker_index + 1]["block_id"]]
+            if marker_index + 1 < len(marker_positions)
+            else len(block_order)
+        )
+        chapter_block_ids = block_order[start_block_index:end_block_index]
+
+        title = ""
+        for entry in line_entries[marker_info["line_index"] + 1: marker_positions[marker_index + 1]["line_index"] if marker_index + 1 < len(marker_positions) else len(line_entries)]:
+            stripped = entry["line"].strip()
+            if stripped:
+                title = stripped
+                break
+
+        body_text = "\n\n".join(block.text for block in blocks if block.block_id in set(chapter_block_ids))
+        word_count = _book_organizer_word_count(body_text)
+        chapter_type = _book_organizer_chapter_type(marker_info["marker"])
+        chapter_warnings = []
+        if word_count < BOOK_ORGANIZER_MIN_CHAPTER_WORDS and chapter_type not in BOOK_ORGANIZER_SPECIAL_STRUCTURE_TYPES:
+            chapter_warnings.append({
+                "code": "short_chapter",
+                "message": "Chapter is under 500 words; confirm this is an intentional book chapter.",
+                "word_count": word_count,
+            })
+        chapters.append({
+            "chapter_index": len(chapters) + 1,
+            "chapter_title": _book_organizer_format_chapter_title(marker_info["marker"], title),
+            "marker": marker_info["marker"],
+            "title": title,
+            "type": chapter_type,
+            "block_ids": chapter_block_ids,
+            "word_count": word_count,
+            "warnings": chapter_warnings,
+        })
+
+    warnings.extend(_book_organizer_structure_warnings(len(chapters)))
+    return chapters, warnings, True
 
 def _extract_text_from_pdf(payload: bytes) -> str:
     try:
@@ -868,19 +1086,23 @@ def propose_organization_plan(
     if invalid_unused:
         raise HTTPException(status_code=422, detail={"invalid_block_ids": invalid_unused})
 
-    used_ids = [block_id for block_id in existing_ids if block_id not in set(requested_unused)]
-    chapters = []
-    for start in range(0, len(used_ids), ORGANIZER_PLAN_CHAPTER_BLOCKS):
-        chunk = used_ids[start : start + ORGANIZER_PLAN_CHAPTER_BLOCKS]
-        chapters.append(
-            {
-                "chapter_index": len(chapters) + 1,
-                "chapter_title": f"Chapter {len(chapters) + 1}",
-                "block_ids": chunk,
-            }
-        )
+    unused_set = set(requested_unused)
+    used_ids = [block_id for block_id in existing_ids if block_id not in unused_set]
+    chapters, warnings, explicit_mode = _build_explicit_book_organizer_plan(blocks, unused_set)
+    if not explicit_mode:
+        chapters = []
+        for start in range(0, len(used_ids), ORGANIZER_PLAN_CHAPTER_BLOCKS):
+            chunk = used_ids[start : start + ORGANIZER_PLAN_CHAPTER_BLOCKS]
+            chapters.append(
+                {
+                    "chapter_index": len(chapters) + 1,
+                    "chapter_title": f"Chapter {len(chapters) + 1}",
+                    "type": "chapter",
+                    "block_ids": chunk,
+                }
+            )
+        warnings = _book_organizer_structure_warnings(len(chapters))
 
-    warnings = []
     if requested_unused:
         warnings.append(
             {
@@ -893,6 +1115,9 @@ def propose_organization_plan(
     structure = {
         "title_candidate": document.title.strip() or "Untitled",
         "chapters": chapters,
+        "chapter_count": len(chapters),
+        "detection_mode": "explicit_chapter_markers" if explicit_mode else "paragraph_chunks",
+        "requires_review": len(chapters) > BOOK_ORGANIZER_OVER_SPLIT_REVIEW_THRESHOLD,
         "warnings": warnings,
     }
 
@@ -929,10 +1154,16 @@ def _build_organizer_chapters_from_plan(plan: BookOrganizationPlan, block_map: d
                 raise HTTPException(status_code=422, detail={"checksum_mismatch_block_ids": [block.block_id]})
             paragraphs.append({"block_id": block.block_id, "block_index": block.block_index, "text": block.text})
 
+        body_text = "\n\n".join(paragraph["text"] for paragraph in paragraphs)
         chapters.append(
             {
                 "chapter_index": chapter.get("chapter_index"),
                 "chapter_title": chapter.get("chapter_title"),
+                "marker": chapter.get("marker"),
+                "title": chapter.get("title"),
+                "type": chapter.get("type", "chapter"),
+                "word_count": chapter.get("word_count", _book_organizer_word_count(body_text)),
+                "warnings": chapter.get("warnings", []),
                 "paragraphs": paragraphs,
             }
         )
@@ -1028,7 +1259,10 @@ def review_structure_for_organizer(
     structure = {
         "title_candidate": plan.structure.get("title_candidate") or document.title or "Untitled",
         "chapters": chapters,
-        "warnings": plan.structure.get("warnings", []),
+        "chapter_count": len(chapters),
+        "detection_mode": plan.structure.get("detection_mode"),
+        "requires_review": len(chapters) > BOOK_ORGANIZER_OVER_SPLIT_REVIEW_THRESHOLD or bool(plan.structure.get("requires_review", False)),
+        "warnings": [*plan.structure.get("warnings", []), *_book_organizer_structure_warnings(len(chapters))],
     }
     new_plan = BookOrganizationPlan(
         document_id=document.id,
@@ -1077,7 +1311,17 @@ def preview_organization(
 
     chapters = _build_organizer_chapters_from_plan(plan, block_map)
 
-    return {"document_id": document.id, "plan_id": plan.id, "chapters": chapters}
+    chapter_titles = [chapter.get("chapter_title") for chapter in chapters]
+    return {
+        "document_id": document.id,
+        "plan_id": plan.id,
+        "detected_chapter_count": len(chapters),
+        "chapter_titles": chapter_titles,
+        "warnings": plan.structure.get("warnings", []),
+        "requires_review": bool(plan.structure.get("requires_review", False)),
+        "detection_mode": plan.structure.get("detection_mode"),
+        "chapters": chapters,
+    }
 
 
 @router.post("/organizer/export-txt")
