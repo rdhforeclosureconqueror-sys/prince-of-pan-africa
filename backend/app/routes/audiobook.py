@@ -386,20 +386,46 @@ def _book_organizer_format_chapter_title(marker: str, title: str | None = None) 
     return marker_text
 
 
+BOOK_ORGANIZER_CANONICAL_SECTION_HEADINGS = {
+    "opening",
+    "closing",
+    "the story most people inherit",
+    "slavery was wealth — but also pressure",
+    "slavery was wealth - but also pressure",
+}
+
+
+def _book_organizer_is_title_case_heading(normalized: str) -> bool:
+    words = re.findall(r"[A-Za-z][A-Za-z’'’-]*", normalized)
+    if len(words) < 3 or len(words) > 10:
+        return False
+    if normalized.isupper():
+        return False
+    minor_words = {"a", "an", "and", "as", "at", "but", "by", "for", "from", "in", "nor", "of", "on", "or", "the", "to", "with"}
+    significant_words = [word for index, word in enumerate(words) if index == 0 or word.casefold() not in minor_words]
+    if len(significant_words) < 2:
+        return False
+    return all(word[:1].isupper() for word in significant_words)
+
+
 def _book_organizer_is_section_heading(line: str) -> bool:
-    normalized = (line or "").strip()
+    normalized = re.sub(r"\s+", " ", (line or "").strip())
     if not normalized or _book_organizer_explicit_marker(normalized):
         return False
     if normalized in {"⸻", "---", "***", "* * *"}:
         return False
-    if normalized.startswith(("- ", "* ", "• ", "1. ")):
+    if normalized.startswith(("- ", "* ", "• ", "1. ", "—", "–")):
         return False
-    if len(normalized) > 90 or normalized.endswith(('.', ',', ';', ':')):
+    if normalized[:1] in {'"', "'", "“", "‘"}:
+        return False
+    if len(normalized) > 90 or normalized.endswith(('.', ',', ';', ':', '?', '!')):
         return False
     words = normalized.split()
     if len(words) > 10:
         return False
-    return bool(re.search(r"[A-Za-z]", normalized))
+    if normalized.casefold() in BOOK_ORGANIZER_CANONICAL_SECTION_HEADINGS:
+        return True
+    return _book_organizer_is_title_case_heading(normalized)
 
 
 def _book_organizer_extract_sections(body: str) -> list[dict]:
@@ -1388,23 +1414,44 @@ def _build_docx_export(project: BookProject) -> bytes:
 
 
 def _epub_xhtml(title: str, body: str) -> str:
-    return f'<?xml version="1.0" encoding="utf-8"?><!DOCTYPE html><html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="en"><head><title>{html.escape(title)}</title><link rel="stylesheet" type="text/css" href="style.css"/></head><body>{body}</body></html>'
+    return (
+        '<?xml version="1.0" encoding="utf-8"?>'
+        '<!DOCTYPE html>'
+        f'<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="en" lang="en">'
+        f'<head><title>{html.escape(title)}</title><link rel="stylesheet" type="text/css" href="style.css"/></head>'
+        f'<body>{body}</body></html>'
+    )
+
+
+def _epub_toc_chapters(project: BookProject) -> list[BookChapter]:
+    return [chapter for chapter in project.chapters if chapter.kind in {"chapter", "epilogue"}]
 
 
 def _build_epub_export(project: BookProject) -> bytes:
     uid = hashlib.sha1(f"{project.title}:{project.author}".encode()).hexdigest()
-    nav_items = ''.join(f'<li><a href="chapter-{chapter.chapter_index}.xhtml">{html.escape(chapter.title)}</a></li>' for chapter in project.chapters)
+    toc_chapters = _epub_toc_chapters(project)
+    nav_items = ''.join(f'<li><a href="chapter-{chapter.chapter_index}.xhtml">{html.escape(chapter.title)}</a></li>' for chapter in toc_chapters)
     manifest_items = ''.join(f'<item id="chap{chapter.chapter_index}" href="chapter-{chapter.chapter_index}.xhtml" media-type="application/xhtml+xml"/>' for chapter in project.chapters)
     spine_items = ''.join(f'<itemref idref="chap{chapter.chapter_index}"/>' for chapter in project.chapters)
+    nav_points = ''.join(
+        f'<navPoint id="navPoint-{position}" playOrder="{position}"><navLabel><text>{xml_escape(chapter.title)}</text></navLabel><content src="chapter-{chapter.chapter_index}.xhtml"/></navPoint>'
+        for position, chapter in enumerate(toc_chapters, start=1)
+    )
     nav = _epub_xhtml("Table of Contents", f'<nav epub:type="toc" id="toc"><h1>Table of Contents</h1><ol>{nav_items}</ol></nav>')
-    package = f'''<?xml version="1.0" encoding="utf-8"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="bookid">urn:uuid:{uid}</dc:identifier><dc:title>{xml_escape(project.title)}</dc:title><dc:creator>{xml_escape(project.author)}</dc:creator><dc:language>{xml_escape(project.language)}</dc:language><meta property="dcterms:modified">{datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')}</meta></metadata><manifest><item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/><item id="style" href="style.css" media-type="text/css"/>{manifest_items}</manifest><spine>{spine_items}</spine></package>'''
+    package = f'''<?xml version="1.0" encoding="utf-8"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="bookid">urn:uuid:{uid}</dc:identifier><dc:title>{xml_escape(project.title)}</dc:title><dc:creator>{xml_escape(project.author)}</dc:creator><dc:language>{xml_escape(project.language)}</dc:language><meta property="dcterms:modified">{datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')}</meta></metadata><manifest><item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/><item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/><item id="style" href="style.css" media-type="text/css"/>{manifest_items}</manifest><spine toc="ncx"><itemref idref="nav" linear="no"/>{spine_items}</spine></package>'''
+    ncx = f'''<?xml version="1.0" encoding="UTF-8"?><ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1"><head><meta name="dtb:uid" content="urn:uuid:{uid}"/><meta name="dtb:depth" content="1"/><meta name="dtb:totalPageCount" content="0"/><meta name="dtb:maxPageNumber" content="0"/></head><docTitle><text>{xml_escape(project.title)}</text></docTitle><navMap>{nav_points}</navMap></ncx>'''
     bio = io.BytesIO()
     with zipfile.ZipFile(bio, "w") as zf:
         zf.writestr("mimetype", "application/epub+zip", compress_type=zipfile.ZIP_STORED)
         zf.writestr("META-INF/container.xml", '<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>', compress_type=zipfile.ZIP_DEFLATED)
         zf.writestr("OEBPS/content.opf", package, compress_type=zipfile.ZIP_DEFLATED)
         zf.writestr("OEBPS/nav.xhtml", nav, compress_type=zipfile.ZIP_DEFLATED)
-        zf.writestr("OEBPS/style.css", "body{font-family:serif;line-height:1.45;} .section-divider{text-align:center;margin:1.5em;} ul{margin-left:1em;}", compress_type=zipfile.ZIP_DEFLATED)
+        zf.writestr("OEBPS/toc.ncx", ncx, compress_type=zipfile.ZIP_DEFLATED)
+        zf.writestr(
+            "OEBPS/style.css",
+            "body{font-family:serif;line-height:1.5;margin:1em;} h1{font-size:1.6em;line-height:1.2;} h2{font-size:1.2em;line-height:1.25;margin-top:1.4em;} p{margin:0 0 1em;} .section-divider{text-align:center;margin:1.5em;} ul{margin-left:1em;}",
+            compress_type=zipfile.ZIP_DEFLATED,
+        )
         for chapter in project.chapters:
             body_parts = [f'<h1>{html.escape(chapter.title)}</h1>']
             for section in chapter.sections:
