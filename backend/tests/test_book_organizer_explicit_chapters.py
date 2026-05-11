@@ -1,5 +1,7 @@
 import os
+import io
 import unittest
+import zipfile
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -179,6 +181,51 @@ class ExplicitChapterOrganizerApiTests(unittest.TestCase):
         self.assertEqual(preview_body['detected_chapter_count'], 18)
         self.assertEqual(len(preview_body['chapter_titles']), 18)
         self.assertIn('word_count', preview_body['chapters'][0])
+
+    def test_txt_export_uses_canonical_headings_without_duplicate_raw_marker_or_title(self):
+        client = self._authed_client()
+        text = 'CHAPTER ONE\nWHO REALLY FREED THE SLAVES?\n\nOpening\n“If I could save the Union without freeing any slave, I would do it.”\n\nCHAPTER TWO\nNEXT TITLE\n\nOpening\nBody'
+        doc = client.post('/audiobooks/organizer/ingest-text', json={'title': 'Explicit', 'text': text}).json()['document']['id']
+        plan = client.post('/audiobooks/organizer/propose-plan', json={'document_id': doc}).json()['plan_id']
+
+        export = client.post('/audiobooks/organizer/export-txt', json={'document_id': doc, 'plan_id': plan})
+
+        self.assertEqual(export.status_code, 200)
+        body = export.text
+        self.assertIn('Chapter One: Who Really Freed the Slaves?\n\nOpening\n\n“If I could save the Union without freeing any slave, I would do it.”', body)
+        self.assertEqual(body.count('Chapter One: Who Really Freed the Slaves?'), 1)
+        self.assertNotIn('CHAPTER ONE\n\nWHO REALLY FREED THE SLAVES?', body)
+
+    def test_publishing_exports_are_generated_from_canonical_structure(self):
+        client = self._authed_client()
+        text = 'CHAPTER ONE\nWHO REALLY FREED THE SLAVES?\n\nOpening\nBody one\n\n- Bullet one\n- Bullet two\n\nCHAPTER TWO\nNEXT TITLE\n\nOpening\nBody two'
+        doc = client.post('/audiobooks/organizer/ingest-text', json={'title': 'Publishable', 'text': text}).json()['document']['id']
+        plan = client.post('/audiobooks/organizer/propose-plan', json={'document_id': doc}).json()['plan_id']
+        payload = {'document_id': doc, 'plan_id': plan, 'title': 'Publishable', 'author': 'Author Name', 'language': 'en'}
+
+        docx = client.post('/audiobooks/organizer/export-docx', json=payload)
+        epub = client.post('/audiobooks/organizer/export-epub', json=payload)
+        pdf = client.post('/audiobooks/organizer/export-print-pdf', json=payload)
+
+        self.assertEqual(docx.status_code, 200)
+        self.assertEqual(epub.status_code, 200)
+        self.assertEqual(pdf.status_code, 200)
+        with zipfile.ZipFile(io.BytesIO(docx.content)) as zf:
+            document_xml = zf.read('word/document.xml').decode('utf-8')
+            self.assertIn('Table of Contents', document_xml)
+            self.assertIn('Chapter One: Who Really Freed the Slaves?', document_xml)
+            self.assertNotIn('CHAPTER ONE', document_xml)
+        with zipfile.ZipFile(io.BytesIO(epub.content)) as zf:
+            self.assertEqual(zf.read('mimetype'), b'application/epub+zip')
+            opf = zf.read('OEBPS/content.opf').decode('utf-8')
+            nav = zf.read('OEBPS/nav.xhtml').decode('utf-8')
+            chapter = zf.read('OEBPS/chapter-1.xhtml').decode('utf-8')
+            self.assertIn('<dc:title>Publishable</dc:title>', opf)
+            self.assertIn('chapter-1.xhtml', nav)
+            self.assertIn('<ul><li>Bullet one</li><li>Bullet two</li></ul>', chapter)
+            self.assertNotIn('CHAPTER ONE', chapter)
+        self.assertTrue(pdf.content.startswith(b'%PDF-1.4'))
+        self.assertIn(b'/MediaBox [0 0 432 648]', pdf.content)
 
 
 if __name__ == '__main__':
