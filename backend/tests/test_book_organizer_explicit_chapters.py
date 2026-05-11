@@ -194,20 +194,37 @@ class ExplicitChapterOrganizerApiTests(unittest.TestCase):
         self.assertEqual(len(preview_body['chapter_titles']), 18)
         self.assertIn('word_count', preview_body['chapters'][0])
 
-        epub = client.post('/audiobooks/organizer/export-epub', json={'document_id': doc, 'plan_id': plan_res.json()['plan_id'], 'title': 'Large', 'author': 'Author Name', 'language': 'en'})
+        approved = client.post('/audiobooks/organizer/review-structure', json={'document_id': doc, 'plan_id': plan_res.json()['plan_id']})
+        self.assertEqual(approved.status_code, 200)
+        epub = client.post('/audiobooks/organizer/export-epub', json={'document_id': doc, 'plan_id': approved.json()['plan_id'], 'title': 'Large', 'author': 'Author Name', 'language': 'en'})
         self.assertEqual(epub.status_code, 200)
         with zipfile.ZipFile(io.BytesIO(epub.content)) as zf:
+            content_files = [name for name in zf.namelist() if name.startswith('OEBPS/chapter-') and name.endswith('.xhtml')]
             nav = zf.read('OEBPS/nav.xhtml').decode('utf-8')
+            ncx = zf.read('OEBPS/toc.ncx').decode('utf-8')
+            chapter_one = zf.read('OEBPS/chapter-1.xhtml').decode('utf-8')
+            chapter_seventeen = zf.read('OEBPS/chapter-17.xhtml').decode('utf-8')
+            epilogue = zf.read('OEBPS/chapter-18.xhtml').decode('utf-8')
+
+            self.assertEqual(len(content_files), 18)
             self.assertEqual(nav.count('<li><a href='), 18)
+            self.assertEqual(ncx.count('<navPoint '), 18)
+            self.assertIn('Chapter One: Who Really Freed the Slaves?', nav)
+            self.assertIn('Chapter Seventeen: Who Owns the Future?', nav)
             self.assertIn('Epilogue: The Question That Remains', nav)
+            self.assertIn('<h1>Chapter One: Who Really Freed the Slaves?</h1><h2>Opening</h2>', chapter_one)
+            self.assertEqual(chapter_one.count('<h1>Chapter One: Who Really Freed the Slaves?</h1>'), 1)
+            self.assertIn('<h1>Chapter Seventeen: Who Owns the Future?</h1>', chapter_seventeen)
+            self.assertIn('<h1>Epilogue: The Question That Remains</h1>', epilogue)
 
     def test_txt_export_uses_canonical_headings_without_duplicate_raw_marker_or_title(self):
         client = self._authed_client()
         text = 'CHAPTER ONE\nWHO REALLY FREED THE SLAVES?\n\nOpening\n“If I could save the Union without freeing any slave, I would do it.”\n\nCHAPTER TWO\nNEXT TITLE\n\nOpening\nBody'
         doc = client.post('/audiobooks/organizer/ingest-text', json={'title': 'Explicit', 'text': text}).json()['document']['id']
         plan = client.post('/audiobooks/organizer/propose-plan', json={'document_id': doc}).json()['plan_id']
+        approved = client.post('/audiobooks/organizer/review-structure', json={'document_id': doc, 'plan_id': plan}).json()['plan_id']
 
-        export = client.post('/audiobooks/organizer/export-txt', json={'document_id': doc, 'plan_id': plan})
+        export = client.post('/audiobooks/organizer/export-txt', json={'document_id': doc, 'plan_id': approved})
 
         self.assertEqual(export.status_code, 200)
         body = export.text
@@ -220,7 +237,8 @@ class ExplicitChapterOrganizerApiTests(unittest.TestCase):
         text = 'CHAPTER ONE\nWHO REALLY FREED THE SLAVES?\n\nOpening\nWhy?\n\nFast.\n\n— Frederick Douglass\n\nBody one\n\n- Bullet one\n- Bullet two\n\nCHAPTER TWO\nNEXT TITLE\n\nClosing\nBody two'
         doc = client.post('/audiobooks/organizer/ingest-text', json={'title': 'Publishable', 'text': text}).json()['document']['id']
         plan = client.post('/audiobooks/organizer/propose-plan', json={'document_id': doc}).json()['plan_id']
-        payload = {'document_id': doc, 'plan_id': plan, 'title': 'Publishable', 'author': 'Author Name', 'language': 'en'}
+        approved = client.post('/audiobooks/organizer/review-structure', json={'document_id': doc, 'plan_id': plan}).json()['plan_id']
+        payload = {'document_id': doc, 'plan_id': approved, 'title': 'Publishable', 'author': 'Author Name', 'language': 'en'}
 
         docx = client.post('/audiobooks/organizer/export-docx', json=payload)
         epub = client.post('/audiobooks/organizer/export-epub', json=payload)
