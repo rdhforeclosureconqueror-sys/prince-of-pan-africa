@@ -31,7 +31,7 @@ app = FastAPI(
 
 logger = logging.getLogger("mufasa-cors")
 
-SUSPENDED_CUSTOM_API_DOMAIN = "api.simbawaujamaa.com"
+CUSTOM_API_DOMAIN = "api.simbawaujamaa.com"
 PUBLIC_API_BASE_ENV_KEYS = ("VITE_API_BASE_URL", "PUBLIC_API_BASE_URL", "BACKEND_URL")
 
 
@@ -43,21 +43,20 @@ def _configured_public_api_bases() -> dict[str, str]:
     }
 
 
-def _warn_if_custom_api_domain_configured() -> None:
+def _log_custom_api_domain_status() -> None:
     configured_bases = _configured_public_api_bases()
-    suspended_bases = {
+    custom_domain_bases = {
         key: value
         for key, value in configured_bases.items()
-        if SUSPENDED_CUSTOM_API_DOMAIN in value
+        if CUSTOM_API_DOMAIN in value
     }
-    if suspended_bases:
-        logger.warning(
-            "%s is configured in public API base environment values %s. Do not point "
-            "production frontend traffic to this custom API domain until it is attached "
-            "to prince-of-pan-africa-backend, TLS is active, /health returns a backend "
-            "response, and the suspended-service page is gone.",
-            SUSPENDED_CUSTOM_API_DOMAIN,
-            suspended_bases,
+    if custom_domain_bases:
+        logger.info(
+            "%s is configured in public API base environment values %s. "
+            "Use this same-site API domain only after Render verifies DNS and certificate "
+            "for prince-of-pan-africa-backend; once verified, it is valid for production.",
+            CUSTOM_API_DOMAIN,
+            custom_domain_bases,
         )
 
 default_origins = [
@@ -262,7 +261,7 @@ def info():
 
 @app.on_event("startup")
 async def startup_event():
-    _warn_if_custom_api_domain_configured()
+    _log_custom_api_domain_status()
     enforce_database_url_for_production()
     get_session_secret()
     init_db()
