@@ -1,11 +1,15 @@
 import hashlib
+import html
 import io
 import logging
 import os
 import re
 import threading
 import time
+import zipfile
+from dataclasses import dataclass, field
 from datetime import datetime
+from xml.sax.saxutils import escape as xml_escape
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.responses import PlainTextResponse
@@ -76,6 +80,13 @@ class OrganizerPreviewRequest(BaseModel):
     document_id: int = Field(ge=1)
     plan_id: int = Field(ge=1)
 
+
+class OrganizerExportRequest(OrganizerPreviewRequest):
+    title: str | None = Field(default=None, max_length=255)
+    author: str = Field(default="Unknown", max_length=255)
+    language: str = Field(default="en", max_length=16)
+    trim_size: str = Field(default="6x9", max_length=20)
+
 class OrganizerStructureEditRequest(BaseModel):
     document_id: int = Field(ge=1)
     plan_id: int = Field(ge=1)
@@ -91,6 +102,45 @@ ORGANIZER_PLAN_CHAPTER_BLOCKS = 5
 BOOK_ORGANIZER_OVER_SPLIT_WARNING_THRESHOLD = 80
 BOOK_ORGANIZER_OVER_SPLIT_REVIEW_THRESHOLD = 100
 BOOK_ORGANIZER_MIN_CHAPTER_WORDS = 500
+
+
+
+@dataclass
+class BookMatterItem:
+    kind: str
+    title: str
+    body: str = ""
+
+
+@dataclass
+class BookSection:
+    title: str
+    body: str
+
+
+@dataclass
+class BookChapter:
+    chapter_index: int
+    title: str
+    kind: str = "chapter"
+    sections: list[BookSection] = field(default_factory=list)
+
+
+@dataclass
+class BookProject:
+    title: str
+    author: str
+    language: str
+    front_matter: list[BookMatterItem]
+    chapters: list[BookChapter]
+    back_matter: list[BookMatterItem] = field(default_factory=list)
+
+
+@dataclass
+class BookExport:
+    filename: str
+    media_type: str
+    payload: bytes
 
 BOOK_ORGANIZER_CHAPTER_WORD_NUMBERS = (
     "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
@@ -1143,17 +1193,44 @@ def _validate_plan_block_ids(chapters: list[dict], block_map: dict[str, BookOrga
         raise HTTPException(status_code=422, detail={"invalid_block_ids": list(dict.fromkeys(missing_block_ids))})
 
 
+def _clean_organizer_chapter_paragraphs(chapter: dict, raw_paragraphs: list[dict]) -> list[dict]:
+    cleaned: list[dict] = []
+    marker = chapter.get("marker")
+    title = chapter.get("title")
+    marker_removed = not marker
+    title_removed = not title
+    for paragraph in raw_paragraphs:
+        lines = (paragraph.get("text", "") or "").replace("\r\n", "\n").replace("\r", "\n").split("\n")
+        while lines and not lines[0].strip():
+            lines.pop(0)
+        if lines and not marker_removed and _book_organizer_explicit_marker(lines[0]) == marker:
+            lines.pop(0)
+            marker_removed = True
+            while lines and not lines[0].strip():
+                lines.pop(0)
+        if lines and not title_removed and lines[0].strip().casefold() == str(title).strip().casefold():
+            lines.pop(0)
+            title_removed = True
+            while lines and not lines[0].strip():
+                lines.pop(0)
+        text = "\n".join(lines).strip()
+        if text:
+            cleaned.append({**paragraph, "text": text})
+    return cleaned
+
+
 def _build_organizer_chapters_from_plan(plan: BookOrganizationPlan, block_map: dict[str, BookOrganizerBlock]) -> list[dict]:
     _validate_plan_block_ids(plan.structure.get("chapters", []), block_map)
     chapters = []
     for chapter in plan.structure.get("chapters", []):
-        paragraphs = []
+        raw_paragraphs = []
         for block_id in chapter.get("block_ids", []):
             block = block_map.get(block_id)
             if compute_text_checksum(block.text) != block.checksum:
                 raise HTTPException(status_code=422, detail={"checksum_mismatch_block_ids": [block.block_id]})
-            paragraphs.append({"block_id": block.block_id, "block_index": block.block_index, "text": block.text})
+            raw_paragraphs.append({"block_id": block.block_id, "block_index": block.block_index, "text": block.text})
 
+        paragraphs = _clean_organizer_chapter_paragraphs(chapter, raw_paragraphs)
         body_text = "\n\n".join(paragraph["text"] for paragraph in paragraphs)
         chapters.append(
             {
@@ -1162,12 +1239,287 @@ def _build_organizer_chapters_from_plan(plan: BookOrganizationPlan, block_map: d
                 "marker": chapter.get("marker"),
                 "title": chapter.get("title"),
                 "type": chapter.get("type", "chapter"),
-                "word_count": chapter.get("word_count", _book_organizer_word_count(body_text)),
+                "word_count": _book_organizer_word_count(body_text),
                 "warnings": chapter.get("warnings", []),
                 "paragraphs": paragraphs,
+                "sections": _book_organizer_extract_sections(body_text),
             }
         )
     return chapters
+
+def _safe_export_basename(title: str | None, fallback: str = "manuscript") -> str:
+    return re.sub(r"[^a-zA-Z0-9._-]+", "_", (title or fallback)).strip("_") or fallback
+
+
+def _resolve_organizer_export_project(
+    *,
+    payload: OrganizerExportRequest | OrganizerPreviewRequest,
+    user: User,
+    db: Session,
+    author: str | None = None,
+    language: str | None = None,
+) -> tuple[BookOrganizerDocument, BookOrganizationPlan, BookProject]:
+    if not settings.ENABLE_TEXT_BOOK_ORGANIZER:
+        raise HTTPException(status_code=404, detail="Not found.")
+    document = (
+        db.query(BookOrganizerDocument)
+        .filter(BookOrganizerDocument.id == payload.document_id, BookOrganizerDocument.user_id == user.id)
+        .first()
+    )
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found.")
+    plan = (
+        db.query(BookOrganizationPlan)
+        .filter(BookOrganizationPlan.id == payload.plan_id, BookOrganizationPlan.document_id == document.id)
+        .first()
+    )
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan not found.")
+
+    blocks = (
+        db.query(BookOrganizerBlock)
+        .filter(BookOrganizerBlock.document_id == document.id)
+        .order_by(BookOrganizerBlock.block_index.asc())
+        .all()
+    )
+    block_map = {block.block_id: block for block in blocks}
+    chapter_dicts = _build_organizer_chapters_from_plan(plan, block_map)
+    title = (getattr(payload, "title", None) or plan.structure.get("title_candidate") or document.title or "Untitled").strip()
+    project = BookProject(
+        title=title,
+        author=(author or getattr(payload, "author", None) or "Unknown").strip() or "Unknown",
+        language=(language or getattr(payload, "language", None) or "en").strip() or "en",
+        front_matter=[
+            BookMatterItem(kind="title_page", title=title, body=f"by {((author or getattr(payload, 'author', None) or 'Unknown').strip() or 'Unknown')}"),
+            BookMatterItem(kind="copyright", title="Copyright", body="Copyright ©. All rights reserved."),
+            BookMatterItem(kind="toc", title="Table of Contents", body=""),
+        ],
+        chapters=[
+            BookChapter(
+                chapter_index=int(chapter.get("chapter_index") or index),
+                title=(chapter.get("chapter_title") or f"Chapter {index}").strip(),
+                kind=chapter.get("type", "chapter"),
+                sections=[BookSection(title=section.get("title") or "Opening", body=section.get("body") or "") for section in chapter.get("sections", [])],
+            )
+            for index, chapter in enumerate(chapter_dicts, start=1)
+        ],
+    )
+    return document, plan, project
+
+
+def _canonical_plaintext(project: BookProject) -> str:
+    parts: list[str] = []
+    for chapter in project.chapters:
+        parts.append(chapter.title)
+        for section in chapter.sections:
+            if section.title:
+                parts.append(section.title.strip())
+            if section.body.strip():
+                parts.append(_normalize_dividers_for_text(section.body.strip()))
+        parts.append("")
+    return "\n\n".join(parts).rstrip() + "\n"
+
+
+def _normalize_dividers_for_text(text: str) -> str:
+    lines = []
+    for line in (text or "").split("\n"):
+        if line.strip() in {"⸻", "---", "***", "* * *"}:
+            lines.append("***")
+        else:
+            lines.append(line.rstrip())
+    return "\n".join(lines).strip()
+
+
+def _canonical_markdown(project: BookProject) -> str:
+    parts = [f"# {project.title}", f"by {project.author}", "", "## Table of Contents"]
+    parts.extend(f"- {chapter.title}" for chapter in project.chapters)
+    for chapter in project.chapters:
+        parts.extend(["", f"## {chapter.title}"])
+        for section in chapter.sections:
+            if section.title:
+                parts.append(f"### {section.title}")
+            if section.body.strip():
+                parts.append(_normalize_dividers_for_text(section.body.strip()))
+    return "\n\n".join(part for part in parts if part is not None).rstrip() + "\n"
+
+
+def _docx_paragraph(text: str, style: str | None = None, page_break_before: bool = False) -> str:
+    props = ""
+    if style:
+        props += f'<w:pStyle w:val="{style}"/>'
+    if page_break_before:
+        props += '<w:pageBreakBefore/>'
+    ppr = f"<w:pPr>{props}</w:pPr>" if props else ""
+    runs = []
+    for index, line in enumerate((text or "").split("\n")):
+        if index:
+            runs.append("<w:r><w:br/></w:r>")
+        runs.append(f'<w:r><w:t xml:space="preserve">{xml_escape(line)}</w:t></w:r>')
+    return f"<w:p>{ppr}{''.join(runs)}</w:p>"
+
+
+def _build_docx_export(project: BookProject) -> bytes:
+    body = [
+        _docx_paragraph(project.title, "Title"),
+        _docx_paragraph(f"by {project.author}", "Subtitle"),
+        _docx_paragraph("Copyright ©. All rights reserved.", None, True),
+        _docx_paragraph("Table of Contents", "Heading1", True),
+        _docx_paragraph("Update this placeholder in your word processor after opening the manuscript."),
+    ]
+    for chapter in project.chapters:
+        body.append(_docx_paragraph(chapter.title, "Heading1", True))
+        for section in chapter.sections:
+            if section.title:
+                body.append(_docx_paragraph(section.title, "Heading2"))
+            for para in re.split(r"\n\s*\n", _normalize_dividers_for_text(section.body)):
+                if para.strip():
+                    body.append(_docx_paragraph(para.strip(), "ListParagraph" if para.lstrip().startswith(("- ", "* ", "• ")) else None))
+    sect = '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1080" w:bottom="1440" w:left="1080" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr>'
+    document_xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' + ''.join(body) + sect + '</w:body></w:document>'
+    styles_xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/></w:style><w:style w:type="paragraph" w:styleId="Subtitle"><w:name w:val="Subtitle"/></w:style><w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:pPr><w:outlineLvl w:val="0"/></w:pPr></w:style><w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/><w:pPr><w:outlineLvl w:val="1"/></w:pPr></w:style><w:style w:type="paragraph" w:styleId="ListParagraph"><w:name w:val="List Paragraph"/></w:style></w:styles>'
+    bio = io.BytesIO()
+    with zipfile.ZipFile(bio, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("[Content_Types].xml", '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>')
+        zf.writestr("_rels/.rels", '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>')
+        zf.writestr("word/_rels/document.xml.rels", '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>')
+        zf.writestr("word/document.xml", document_xml)
+        zf.writestr("word/styles.xml", styles_xml)
+    return bio.getvalue()
+
+
+def _epub_xhtml(title: str, body: str) -> str:
+    return f'<?xml version="1.0" encoding="utf-8"?><!DOCTYPE html><html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="en"><head><title>{html.escape(title)}</title><link rel="stylesheet" type="text/css" href="style.css"/></head><body>{body}</body></html>'
+
+
+def _build_epub_export(project: BookProject) -> bytes:
+    uid = hashlib.sha1(f"{project.title}:{project.author}".encode()).hexdigest()
+    nav_items = ''.join(f'<li><a href="chapter-{chapter.chapter_index}.xhtml">{html.escape(chapter.title)}</a></li>' for chapter in project.chapters)
+    manifest_items = ''.join(f'<item id="chap{chapter.chapter_index}" href="chapter-{chapter.chapter_index}.xhtml" media-type="application/xhtml+xml"/>' for chapter in project.chapters)
+    spine_items = ''.join(f'<itemref idref="chap{chapter.chapter_index}"/>' for chapter in project.chapters)
+    nav = _epub_xhtml("Table of Contents", f'<nav epub:type="toc" id="toc"><h1>Table of Contents</h1><ol>{nav_items}</ol></nav>')
+    package = f'''<?xml version="1.0" encoding="utf-8"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="bookid">urn:uuid:{uid}</dc:identifier><dc:title>{xml_escape(project.title)}</dc:title><dc:creator>{xml_escape(project.author)}</dc:creator><dc:language>{xml_escape(project.language)}</dc:language><meta property="dcterms:modified">{datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')}</meta></metadata><manifest><item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/><item id="style" href="style.css" media-type="text/css"/>{manifest_items}</manifest><spine>{spine_items}</spine></package>'''
+    bio = io.BytesIO()
+    with zipfile.ZipFile(bio, "w") as zf:
+        zf.writestr("mimetype", "application/epub+zip", compress_type=zipfile.ZIP_STORED)
+        zf.writestr("META-INF/container.xml", '<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>', compress_type=zipfile.ZIP_DEFLATED)
+        zf.writestr("OEBPS/content.opf", package, compress_type=zipfile.ZIP_DEFLATED)
+        zf.writestr("OEBPS/nav.xhtml", nav, compress_type=zipfile.ZIP_DEFLATED)
+        zf.writestr("OEBPS/style.css", "body{font-family:serif;line-height:1.45;} .section-divider{text-align:center;margin:1.5em;} ul{margin-left:1em;}", compress_type=zipfile.ZIP_DEFLATED)
+        for chapter in project.chapters:
+            body_parts = [f'<h1>{html.escape(chapter.title)}</h1>']
+            for section in chapter.sections:
+                if section.title:
+                    body_parts.append(f'<h2>{html.escape(section.title)}</h2>')
+                for para in re.split(r"\n\s*\n", _normalize_dividers_for_text(section.body)):
+                    stripped = para.strip()
+                    if not stripped:
+                        continue
+                    if stripped == "***":
+                        body_parts.append('<p class="section-divider">***</p>')
+                    elif stripped.startswith(("- ", "* ", "• ")):
+                        items = ''.join(f'<li>{html.escape(line.lstrip("-*• ").strip())}</li>' for line in stripped.split("\n") if line.strip())
+                        body_parts.append(f"<ul>{items}</ul>")
+                    else:
+                        body_parts.append(f"<p>{html.escape(stripped).replace(chr(10), '<br/>')}</p>")
+            zf.writestr(f"OEBPS/chapter-{chapter.chapter_index}.xhtml", _epub_xhtml(chapter.title, ''.join(body_parts)), compress_type=zipfile.ZIP_DEFLATED)
+    return bio.getvalue()
+
+
+def _pdf_escape(text: str) -> str:
+    return (text or "").replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+
+
+def _wrap_pdf_text(text: str, max_chars: int = 72) -> list[str]:
+    wrapped: list[str] = []
+    for para in re.split(r"\n\s*\n", text or ""):
+        words = para.replace("\n", " ").split()
+        line = ""
+        for word in words:
+            if line and len(line) + len(word) + 1 > max_chars:
+                wrapped.append(line)
+                line = word
+            else:
+                line = f"{line} {word}".strip()
+        if line:
+            wrapped.append(line)
+        wrapped.append("")
+    return wrapped
+
+
+def _build_pdf_export(project: BookProject, trim_size: str = "6x9") -> bytes:
+    width, height = (432, 648) if trim_size == "6x9" else (432, 648)
+    margin_left, margin_top, margin_bottom = 54, 54, 54
+    pages: list[list[tuple[str, int, float, float]]] = []
+    current: list[tuple[str, int, float, float]] = []
+    y = height - margin_top
+
+    def new_page(header: str | None = None):
+        nonlocal current, y
+        if current:
+            pages.append(current)
+        current = []
+        y = height - margin_top
+        if header:
+            current.append((header, 9, margin_left, height - 28))
+
+    def add_line(text: str, size: int = 11, indent: int = 0):
+        nonlocal y
+        if y < margin_bottom + 28:
+            new_page()
+        current.append((text, size, margin_left + indent, y))
+        y -= size + 4
+
+    new_page()
+    y = height / 2 + 40
+    add_line(project.title, 22)
+    add_line(f"by {project.author}", 14)
+    new_page()
+    add_line("Copyright", 18)
+    add_line("Copyright ©. All rights reserved.", 11)
+    new_page()
+    add_line("Table of Contents", 18)
+    for chapter in project.chapters:
+        add_line(chapter.title, 11)
+    for chapter in project.chapters:
+        new_page(chapter.title if chapter.kind == "chapter" else None)
+        add_line(chapter.title, 18)
+        add_line("")
+        for section in chapter.sections:
+            if section.title:
+                add_line(section.title, 14)
+            for line in _wrap_pdf_text(_normalize_dividers_for_text(section.body), 70):
+                add_line(line, 11)
+    if current:
+        pages.append(current)
+
+    objects: list[bytes] = []
+    objects.append(b"<< /Type /Catalog /Pages 2 0 R >>")
+    kids = " ".join(f"{3 + i * 2} 0 R" for i in range(len(pages)))
+    objects.append(f"<< /Type /Pages /Kids [{kids}] /Count {len(pages)} >>".encode())
+    for i, page_lines in enumerate(pages):
+        page_obj = 3 + i * 2
+        content_obj = page_obj + 1
+        stream_lines = ["BT /F1 11 Tf"]
+        for text, size, x, line_y in page_lines:
+            if text == "":
+                continue
+            stream_lines.append(f"/F1 {size} Tf {x:.0f} {line_y:.0f} Td ({_pdf_escape(text)}) Tj {-(x):.0f} {-(line_y):.0f} Td")
+        stream_lines.append(f"/F1 9 Tf {width/2-10:.0f} 24 Td ({i + 1}) Tj ET")
+        content = "\n".join(stream_lines).encode("latin-1", errors="replace")
+        objects.append(f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {width} {height}] /Resources << /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Times-Roman >> >> >> /Contents {content_obj} 0 R >>".encode())
+        objects.append(b"<< /Length " + str(len(content)).encode() + b" >>\nstream\n" + content + b"\nendstream")
+    out = io.BytesIO()
+    out.write(b"%PDF-1.4\n")
+    offsets = [0]
+    for objnum, obj in enumerate(objects, start=1):
+        offsets.append(out.tell())
+        out.write(f"{objnum} 0 obj\n".encode() + obj + b"\nendobj\n")
+    xref = out.tell()
+    out.write(f"xref\n0 {len(objects)+1}\n0000000000 65535 f \n".encode())
+    for offset in offsets[1:]:
+        out.write(f"{offset:010d} 00000 n \n".encode())
+    out.write(f"trailer << /Size {len(objects)+1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n".encode())
+    return out.getvalue()
 
 
 @router.post("/organizer/review-structure")
@@ -1208,6 +1560,10 @@ def review_structure_for_organizer(
         {
             "chapter_index": int(chapter.get("chapter_index", index + 1)),
             "chapter_title": chapter.get("chapter_title") or f"Chapter {index + 1}",
+            "marker": chapter.get("marker"),
+            "title": chapter.get("title"),
+            "type": chapter.get("type", "chapter"),
+            "warnings": chapter.get("warnings", []),
             "block_ids": list(chapter.get("block_ids", [])),
         }
         for index, chapter in enumerate(plan.structure.get("chapters", []))
@@ -1245,6 +1601,8 @@ def review_structure_for_organizer(
             {
                 "chapter_index": chapter_index + 1,
                 "chapter_title": f"{target['chapter_title']} (Part 2)",
+                "type": target.get("type", "chapter"),
+                "warnings": [],
                 "block_ids": block_ids[split_at:],
             },
         )
@@ -1326,51 +1684,82 @@ def preview_organization(
 
 @router.post("/organizer/export-txt")
 def export_organization_txt(
-    payload: OrganizerPreviewRequest,
+    payload: OrganizerExportRequest,
     request: Request,
     user: User = Depends(require_permission("book_organizer:export_self")),
     db: Session = Depends(get_db),
 ):
-    if not settings.ENABLE_TEXT_BOOK_ORGANIZER:
-        raise HTTPException(status_code=404, detail="Not found.")
-    document = (
-        db.query(BookOrganizerDocument)
-        .filter(BookOrganizerDocument.id == payload.document_id, BookOrganizerDocument.user_id == user.id)
-        .first()
-    )
-    if not document:
-        raise HTTPException(status_code=404, detail="Document not found.")
-    plan = (
-        db.query(BookOrganizationPlan)
-        .filter(BookOrganizationPlan.id == payload.plan_id, BookOrganizationPlan.document_id == document.id)
-        .first()
-    )
-    if not plan:
-        raise HTTPException(status_code=404, detail="Plan not found.")
-
-    blocks = (
-        db.query(BookOrganizerBlock)
-        .filter(BookOrganizerBlock.document_id == document.id)
-        .order_by(BookOrganizerBlock.block_index.asc())
-        .all()
-    )
-    block_map = {block.block_id: block for block in blocks}
-    chapters = _build_organizer_chapters_from_plan(plan, block_map)
-
-    txt_parts: list[str] = []
-    for chapter in chapters:
-        txt_parts.append((chapter.get("chapter_title") or "Untitled Chapter").strip())
-        for paragraph in chapter.get("paragraphs", []):
-            txt_parts.append(paragraph.get("text", ""))
-        txt_parts.append("")
-
-    txt_body = "\n\n".join(txt_parts).rstrip() + "\n"
-    safe_title = re.sub(r"[^a-zA-Z0-9._-]+", "_", (document.title or "manuscript")).strip("_") or "manuscript"
+    document, _plan, project = _resolve_organizer_export_project(payload=payload, user=user, db=db)
+    safe_title = _safe_export_basename(project.title or document.title)
     return PlainTextResponse(
-        content=txt_body,
+        content=_canonical_plaintext(project),
         headers={"Content-Disposition": f'attachment; filename="{safe_title}.txt"'},
         media_type="text/plain; charset=utf-8",
     )
+
+
+@router.post("/organizer/export-markdown")
+def export_organization_markdown(
+    payload: OrganizerExportRequest,
+    request: Request,
+    user: User = Depends(require_permission("book_organizer:export_self")),
+    db: Session = Depends(get_db),
+):
+    document, _plan, project = _resolve_organizer_export_project(payload=payload, user=user, db=db)
+    safe_title = _safe_export_basename(project.title or document.title)
+    return PlainTextResponse(
+        content=_canonical_markdown(project),
+        headers={"Content-Disposition": f'attachment; filename="{safe_title}.md"'},
+        media_type="text/markdown; charset=utf-8",
+    )
+
+
+@router.post("/organizer/export-docx")
+def export_organization_docx(
+    payload: OrganizerExportRequest,
+    request: Request,
+    user: User = Depends(require_permission("book_organizer:export_self")),
+    db: Session = Depends(get_db),
+):
+    document, _plan, project = _resolve_organizer_export_project(payload=payload, user=user, db=db)
+    export = BookExport(
+        filename=f"{_safe_export_basename(project.title or document.title)}.docx",
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        payload=_build_docx_export(project),
+    )
+    return Response(content=export.payload, media_type=export.media_type, headers={"Content-Disposition": f'attachment; filename="{export.filename}"'})
+
+
+@router.post("/organizer/export-epub")
+def export_organization_epub(
+    payload: OrganizerExportRequest,
+    request: Request,
+    user: User = Depends(require_permission("book_organizer:export_self")),
+    db: Session = Depends(get_db),
+):
+    document, _plan, project = _resolve_organizer_export_project(payload=payload, user=user, db=db)
+    export = BookExport(
+        filename=f"{_safe_export_basename(project.title or document.title)}.epub",
+        media_type="application/epub+zip",
+        payload=_build_epub_export(project),
+    )
+    return Response(content=export.payload, media_type=export.media_type, headers={"Content-Disposition": f'attachment; filename="{export.filename}"'})
+
+
+@router.post("/organizer/export-print-pdf")
+def export_organization_print_pdf(
+    payload: OrganizerExportRequest,
+    request: Request,
+    user: User = Depends(require_permission("book_organizer:export_self")),
+    db: Session = Depends(get_db),
+):
+    document, _plan, project = _resolve_organizer_export_project(payload=payload, user=user, db=db)
+    export = BookExport(
+        filename=f"{_safe_export_basename(project.title or document.title)}-print-interior.pdf",
+        media_type="application/pdf",
+        payload=_build_pdf_export(project, trim_size=payload.trim_size),
+    )
+    return Response(content=export.payload, media_type=export.media_type, headers={"Content-Disposition": f'attachment; filename="{export.filename}"'})
 
 
 @router.get("")

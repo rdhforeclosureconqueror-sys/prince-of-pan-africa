@@ -13,7 +13,8 @@ export default function LibraryOrganizer() {
   const [planId, setPlanId] = useState(null);
   const [titleEdits, setTitleEdits] = useState({});
   const [splitBoundary, setSplitBoundary] = useState({});
-  const [downloadingTxt, setDownloadingTxt] = useState(false);
+  const [downloadStatus, setDownloadStatus] = useState("");
+  const [downloadingExport, setDownloadingExport] = useState("");
 
   function organizerErrorMessage(err, fallback) {
     if (err?.status === 401) return "Please sign in again.";
@@ -78,24 +79,25 @@ export default function LibraryOrganizer() {
     }
   }
 
-  async function handleDownloadTxt() {
+  async function handleDownloadExport(exportKind, endpoint, fallbackFilename) {
     if (!documentId || !planId) return;
-    setDownloadingTxt(true);
+    setDownloadingExport(exportKind);
+    setDownloadStatus(`Preparing ${exportKind} export from approved structure...`);
     setError("");
     try {
-      const res = await fetch(`${API_BASE_URL}/audiobooks/organizer/export-txt`, {
+      const res = await fetch(`${API_BASE_URL}${endpoint}`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ document_id: documentId, plan_id: planId }),
+        body: JSON.stringify({ document_id: documentId, plan_id: planId, title, author: "Unknown", language: "en", trim_size: "6x9" }),
       });
       if (!res.ok) {
-        let msg = "TXT export failed.";
+        let msg = `${exportKind} export failed.`;
         try {
           const payload = await res.json();
           msg = payload?.detail ? JSON.stringify(payload.detail) : msg;
         } catch (_err) {
-          msg = `TXT export failed (${res.status}).`;
+          msg = `${exportKind} export failed (${res.status}).`;
         }
         const error = new Error(msg);
         error.status = res.status;
@@ -104,7 +106,7 @@ export default function LibraryOrganizer() {
       const blob = await res.blob();
       const disposition = res.headers.get("content-disposition") || "";
       const match = disposition.match(/filename=\"?([^\";]+)\"?/i);
-      const filename = match?.[1] || "manuscript.txt";
+      const filename = match?.[1] || fallbackFilename;
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
@@ -113,10 +115,12 @@ export default function LibraryOrganizer() {
       anchor.click();
       anchor.remove();
       URL.revokeObjectURL(url);
+      setDownloadStatus(`${exportKind} export is ready.`);
     } catch (err) {
-      setError(organizerErrorMessage(err, "TXT export failed."));
+      setError(organizerErrorMessage(err, `${exportKind} export failed.`));
+      setDownloadStatus("");
     } finally {
-      setDownloadingTxt(false);
+      setDownloadingExport("");
     }
   }
 
@@ -142,10 +146,33 @@ export default function LibraryOrganizer() {
           <button type="button" className="library-pill library-pill--green" onClick={handleOrganize} disabled={loading}>
             {loading ? "Organizing..." : "Create Structured Preview"}
           </button>
-          <button type="button" className="library-pill" onClick={handleDownloadTxt} disabled={!preview?.chapters?.length || downloadingTxt}>
-            {downloadingTxt ? "Downloading TXT..." : "Download TXT"}
-          </button>
         </div>
+
+        {preview?.chapters?.length ? (
+          <section className="saved-book-card">
+            <h2>Download publishing exports</h2>
+            <p>All downloads are generated from the same approved canonical book structure. No audio, audiobook, MP3, M4B, or TTS output is created here.</p>
+            <div className="library-actions">
+              <button type="button" className="library-pill" onClick={() => handleDownloadExport("DOCX", "/audiobooks/organizer/export-docx", "manuscript.docx")} disabled={!!downloadingExport}>
+                {downloadingExport === "DOCX" ? "Preparing DOCX..." : "Download DOCX"}
+              </button>
+              <span className="saved-book-meta">Editable manuscript for author/editor revisions.</span>
+              <button type="button" className="library-pill" onClick={() => handleDownloadExport("EPUB", "/audiobooks/organizer/export-epub", "manuscript.epub")} disabled={!!downloadingExport}>
+                {downloadingExport === "EPUB" ? "Preparing EPUB..." : "Download EPUB"}
+              </button>
+              <span className="saved-book-meta">Ebook with reflowable chapters and clickable navigation.</span>
+              <button type="button" className="library-pill" onClick={() => handleDownloadExport("Print PDF", "/audiobooks/organizer/export-print-pdf", "manuscript-print-interior.pdf")} disabled={!!downloadingExport}>
+                {downloadingExport === "Print PDF" ? "Preparing Print PDF..." : "Download Print PDF"}
+              </button>
+              <span className="saved-book-meta">Physical book / paperback interior PDF, default 6×9 inches.</span>
+              <button type="button" className="library-pill" onClick={() => handleDownloadExport("TXT/Markdown", "/audiobooks/organizer/export-txt", "manuscript.txt")} disabled={!!downloadingExport}>
+                {downloadingExport === "TXT/Markdown" ? "Preparing TXT..." : "Download TXT/Markdown"}
+              </button>
+              <span className="saved-book-meta">Plain text backup only; no page formatting expectations.</span>
+            </div>
+            {downloadStatus ? <p className="saved-empty">{downloadStatus}</p> : null}
+          </section>
+        ) : null}
 
         {error ? <p className="saved-empty">{error}</p> : null}
 
