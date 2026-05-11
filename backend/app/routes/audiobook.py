@@ -83,8 +83,11 @@ class OrganizerPreviewRequest(BaseModel):
 
 class OrganizerExportRequest(OrganizerPreviewRequest):
     title: str | None = Field(default=None, max_length=255)
-    author: str = Field(default="Unknown", max_length=255)
+    subtitle: str | None = Field(default=None, max_length=255)
+    author: str | None = Field(default=None, max_length=255)
     language: str = Field(default="en", max_length=16)
+    publisher: str | None = Field(default=None, max_length=255)
+    copyright_year: str | None = Field(default=None, max_length=16)
     trim_size: str = Field(default="6x9", max_length=20)
 
 class OrganizerStructureEditRequest(BaseModel):
@@ -133,6 +136,9 @@ class BookProject:
     language: str
     front_matter: list[BookMatterItem]
     chapters: list[BookChapter]
+    subtitle: str = ""
+    publisher: str = ""
+    copyright_year: str = ""
     back_matter: list[BookMatterItem] = field(default_factory=list)
 
 
@@ -1277,6 +1283,17 @@ def _safe_export_basename(title: str | None, fallback: str = "manuscript") -> st
     return re.sub(r"[^a-zA-Z0-9._-]+", "_", (title or fallback)).strip("_") or fallback
 
 
+def _clean_metadata_value(value: str | None) -> str:
+    return re.sub(r"\s+", " ", (value or "").strip())
+
+
+def _copyright_notice(project: BookProject) -> str:
+    if not project.copyright_year:
+        return "Copyright ©. All rights reserved."
+    holder = project.author or project.publisher or project.title
+    return f"Copyright © {project.copyright_year} {holder}. All rights reserved."
+
+
 def _resolve_organizer_export_project(
     *,
     payload: OrganizerExportRequest | OrganizerPreviewRequest,
@@ -1310,14 +1327,36 @@ def _resolve_organizer_export_project(
     )
     block_map = {block.block_id: block for block in blocks}
     chapter_dicts = _build_organizer_chapters_from_plan(plan, block_map)
-    title = (getattr(payload, "title", None) or plan.structure.get("title_candidate") or document.title or "Untitled").strip()
+    title = _clean_metadata_value(getattr(payload, "title", None) or plan.structure.get("title_candidate") or document.title or "Untitled") or "Untitled"
+    subtitle = _clean_metadata_value(getattr(payload, "subtitle", None))
+    author_name = _clean_metadata_value(author or getattr(payload, "author", None))
+    if not author_name:
+        author_name = "Unknown"
+    language_code = _clean_metadata_value(language or getattr(payload, "language", None) or "en") or "en"
+    publisher = _clean_metadata_value(getattr(payload, "publisher", None))
+    copyright_year = _clean_metadata_value(getattr(payload, "copyright_year", None))
+    copyright_body = _copyright_notice(
+        BookProject(
+            title=title,
+            subtitle=subtitle,
+            author=author_name,
+            language=language_code,
+            publisher=publisher,
+            copyright_year=copyright_year,
+            front_matter=[],
+            chapters=[],
+        )
+    )
     project = BookProject(
         title=title,
-        author=(author or getattr(payload, "author", None) or "Unknown").strip() or "Unknown",
-        language=(language or getattr(payload, "language", None) or "en").strip() or "en",
+        subtitle=subtitle,
+        author=author_name,
+        language=language_code,
+        publisher=publisher,
+        copyright_year=copyright_year,
         front_matter=[
-            BookMatterItem(kind="title_page", title=title, body=f"by {((author or getattr(payload, 'author', None) or 'Unknown').strip() or 'Unknown')}"),
-            BookMatterItem(kind="copyright", title="Copyright", body="Copyright ©. All rights reserved."),
+            BookMatterItem(kind="title_page", title=title, body="\n".join(part for part in [subtitle, f"by {author_name}"] if part)),
+            BookMatterItem(kind="copyright", title="Copyright", body=copyright_body),
             BookMatterItem(kind="toc", title="Table of Contents", body=""),
         ],
         chapters=[
@@ -1331,7 +1370,6 @@ def _resolve_organizer_export_project(
         ],
     )
     return document, plan, project
-
 
 def _canonical_plaintext(project: BookProject) -> str:
     parts: list[str] = []
@@ -1357,7 +1395,11 @@ def _normalize_dividers_for_text(text: str) -> str:
 
 
 def _canonical_markdown(project: BookProject) -> str:
-    parts = [f"# {project.title}", f"by {project.author}", "", "## Table of Contents"]
+    title_parts = [f"# {project.title}"]
+    if project.subtitle:
+        title_parts.append(project.subtitle)
+    title_parts.append(f"by {project.author}")
+    parts = [*title_parts, "", _copyright_notice(project), "", "## Table of Contents"]
     parts.extend(f"- {chapter.title}" for chapter in project.chapters)
     for chapter in project.chapters:
         parts.extend(["", f"## {chapter.title}"])
@@ -1385,10 +1427,14 @@ def _docx_paragraph(text: str, style: str | None = None, page_break_before: bool
 
 
 def _build_docx_export(project: BookProject) -> bytes:
+    title_page = [_docx_paragraph(project.title, "Title")]
+    if project.subtitle:
+        title_page.append(_docx_paragraph(project.subtitle, "Subtitle"))
+    title_page.append(_docx_paragraph(f"by {project.author}", "Subtitle"))
     body = [
-        _docx_paragraph(project.title, "Title"),
-        _docx_paragraph(f"by {project.author}", "Subtitle"),
-        _docx_paragraph("Copyright ©. All rights reserved.", None, True),
+        *title_page,
+        _docx_paragraph(_copyright_notice(project), None, True),
+        *([_docx_paragraph(f"Publisher: {project.publisher}")] if project.publisher else []),
         _docx_paragraph("Table of Contents", "Heading1", True),
         _docx_paragraph("Update this placeholder in your word processor after opening the manuscript."),
     ]
@@ -1403,21 +1449,26 @@ def _build_docx_export(project: BookProject) -> bytes:
     sect = '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1080" w:bottom="1440" w:left="1080" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr>'
     document_xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' + ''.join(body) + sect + '</w:body></w:document>'
     styles_xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/></w:style><w:style w:type="paragraph" w:styleId="Subtitle"><w:name w:val="Subtitle"/></w:style><w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:pPr><w:outlineLvl w:val="0"/></w:pPr></w:style><w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/><w:pPr><w:outlineLvl w:val="1"/></w:pPr></w:style><w:style w:type="paragraph" w:styleId="ListParagraph"><w:name w:val="List Paragraph"/></w:style></w:styles>'
+    subject = project.subtitle or project.title
+    keywords = "; ".join(part for part in [project.language, project.publisher] if part)
+    core_xml = f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>{xml_escape(project.title)}</dc:title><dc:subject>{xml_escape(subject)}</dc:subject><dc:creator>{xml_escape(project.author)}</dc:creator><cp:keywords>{xml_escape(keywords)}</cp:keywords><dc:language>{xml_escape(project.language)}</dc:language><cp:category>{xml_escape(project.publisher)}</cp:category><cp:lastModifiedBy>{xml_escape(project.author)}</cp:lastModifiedBy></cp:coreProperties>'
     bio = io.BytesIO()
     with zipfile.ZipFile(bio, "w", zipfile.ZIP_DEFLATED) as zf:
-        zf.writestr("[Content_Types].xml", '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>')
-        zf.writestr("_rels/.rels", '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>')
+        zf.writestr("[Content_Types].xml", '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>')
+        zf.writestr("_rels/.rels", '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/></Relationships>')
         zf.writestr("word/_rels/document.xml.rels", '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>')
         zf.writestr("word/document.xml", document_xml)
         zf.writestr("word/styles.xml", styles_xml)
+        zf.writestr("docProps/core.xml", core_xml)
     return bio.getvalue()
 
 
-def _epub_xhtml(title: str, body: str) -> str:
+def _epub_xhtml(title: str, body: str, language: str = "en") -> str:
+    safe_language = html.escape(language or "en")
     return (
         '<?xml version="1.0" encoding="utf-8"?>'
         '<!DOCTYPE html>'
-        f'<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="en" lang="en">'
+        f'<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="{safe_language}" lang="{safe_language}">'
         f'<head><title>{html.escape(title)}</title><link rel="stylesheet" type="text/css" href="style.css"/></head>'
         f'<body>{body}</body></html>'
     )
@@ -1437,8 +1488,15 @@ def _build_epub_export(project: BookProject) -> bytes:
         f'<navPoint id="navPoint-{position}" playOrder="{position}"><navLabel><text>{xml_escape(chapter.title)}</text></navLabel><content src="chapter-{chapter.chapter_index}.xhtml"/></navPoint>'
         for position, chapter in enumerate(toc_chapters, start=1)
     )
-    nav = _epub_xhtml("Table of Contents", f'<nav epub:type="toc" id="toc"><h1>Table of Contents</h1><ol>{nav_items}</ol></nav>')
-    package = f'''<?xml version="1.0" encoding="utf-8"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="bookid">urn:uuid:{uid}</dc:identifier><dc:title>{xml_escape(project.title)}</dc:title><dc:creator>{xml_escape(project.author)}</dc:creator><dc:language>{xml_escape(project.language)}</dc:language><meta property="dcterms:modified">{datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')}</meta></metadata><manifest><item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/><item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/><item id="style" href="style.css" media-type="text/css"/>{manifest_items}</manifest><spine toc="ncx"><itemref idref="nav" linear="no"/>{spine_items}</spine></package>'''
+    nav = _epub_xhtml("Table of Contents", f'<nav epub:type="toc" id="toc"><h1>Table of Contents</h1><ol>{nav_items}</ol></nav>', project.language)
+    optional_metadata = ""
+    if project.subtitle:
+        optional_metadata += f'<dc:description>{xml_escape(project.subtitle)}</dc:description>'
+    if project.publisher:
+        optional_metadata += f'<dc:publisher>{xml_escape(project.publisher)}</dc:publisher>'
+    if project.copyright_year:
+        optional_metadata += f'<dc:rights>{xml_escape(_copyright_notice(project))}</dc:rights>'
+    package = f'''<?xml version="1.0" encoding="utf-8"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="bookid">urn:uuid:{uid}</dc:identifier><dc:title>{xml_escape(project.title)}</dc:title><dc:creator>{xml_escape(project.author)}</dc:creator><dc:language>{xml_escape(project.language)}</dc:language>{optional_metadata}<meta property="dcterms:modified">{datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')}</meta></metadata><manifest><item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/><item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/><item id="style" href="style.css" media-type="text/css"/>{manifest_items}</manifest><spine toc="ncx"><itemref idref="nav" linear="no"/>{spine_items}</spine></package>'''
     ncx = f'''<?xml version="1.0" encoding="UTF-8"?><ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1"><head><meta name="dtb:uid" content="urn:uuid:{uid}"/><meta name="dtb:depth" content="1"/><meta name="dtb:totalPageCount" content="0"/><meta name="dtb:maxPageNumber" content="0"/></head><docTitle><text>{xml_escape(project.title)}</text></docTitle><navMap>{nav_points}</navMap></ncx>'''
     bio = io.BytesIO()
     with zipfile.ZipFile(bio, "w") as zf:
@@ -1468,7 +1526,7 @@ def _build_epub_export(project: BookProject) -> bytes:
                         body_parts.append(f"<ul>{items}</ul>")
                     else:
                         body_parts.append(f"<p>{html.escape(stripped).replace(chr(10), '<br/>')}</p>")
-            zf.writestr(f"OEBPS/chapter-{chapter.chapter_index}.xhtml", _epub_xhtml(chapter.title, ''.join(body_parts)), compress_type=zipfile.ZIP_DEFLATED)
+            zf.writestr(f"OEBPS/chapter-{chapter.chapter_index}.xhtml", _epub_xhtml(chapter.title, ''.join(body_parts), project.language), compress_type=zipfile.ZIP_DEFLATED)
     return bio.getvalue()
 
 
@@ -1519,10 +1577,14 @@ def _build_pdf_export(project: BookProject, trim_size: str = "6x9") -> bytes:
     new_page()
     y = height / 2 + 40
     add_line(project.title, 22)
+    if project.subtitle:
+        add_line(project.subtitle, 16)
     add_line(f"by {project.author}", 14)
     new_page()
     add_line("Copyright", 18)
-    add_line("Copyright ©. All rights reserved.", 11)
+    add_line(_copyright_notice(project), 11)
+    if project.publisher:
+        add_line(f"Publisher: {project.publisher}", 11)
     new_page()
     add_line("Table of Contents", 18)
     for chapter in project.chapters:
@@ -1555,6 +1617,19 @@ def _build_pdf_export(project: BookProject, trim_size: str = "6x9") -> bytes:
         content = "\n".join(stream_lines).encode("latin-1", errors="replace")
         objects.append(f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {width} {height}] /Resources << /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Times-Roman >> >> >> /Contents {content_obj} 0 R >>".encode())
         objects.append(b"<< /Length " + str(len(content)).encode() + b" >>\nstream\n" + content + b"\nendstream")
+    info_obj_num = len(objects) + 1
+    info_parts = [
+        f"/Title ({_pdf_escape(project.title)})",
+        f"/Author ({_pdf_escape(project.author)})",
+        f"/Subject ({_pdf_escape(project.subtitle or project.title)})",
+        f"/Lang ({_pdf_escape(project.language)})",
+    ]
+    if project.publisher:
+        info_parts.append(f"/Publisher ({_pdf_escape(project.publisher)})")
+    if project.copyright_year:
+        info_parts.append(f"/Rights ({_pdf_escape(_copyright_notice(project))})")
+    objects.append(("<< " + " ".join(info_parts) + " >>").encode("latin-1", errors="replace"))
+
     out = io.BytesIO()
     out.write(b"%PDF-1.4\n")
     offsets = [0]
@@ -1565,7 +1640,7 @@ def _build_pdf_export(project: BookProject, trim_size: str = "6x9") -> bytes:
     out.write(f"xref\n0 {len(objects)+1}\n0000000000 65535 f \n".encode())
     for offset in offsets[1:]:
         out.write(f"{offset:010d} 00000 n \n".encode())
-    out.write(f"trailer << /Size {len(objects)+1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n".encode())
+    out.write(f"trailer << /Size {len(objects)+1} /Root 1 0 R /Info {info_obj_num} 0 R >>\nstartxref\n{xref}\n%%EOF\n".encode())
     return out.getvalue()
 
 

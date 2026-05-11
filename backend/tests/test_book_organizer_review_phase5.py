@@ -189,6 +189,56 @@ class BookOrganizerReviewPhase5Tests(unittest.TestCase):
         preview_text = "\n\n".join(preview_parts).rstrip() + "\n"
         self.assertEqual(exported.text, preview_text)
 
+    def test_epub_docx_and_pdf_use_export_metadata(self):
+        import zipfile
+        from io import BytesIO
+
+        client = self._authed_client()
+        ingest = client.post('/audiobooks/organizer/ingest-text', json={'title': 'roughsource', 'text': 'Para A\n\nPara B\n\nPara C'})
+        document_id = ingest.json()['document']['id']
+        plan_id = client.post('/audiobooks/organizer/propose-plan', json={'document_id': document_id}).json()['plan_id']
+        metadata = {
+            'document_id': document_id,
+            'plan_id': plan_id,
+            'title': 'Who Really Freed the Slaves?',
+            'subtitle': 'A Prince of Pan Africa Reader',
+            'author': 'Mufasa Study Circle',
+            'language': 'en-US',
+            'publisher': 'Pan Africa Press',
+            'copyright_year': '2026',
+        }
+
+        epub = client.post('/audiobooks/organizer/export-epub', json=metadata)
+        self.assertEqual(epub.status_code, 200)
+        self.assertIn('Who_Really_Freed_the_Slaves.epub', epub.headers['content-disposition'])
+        with zipfile.ZipFile(BytesIO(epub.content)) as zf:
+            opf = zf.read('OEBPS/content.opf').decode('utf-8')
+        self.assertIn('<dc:title>Who Really Freed the Slaves?</dc:title>', opf)
+        self.assertIn('<dc:creator>Mufasa Study Circle</dc:creator>', opf)
+        self.assertIn('<dc:language>en-US</dc:language>', opf)
+        self.assertIn('<dc:publisher>Pan Africa Press</dc:publisher>', opf)
+        self.assertIn('<dc:rights>Copyright © 2026 Mufasa Study Circle. All rights reserved.</dc:rights>', opf)
+        self.assertNotIn('<dc:creator>Unknown</dc:creator>', opf)
+
+        docx = client.post('/audiobooks/organizer/export-docx', json=metadata)
+        self.assertEqual(docx.status_code, 200)
+        with zipfile.ZipFile(BytesIO(docx.content)) as zf:
+            document_xml = zf.read('word/document.xml').decode('utf-8')
+            core_xml = zf.read('docProps/core.xml').decode('utf-8')
+        self.assertIn('Who Really Freed the Slaves?', document_xml)
+        self.assertIn('by Mufasa Study Circle', document_xml)
+        self.assertIn('Copyright © 2026 Mufasa Study Circle. All rights reserved.', document_xml)
+        self.assertIn('<dc:title>Who Really Freed the Slaves?</dc:title>', core_xml)
+        self.assertIn('<dc:creator>Mufasa Study Circle</dc:creator>', core_xml)
+        self.assertIn('<dc:language>en-US</dc:language>', core_xml)
+
+        pdf = client.post('/audiobooks/organizer/export-print-pdf', json=metadata)
+        self.assertEqual(pdf.status_code, 200)
+        pdf_text = pdf.content.decode('latin-1', errors='ignore')
+        self.assertIn('/Title (Who Really Freed the Slaves?)', pdf_text)
+        self.assertIn('/Author (Mufasa Study Circle)', pdf_text)
+        self.assertIn('/Info', pdf_text)
+
 
 if __name__ == '__main__':
     unittest.main()
