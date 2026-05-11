@@ -115,7 +115,11 @@ export default function LibraryOrganizer() {
       anchor.click();
       anchor.remove();
       URL.revokeObjectURL(url);
-      setDownloadStatus(`${exportKind} export is ready.`);
+      setDownloadStatus(
+        exportKind === "EPUB"
+          ? 'EPUB export is ready. On iPhone/iPad, tap Share → Books to open the EPUB.'
+          : `${exportKind} export is ready.`
+      );
     } catch (err) {
       setError(organizerErrorMessage(err, `${exportKind} export failed.`));
       setDownloadStatus("");
@@ -160,7 +164,7 @@ export default function LibraryOrganizer() {
               <button type="button" className="library-pill" onClick={() => handleDownloadExport("EPUB", "/audiobooks/organizer/export-epub", "manuscript.epub")} disabled={!!downloadingExport}>
                 {downloadingExport === "EPUB" ? "Preparing EPUB..." : "Download EPUB"}
               </button>
-              <span className="saved-book-meta">Ebook with reflowable chapters and clickable navigation.</span>
+              <span className="saved-book-meta">Ebook with reflowable chapters and clickable navigation. On iPhone/iPad, tap Share → Books to open the EPUB.</span>
               <button type="button" className="library-pill" onClick={() => handleDownloadExport("Print PDF", "/audiobooks/organizer/export-print-pdf", "manuscript-print-interior.pdf")} disabled={!!downloadingExport}>
                 {downloadingExport === "Print PDF" ? "Preparing Print PDF..." : "Download Print PDF"}
               </button>

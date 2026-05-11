@@ -99,6 +99,18 @@ class ExplicitChapterDetectionUnitTests(unittest.TestCase):
         self.assertEqual(len(chapters), 2)
         self.assertNotIn("Part", chapters[0]["chapter_title"])
 
+    def test_short_emphasis_lines_and_attributions_are_not_section_headings(self):
+        from app.routes.audiobook import _book_organizer_extract_sections
+
+        body = "Opening\nWhy?\n\nFast.\n\n— Frederick Douglass\n\nThe Story Most People Inherit\nActual section body."
+
+        sections = _book_organizer_extract_sections(body)
+
+        self.assertEqual([section["title"] for section in sections], ["Opening", "The Story Most People Inherit"])
+        self.assertIn("Why?", sections[0]["body"])
+        self.assertIn("Fast.", sections[0]["body"])
+        self.assertIn("— Frederick Douglass", sections[0]["body"])
+
     def test_over_splitting_warning_when_chapter_count_exceeds_threshold(self):
         from app.routes.audiobook import _book_organizer_structure_warnings
 
@@ -182,6 +194,13 @@ class ExplicitChapterOrganizerApiTests(unittest.TestCase):
         self.assertEqual(len(preview_body['chapter_titles']), 18)
         self.assertIn('word_count', preview_body['chapters'][0])
 
+        epub = client.post('/audiobooks/organizer/export-epub', json={'document_id': doc, 'plan_id': plan_res.json()['plan_id'], 'title': 'Large', 'author': 'Author Name', 'language': 'en'})
+        self.assertEqual(epub.status_code, 200)
+        with zipfile.ZipFile(io.BytesIO(epub.content)) as zf:
+            nav = zf.read('OEBPS/nav.xhtml').decode('utf-8')
+            self.assertEqual(nav.count('<li><a href='), 18)
+            self.assertIn('Epilogue: The Question That Remains', nav)
+
     def test_txt_export_uses_canonical_headings_without_duplicate_raw_marker_or_title(self):
         client = self._authed_client()
         text = 'CHAPTER ONE\nWHO REALLY FREED THE SLAVES?\n\nOpening\n“If I could save the Union without freeing any slave, I would do it.”\n\nCHAPTER TWO\nNEXT TITLE\n\nOpening\nBody'
@@ -198,7 +217,7 @@ class ExplicitChapterOrganizerApiTests(unittest.TestCase):
 
     def test_publishing_exports_are_generated_from_canonical_structure(self):
         client = self._authed_client()
-        text = 'CHAPTER ONE\nWHO REALLY FREED THE SLAVES?\n\nOpening\nBody one\n\n- Bullet one\n- Bullet two\n\nCHAPTER TWO\nNEXT TITLE\n\nOpening\nBody two'
+        text = 'CHAPTER ONE\nWHO REALLY FREED THE SLAVES?\n\nOpening\nWhy?\n\nFast.\n\n— Frederick Douglass\n\nBody one\n\n- Bullet one\n- Bullet two\n\nCHAPTER TWO\nNEXT TITLE\n\nClosing\nBody two'
         doc = client.post('/audiobooks/organizer/ingest-text', json={'title': 'Publishable', 'text': text}).json()['document']['id']
         plan = client.post('/audiobooks/organizer/propose-plan', json={'document_id': doc}).json()['plan_id']
         payload = {'document_id': doc, 'plan_id': plan, 'title': 'Publishable', 'author': 'Author Name', 'language': 'en'}
@@ -209,6 +228,10 @@ class ExplicitChapterOrganizerApiTests(unittest.TestCase):
 
         self.assertEqual(docx.status_code, 200)
         self.assertEqual(epub.status_code, 200)
+        self.assertEqual(epub.headers['content-type'].split(';')[0], 'application/epub+zip')
+        self.assertIn('attachment;', epub.headers['content-disposition'])
+        self.assertIn('Publishable.epub', epub.headers['content-disposition'])
+        self.assertTrue(epub.headers['content-disposition'].strip().endswith('.epub"'))
         self.assertEqual(pdf.status_code, 200)
         with zipfile.ZipFile(io.BytesIO(docx.content)) as zf:
             document_xml = zf.read('word/document.xml').decode('utf-8')
@@ -219,9 +242,22 @@ class ExplicitChapterOrganizerApiTests(unittest.TestCase):
             self.assertEqual(zf.read('mimetype'), b'application/epub+zip')
             opf = zf.read('OEBPS/content.opf').decode('utf-8')
             nav = zf.read('OEBPS/nav.xhtml').decode('utf-8')
+            ncx = zf.read('OEBPS/toc.ncx').decode('utf-8')
             chapter = zf.read('OEBPS/chapter-1.xhtml').decode('utf-8')
             self.assertIn('<dc:title>Publishable</dc:title>', opf)
+            self.assertIn('toc="ncx"', opf)
+            self.assertIn('OEBPS/toc.ncx', '\n'.join(zf.namelist()))
             self.assertIn('chapter-1.xhtml', nav)
+            self.assertEqual(nav.count('<li><a href='), 2)
+            self.assertNotIn('Opening', nav)
+            self.assertNotIn('Closing', nav)
+            self.assertIn('navPoint-1', ncx)
+            self.assertEqual(chapter.count('<h1>Chapter One: Who Really Freed the Slaves?</h1>'), 1)
+            self.assertNotIn('<h2>Why?</h2>', chapter)
+            self.assertNotIn('<h2>Fast.</h2>', chapter)
+            self.assertNotIn('<h2>— Frederick Douglass</h2>', chapter)
+            self.assertIn('<p>Why?</p>', chapter)
+            self.assertIn('<p>Fast.</p>', chapter)
             self.assertIn('<ul><li>Bullet one</li><li>Bullet two</li></ul>', chapter)
             self.assertNotIn('CHAPTER ONE', chapter)
         self.assertTrue(pdf.content.startswith(b'%PDF-1.4'))
