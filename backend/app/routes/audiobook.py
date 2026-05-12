@@ -150,6 +150,10 @@ class BookExport:
     media_type: str
     payload: bytes
 
+PRINT_BODY_FIRST_LINE_INDENT_PT = 14.4  # 0.2 inches at 72 points per inch.
+DOCX_BODY_FIRST_LINE_INDENT_TWIPS = 288  # 0.2 inches at 1440 twips per inch.
+EPUB_BODY_TEXT_INDENT = "1.2em"
+
 BOOK_ORGANIZER_CHAPTER_WORD_NUMBERS = (
     "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
     "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen",
@@ -1498,9 +1502,14 @@ def _sanitize_export_project(project: BookProject) -> BookProject:
     )
 
 
+def _clean_export_text(text: str) -> str:
+    return (text or "").replace("\t", " ")
+
+
 def _iter_export_blocks(text: str) -> list[tuple[str, str | list[str]]]:
     blocks: list[tuple[str, str | list[str]]] = []
-    for para in re.split(r"\n\s*\n", _normalize_dividers_for_text(text or "")):
+    normalized_text = _normalize_dividers_for_text(_clean_export_text(text))
+    for para in re.split(r"\n\s*\n", normalized_text):
         stripped = para.strip()
         if not stripped:
             continue
@@ -1541,7 +1550,7 @@ def _docx_paragraph(text: str, style: str | None = None, page_break_before: bool
         props += '<w:pageBreakBefore/>'
     ppr = f"<w:pPr>{props}</w:pPr>" if props else ""
     runs = []
-    for index, line in enumerate((text or "").split("\n")):
+    for index, line in enumerate(_clean_export_text(text).split("\n")):
         if index:
             runs.append("<w:r><w:br/></w:r>")
         runs.append(f'<w:r><w:t xml:space="preserve">{xml_escape(line)}</w:t></w:r>')
@@ -1556,27 +1565,42 @@ def _build_docx_export(project: BookProject) -> bytes:
     title_page.append(_docx_paragraph(f"by {project.author}", "Subtitle"))
     body = [
         *title_page,
-        _docx_paragraph(_copyright_notice(project), None, True),
-        *([_docx_paragraph(f"Publisher: {project.publisher}")] if project.publisher else []),
+        _docx_paragraph(_copyright_notice(project), "BodyFirst", True),
+        *([_docx_paragraph(f"Publisher: {project.publisher}", "Body")] if project.publisher else []),
         _docx_paragraph("Table of Contents", "Heading1", True),
-        _docx_paragraph("Update this placeholder in your word processor after opening the manuscript."),
+        _docx_paragraph("Update this placeholder in your word processor after opening the manuscript.", "BodyFirst"),
     ]
     for chapter in project.chapters:
         body.append(_docx_paragraph(chapter.title, "Heading1", True))
+        next_paragraph_style = "BodyFirst"
         for section in chapter.sections:
             if section.title:
                 body.append(_docx_paragraph(section.title, "Heading2"))
+                next_paragraph_style = "BodyFirst"
             for block_type, block_body in _iter_export_blocks(section.body):
                 if block_type == "list":
                     for item in block_body:
                         body.append(_docx_paragraph(f"• {item}", "ListParagraph"))
+                    next_paragraph_style = "Body"
                 elif block_type == "divider":
-                    body.append(_docx_paragraph(str(block_body)))
+                    body.append(_docx_paragraph("•  •  •", "Divider"))
+                    next_paragraph_style = "BodyFirst"
                 else:
-                    body.append(_docx_paragraph(str(block_body)))
-    sect = '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1080" w:bottom="1440" w:left="1080" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr>'
+                    body.append(_docx_paragraph(str(block_body), next_paragraph_style))
+                    next_paragraph_style = "Body"
+    sect = '<w:sectPr><w:pgSz w:w="8640" w:h="12960"/><w:pgMar w:top="1080" w:right="1080" w:bottom="1080" w:left="1080" w:header="540" w:footer="720" w:gutter="0"/></w:sectPr>'
     document_xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' + ''.join(body) + sect + '</w:body></w:document>'
-    styles_xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/></w:style><w:style w:type="paragraph" w:styleId="Subtitle"><w:name w:val="Subtitle"/></w:style><w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:pPr><w:outlineLvl w:val="0"/></w:pPr></w:style><w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/><w:pPr><w:outlineLvl w:val="1"/></w:pPr></w:style><w:style w:type="paragraph" w:styleId="ListParagraph"><w:name w:val="List Paragraph"/></w:style></w:styles>'
+    styles_xml = f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:pPr><w:spacing w:before="0" w:after="0" w:line="276" w:lineRule="auto"/></w:pPr></w:style>
+<w:style w:type="paragraph" w:styleId="Body"><w:name w:val="Body"/><w:basedOn w:val="Normal"/><w:pPr><w:ind w:firstLine="{DOCX_BODY_FIRST_LINE_INDENT_TWIPS}"/><w:spacing w:before="0" w:after="0" w:line="276" w:lineRule="auto"/><w:jc w:val="both"/></w:pPr></w:style>
+<w:style w:type="paragraph" w:styleId="BodyFirst"><w:name w:val="Body First"/><w:basedOn w:val="Normal"/><w:pPr><w:ind w:firstLine="0"/><w:spacing w:before="0" w:after="0" w:line="276" w:lineRule="auto"/><w:jc w:val="both"/></w:pPr></w:style>
+<w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/><w:pPr><w:jc w:val="center"/><w:spacing w:after="240"/></w:pPr></w:style>
+<w:style w:type="paragraph" w:styleId="Subtitle"><w:name w:val="Subtitle"/><w:pPr><w:jc w:val="center"/><w:spacing w:after="120"/></w:pPr></w:style>
+<w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:pPr><w:outlineLvl w:val="0"/><w:jc w:val="center"/><w:spacing w:before="240" w:after="240"/></w:pPr></w:style>
+<w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/><w:pPr><w:outlineLvl w:val="1"/><w:jc w:val="center"/><w:spacing w:before="180" w:after="120"/></w:pPr></w:style>
+<w:style w:type="paragraph" w:styleId="Divider"><w:name w:val="Ornamental Divider"/><w:pPr><w:jc w:val="center"/><w:spacing w:before="120" w:after="120"/></w:pPr></w:style>
+<w:style w:type="paragraph" w:styleId="ListParagraph"><w:name w:val="List Paragraph"/><w:basedOn w:val="Normal"/><w:pPr><w:ind w:left="360" w:hanging="180"/><w:spacing w:before="0" w:after="0" w:line="276" w:lineRule="auto"/></w:pPr></w:style>
+</w:styles>'''
     subject = project.subtitle or project.title
     keywords = "; ".join(part for part in [project.language, project.publisher] if part)
     core_xml = f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>{xml_escape(project.title)}</dc:title><dc:subject>{xml_escape(subject)}</dc:subject><dc:creator>{xml_escape(project.author)}</dc:creator><cp:keywords>{xml_escape(keywords)}</cp:keywords><dc:language>{xml_escape(project.language)}</dc:language><cp:category>{xml_escape(project.publisher)}</cp:category><cp:lastModifiedBy>{xml_escape(project.author)}</cp:lastModifiedBy></cp:coreProperties>'
@@ -1636,7 +1660,15 @@ def _build_epub_export(project: BookProject) -> bytes:
         zf.writestr("OEBPS/toc.ncx", ncx, compress_type=zipfile.ZIP_DEFLATED)
         zf.writestr(
             "OEBPS/style.css",
-            "body{font-family:serif;line-height:1.5;margin:1em;} h1{font-size:1.6em;line-height:1.2;} h2{font-size:1.2em;line-height:1.25;margin-top:1.4em;} p{margin:0 0 1em;} .section-divider{text-align:center;margin:1.5em;} ul{margin-left:1em;}",
+            (
+                "body{font-family:serif;line-height:1.45;margin:1em;}"
+                "h1{font-size:1.6em;line-height:1.2;text-align:center;margin:2.2em 0 1em;}"
+                "h2{font-size:1.2em;line-height:1.25;text-align:center;margin:1.4em 0 .6em;}"
+                f"p{{margin:0;text-indent:{EPUB_BODY_TEXT_INDENT};}}"
+                "h1+p,h2+p,.section-divider+p{ text-indent:0;}"
+                ".section-divider{text-align:center;text-indent:0;margin:1.2em 0;}"
+                "ul{margin:.6em 0 .6em 1.25em;}"
+            ),
             compress_type=zipfile.ZIP_DEFLATED,
         )
         for chapter in project.chapters:
@@ -1715,7 +1747,7 @@ def _estimate_pdf_text_width(text: str, size: int = 11, font: str = "R") -> floa
 
 def _wrap_pdf_text_to_width(text: str, max_width: float, size: int = 11, font: str = "R") -> list[str]:
     lines: list[str] = []
-    for para in re.split(r"\n\s*\n", text or ""):
+    for para in re.split(r"\n\s*\n", _clean_export_text(text)):
         words = para.replace("\n", " ").split()
         line = ""
         for word in words:
@@ -1730,6 +1762,24 @@ def _wrap_pdf_text_to_width(text: str, max_width: float, size: int = 11, font: s
     return lines
 
 
+def _wrap_pdf_paragraph_to_width(text: str, max_width: float, first_line_indent: float = 0, size: int = 11, font: str = "R") -> list[str]:
+    words = _clean_export_text(text).replace("\n", " ").split()
+    lines: list[str] = []
+    line = ""
+    line_width = max_width - first_line_indent
+    for word in words:
+        candidate = f"{line} {word}".strip()
+        if line and _estimate_pdf_text_width(candidate, size, font) > line_width:
+            lines.append(line)
+            line = word
+            line_width = max_width
+        else:
+            line = candidate
+    if line:
+        lines.append(line)
+    return lines
+
+
 def _add_wrapped_pdf_lines(add_line, text: str, size: int = 11, indent: int = 0, max_chars: int = 70) -> None:
     for line in _wrap_pdf_text(text, max_chars):
         add_line(line, size, indent)
@@ -1738,9 +1788,12 @@ def _add_wrapped_pdf_lines(add_line, text: str, size: int = 11, indent: int = 0,
 def _build_pdf_export(project: BookProject, trim_size: str = "6x9", chapter_start: str = "next_page") -> bytes:
     project = _sanitize_export_project(project)
     width, height = (432, 648) if trim_size == "6x9" else (432, 648)
+    # 6x9 print PDF: left/right margins are both above KDP's 0.5-inch
+    # gutter guidance for a ~189-page book, and bottom text margin clears the footer.
     margin_left, margin_right, margin_top, margin_bottom = 60, 54, 78, 84
     header_y = height - 44
     footer_y = 34
+    body_text_width = width - margin_left - margin_right
     max_body_chars = 62
     chapter_title_size = 19
     chapter_title_leading = 24
@@ -1880,6 +1933,7 @@ def _build_pdf_export(project: BookProject, trim_size: str = "6x9", chapter_star
             add_body_line(title_line, chapter_title_size, align="center", font="B", leading=chapter_title_leading)
         y -= chapter_title_to_section_gap
         for section_index, section in enumerate(chapter.sections):
+            next_paragraph_flush_left = True
             if section.title:
                 if section_index:
                     y -= 6
@@ -1890,21 +1944,22 @@ def _build_pdf_export(project: BookProject, trim_size: str = "6x9", chapter_star
                     y -= 3
                     add_body_line("•  •  •", 12, align="center", leading=19)
                     y -= 3
+                    next_paragraph_flush_left = True
                     continue
                 if block_type == "list":
                     for item in block_body:
-                        for wrapped_index, line in enumerate(_wrap_pdf_text(str(item), 58)):
-                            if line:
-                                prefix = "• " if wrapped_index == 0 else "  "
-                                add_body_line(f"{prefix}{line}", 11, indent=20, leading=16)
-                    add_body_line("", 11, leading=8)
+                        list_lines = _wrap_pdf_paragraph_to_width(str(item), body_text_width - 20, size=11)
+                        for wrapped_index, line in enumerate(list_lines):
+                            prefix = "• " if wrapped_index == 0 else "  "
+                            add_body_line(f"{prefix}{line}", 11, indent=20, leading=16)
+                    y -= 4
+                    next_paragraph_flush_left = False
                     continue
-                for wrapped_index, line in enumerate(_wrap_pdf_text(str(block_body), max_body_chars)):
-                    if line:
-                        paragraph_indent = 16 if wrapped_index == 0 else 0
-                        add_body_line(line, 11, indent=paragraph_indent, leading=16)
-                    else:
-                        add_body_line("", 11, leading=7)
+                first_line_indent = 0 if next_paragraph_flush_left else PRINT_BODY_FIRST_LINE_INDENT_PT
+                paragraph_lines = _wrap_pdf_paragraph_to_width(str(block_body), body_text_width, first_line_indent, size=11)
+                for wrapped_index, line in enumerate(paragraph_lines):
+                    add_body_line(line, 11, indent=first_line_indent if wrapped_index == 0 else 0, leading=16)
+                next_paragraph_flush_left = False
     commit_body_page()
 
     page_records.extend(build_toc_pages(chapter_starts))

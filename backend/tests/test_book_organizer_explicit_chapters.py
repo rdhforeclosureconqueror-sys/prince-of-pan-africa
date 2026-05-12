@@ -241,6 +241,64 @@ class ExplicitChapterDetectionUnitTests(unittest.TestCase):
         self.assertFalse(any(text.strip().isdigit() for text in page_texts))
 
 
+
+    def test_exports_use_style_based_paragraph_indentation_without_tabs(self):
+        from pypdf import PdfReader
+
+        from app.routes.audiobook import BookChapter, BookProject, BookSection, _build_docx_export, _build_epub_export, _build_pdf_export
+
+        project = BookProject(
+            title="Typography Regression",
+            author="SimbaWaUjamaa.com",
+            language="en",
+            front_matter=[],
+            chapters=[
+                BookChapter(
+                    chapter_index=1,
+                    title="Chapter One: A Very Long Chapter Title That Must Wrap Cleanly Without Duplicating Itself",
+                    sections=[
+                        BookSection(
+                            title="Opening",
+                            body="First paragraph after Opening.\n\nSecond paragraph should indent.\n\n***\n\nFirst paragraph after divider.\n\nSecond paragraph after divider should indent.",
+                        )
+                    ],
+                )
+            ],
+        )
+
+        docx = _build_docx_export(project)
+        epub = _build_epub_export(project)
+        pdf = _build_pdf_export(project)
+
+        with zipfile.ZipFile(io.BytesIO(docx)) as zf:
+            document_xml = zf.read('word/document.xml').decode('utf-8')
+            styles_xml = zf.read('word/styles.xml').decode('utf-8')
+            self.assertIn('w:styleId="Body"', styles_xml)
+            self.assertIn('w:firstLine="288"', styles_xml)
+            self.assertIn('w:styleId="BodyFirst"', styles_xml)
+            self.assertNotIn('\t', document_xml)
+            self.assertIn('w:val="BodyFirst"', document_xml)
+            self.assertIn('w:val="Body"', document_xml)
+
+        with zipfile.ZipFile(io.BytesIO(epub)) as zf:
+            style_css = zf.read('OEBPS/style.css').decode('utf-8')
+            chapter_xhtml = zf.read('OEBPS/chapter-1.xhtml').decode('utf-8')
+            self.assertIn('text-indent:1.2em', style_css)
+            self.assertIn('h1+p,h2+p,.section-divider+p', style_css)
+            self.assertNotIn('\t', chapter_xhtml)
+            self.assertIn('<p>First paragraph after Opening.</p><p>Second paragraph should indent.</p>', chapter_xhtml)
+            self.assertIn('<p class="section-divider">***</p><p>First paragraph after divider.</p>', chapter_xhtml)
+
+        reader = PdfReader(io.BytesIO(pdf))
+        self.assertEqual(float(reader.pages[0].mediabox.width), 432.0)
+        self.assertEqual(float(reader.pages[0].mediabox.height), 648.0)
+        page_streams = [page.get_contents().get_data().decode('latin-1', errors='ignore') for page in reader.pages]
+        opening_stream = next(stream for stream in page_streams if 'First paragraph after Opening.' in stream)
+        self.assertRegex(opening_stream, r'60 \d+ Td \(First paragraph after Opening\.\)')
+        self.assertRegex(opening_stream, r'74 \d+ Td \(Second paragraph should indent\.\)')
+        self.assertRegex(opening_stream, r'60 \d+ Td \(First paragraph after divider\.\)')
+        self.assertRegex(opening_stream, r'74 \d+ Td \(Second paragraph after divider should indent\.\)')
+
     def test_does_not_split_on_bullet_lists(self):
         from app.routes.audiobook import _detect_book_organizer_explicit_chapters
 
