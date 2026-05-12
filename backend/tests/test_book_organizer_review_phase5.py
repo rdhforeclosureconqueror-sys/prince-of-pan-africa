@@ -220,7 +220,7 @@ class BookOrganizerReviewPhase5Tests(unittest.TestCase):
             'subtitle': 'A Prince of Pan Africa Reader',
             'author': 'Mufasa Study Circle',
             'language': 'en-US',
-            'publisher': 'Pan Africa Press',
+            'publisher': 'SimbaWaUjamaa.com',
             'copyright_year': '2026',
         }
 
@@ -232,7 +232,7 @@ class BookOrganizerReviewPhase5Tests(unittest.TestCase):
         self.assertIn('<dc:title>Who Really Freed the Slaves?</dc:title>', opf)
         self.assertIn('<dc:creator>Mufasa Study Circle</dc:creator>', opf)
         self.assertIn('<dc:language>en-US</dc:language>', opf)
-        self.assertIn('<dc:publisher>Pan Africa Press</dc:publisher>', opf)
+        self.assertIn('<dc:publisher>SimbaWaUjamaa.com</dc:publisher>', opf)
         self.assertIn('<dc:rights>Copyright © 2026 Mufasa Study Circle. All rights reserved.</dc:rights>', opf)
         self.assertNotIn('<dc:creator>Unknown</dc:creator>', opf)
 
@@ -244,6 +244,7 @@ class BookOrganizerReviewPhase5Tests(unittest.TestCase):
         self.assertIn('Who Really Freed the Slaves?', document_xml)
         self.assertIn('by Mufasa Study Circle', document_xml)
         self.assertIn('Copyright © 2026 Mufasa Study Circle. All rights reserved.', document_xml)
+        self.assertIn('Publisher: SimbaWaUjamaa.com', document_xml)
         self.assertIn('<dc:title>Who Really Freed the Slaves?</dc:title>', core_xml)
         self.assertIn('<dc:creator>Mufasa Study Circle</dc:creator>', core_xml)
         self.assertIn('<dc:language>en-US</dc:language>', core_xml)
@@ -253,6 +254,7 @@ class BookOrganizerReviewPhase5Tests(unittest.TestCase):
         pdf_text = pdf.content.decode('latin-1', errors='ignore')
         self.assertIn('/Title (Who Really Freed the Slaves?)', pdf_text)
         self.assertIn('/Author (Mufasa Study Circle)', pdf_text)
+        self.assertIn('/Publisher (SimbaWaUjamaa.com)', pdf_text)
         self.assertIn('/Info', pdf_text)
 
 

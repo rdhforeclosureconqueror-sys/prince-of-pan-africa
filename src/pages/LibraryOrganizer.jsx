@@ -10,6 +10,7 @@ export default function LibraryOrganizer() {
   const [language, setLanguage] = useState("en");
   const [publisher, setPublisher] = useState("");
   const [copyrightYear, setCopyrightYear] = useState("");
+  const [chapterStart, setChapterStart] = useState("next_page");
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -114,6 +115,7 @@ export default function LibraryOrganizer() {
           publisher: publisher.trim() || null,
           copyright_year: copyrightYear.trim() || null,
           trim_size: "6x9",
+          chapter_start: chapterStart,
         }),
       });
       if (!res.ok) {
@@ -200,6 +202,12 @@ export default function LibraryOrganizer() {
               <label>Copyright year
                 <input value={copyrightYear} onChange={(e) => setCopyrightYear(e.target.value)} className="save-input" placeholder="Optional, e.g. 2026" />
               </label>
+              <label>Print chapter starts
+                <select value={chapterStart} onChange={(e) => setChapterStart(e.target.value)} className="save-input">
+                  <option value="next_page">Start chapters on next page</option>
+                  <option value="right_hand">Start chapters on right-hand page</option>
+                </select>
+              </label>
             </div>
             {!preview?.approved ? <p className="saved-empty">Please review and approve book structure before exporting.</p> : null}
             {!author.trim() ? <p className="saved-empty">Author metadata is required before final export so readers do not show “Unknown.”</p> : null}
@@ -215,7 +223,7 @@ export default function LibraryOrganizer() {
               <button type="button" className="library-pill" onClick={() => handleDownloadExport("Print PDF", "/audiobooks/organizer/export-print-pdf", "manuscript-print-interior.pdf")} disabled={!!downloadingExport || !preview?.approved}>
                 {downloadingExport === "Print PDF" ? "Preparing Print PDF..." : "Download Print PDF"}
               </button>
-              <span className="saved-book-meta">Physical book / paperback interior PDF, default 6×9 inches.</span>
+              <span className="saved-book-meta">Physical book / paperback interior PDF, default 6×9 inches. Right-hand starts may add unnumbered blank verso pages.</span>
               <button type="button" className="library-pill" onClick={() => handleDownloadExport("TXT/Markdown", "/audiobooks/organizer/export-txt", "manuscript.txt")} disabled={!!downloadingExport || !preview?.approved}>
                 {downloadingExport === "TXT/Markdown" ? "Preparing TXT..." : "Download TXT/Markdown"}
               </button>
