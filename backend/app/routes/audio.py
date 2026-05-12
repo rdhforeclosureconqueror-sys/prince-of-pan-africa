@@ -1,3 +1,4 @@
+import logging
 import re
 from pathlib import Path
 
@@ -7,11 +8,13 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import AudioAsset, Audiobook, AudiobookChapter
-from app.routes.audiobook import _resolve_audiobook_user, _hash_text
+from app.dependencies.auth import require_permission
+from app.models import AudioAsset, Audiobook, AudiobookChapter, User
+from app.routes.audiobook import _hash_text
 from app.routes.chat import STATIC_AUDIO_DIR, generate_tts_audio_url, infer_audio_format_from_url
 
 router = APIRouter(prefix="/api/audio", tags=["Audio Assets"])
+logger = logging.getLogger("mufasa-audio-download")
 
 SUPPORTED_AUDIO_FORMATS = {"mp3", "m4a", "wav"}
 CONTENT_TYPES = {
@@ -57,13 +60,59 @@ def storage_key_from_url(audio_url: str | None) -> str | None:
     return path.rstrip("/").rsplit("/", 1)[-1] or None
 
 
-def local_audio_path(asset: AudioAsset) -> Path:
-    key = (asset.storage_key or storage_key_from_url(asset.audio_url) or "").lstrip("/")
+def _audio_filename_from_storage_key(storage_key: str | None) -> str | None:
+    key = (storage_key or "").strip().lstrip("/")
+    if not key:
+        return None
     filename = key.split("/", 1)[1] if key.startswith("audio/") else Path(key).name
+    if not filename or filename in {".", ".."} or "/" in filename or "\\" in filename:
+        return None
+    return filename
+
+
+def _resolve_local_audio_path(asset: AudioAsset) -> tuple[Path | None, str | None, bool]:
+    key = asset.storage_key or storage_key_from_url(asset.audio_url)
+    filename = _audio_filename_from_storage_key(key)
     if not filename:
-        raise HTTPException(status_code=404, detail="No saved audio found for this chapter.")
-    path = STATIC_AUDIO_DIR / filename
-    if not path.exists() or not path.is_file():
+        return None, key, False
+    path = (STATIC_AUDIO_DIR / filename).resolve()
+    audio_root = STATIC_AUDIO_DIR.resolve()
+    if path.parent != audio_root:
+        return None, key, False
+    return path, key, path.exists() and path.is_file()
+
+
+def _log_audio_download_result(
+    *,
+    request: Request,
+    user: User | None,
+    asset: AudioAsset | None,
+    book_id: int | None,
+    chapter_id: int | None,
+    storage_key: str | None,
+    file_exists: bool,
+    status_code: int,
+    error_category: str,
+) -> None:
+    logger.info(
+        "audio_download path=%s user_id=%s audio_id=%s book_id=%s chapter_id=%s storage_key=%s file_exists=%s auth_result=%s status_code=%s error_category=%s origin=%s",
+        request.url.path,
+        user.id if user else None,
+        asset.id if asset else None,
+        book_id,
+        chapter_id,
+        storage_key,
+        file_exists,
+        "allowed" if status_code < 400 else "denied" if status_code in {401, 403} else "allowed",
+        status_code,
+        error_category,
+        request.headers.get("origin"),
+    )
+
+
+def local_audio_path(asset: AudioAsset) -> Path:
+    path, _storage_key, file_exists = _resolve_local_audio_path(asset)
+    if not path or not file_exists:
         raise HTTPException(status_code=404, detail="No saved audio found for this chapter.")
     return path
 
@@ -122,8 +171,7 @@ def attach_asset_metadata(db: Session, asset: AudioAsset, book: Audiobook, chapt
     return asset
 
 
-def get_owned_book_chapter(db: Session, request: Request, book_id: int, chapter_id: int) -> tuple[Audiobook, AudiobookChapter]:
-    user, _ = _resolve_audiobook_user(request, db)
+def get_owned_book_chapter(db: Session, user: User, book_id: int, chapter_id: int) -> tuple[Audiobook, AudiobookChapter]:
     book = db.query(Audiobook).filter(Audiobook.id == book_id, Audiobook.user_id == user.id).first()
     if not book:
         raise HTTPException(status_code=404, detail="Audiobook not found.")
@@ -134,8 +182,8 @@ def get_owned_book_chapter(db: Session, request: Request, book_id: int, chapter_
 
 
 @router.post("/save")
-def save_audio(payload: SaveAudioRequest, request: Request, db: Session = Depends(get_db)):
-    book, chapter = get_owned_book_chapter(db, request, payload.bookId, payload.chapterId)
+def save_audio(payload: SaveAudioRequest, db: Session = Depends(get_db), user: User = Depends(require_permission("audiobook:update_self"))):
+    book, chapter = get_owned_book_chapter(db, user, payload.bookId, payload.chapterId)
     voice = (payload.voice or book.voice or "alloy").strip()
     audio_url = payload.audioUrl or chapter.audio_url
     if not audio_url:
@@ -162,8 +210,8 @@ def save_audio(payload: SaveAudioRequest, request: Request, db: Session = Depend
 
 
 @router.get("/book/{book_id}/chapter/{chapter_id}")
-def get_chapter_audio(book_id: int, chapter_id: int, request: Request, db: Session = Depends(get_db)):
-    book, chapter = get_owned_book_chapter(db, request, book_id, chapter_id)
+def get_chapter_audio(book_id: int, chapter_id: int, db: Session = Depends(get_db), user: User = Depends(require_permission("audiobook:read_self"))):
+    book, chapter = get_owned_book_chapter(db, user, book_id, chapter_id)
     asset = find_saved_asset(db, book, chapter, book.voice)
     if not asset:
         raise HTTPException(status_code=404, detail="No saved audio found for this chapter.")
@@ -173,21 +221,94 @@ def get_chapter_audio(book_id: int, chapter_id: int, request: Request, db: Sessi
 
 
 @router.get("/download/{audio_id}")
-def download_audio(audio_id: int, request: Request, db: Session = Depends(get_db)):
-    user, _ = _resolve_audiobook_user(request, db)
+def download_audio(audio_id: int, request: Request, db: Session = Depends(get_db), user: User = Depends(require_permission("audiobook:read_self"))):
     asset = db.query(AudioAsset).filter(AudioAsset.id == audio_id).first()
     if not asset:
+        _log_audio_download_result(
+            request=request,
+            user=user,
+            asset=None,
+            book_id=None,
+            chapter_id=None,
+            storage_key=None,
+            file_exists=False,
+            status_code=404,
+            error_category="asset_not_found",
+        )
         raise HTTPException(status_code=404, detail="No saved audio found for this chapter.")
     book = db.query(Audiobook).filter(Audiobook.id == asset.audiobook_id, Audiobook.user_id == user.id).first()
     if not book:
+        _log_audio_download_result(
+            request=request,
+            user=user,
+            asset=asset,
+            book_id=asset.audiobook_id,
+            chapter_id=asset.chapter_id,
+            storage_key=asset.storage_key or storage_key_from_url(asset.audio_url),
+            file_exists=False,
+            status_code=404,
+            error_category="owner_mismatch_or_book_missing",
+        )
         raise HTTPException(status_code=404, detail="No saved audio found for this chapter.")
     chapter = db.query(AudiobookChapter).filter(AudiobookChapter.id == asset.chapter_id, AudiobookChapter.audiobook_id == book.id).first()
     if not chapter:
+        _log_audio_download_result(
+            request=request,
+            user=user,
+            asset=asset,
+            book_id=book.id,
+            chapter_id=asset.chapter_id,
+            storage_key=asset.storage_key or storage_key_from_url(asset.audio_url),
+            file_exists=False,
+            status_code=404,
+            error_category="chapter_missing",
+        )
         raise HTTPException(status_code=404, detail="No saved audio found for this chapter.")
 
-    path = local_audio_path(asset)
+    if chapter.status != "completed":
+        _log_audio_download_result(
+            request=request,
+            user=user,
+            asset=asset,
+            book_id=book.id,
+            chapter_id=chapter.id,
+            storage_key=asset.storage_key or storage_key_from_url(asset.audio_url),
+            file_exists=False,
+            status_code=409,
+            error_category="generation_incomplete",
+        )
+        raise HTTPException(status_code=409, detail="Audio generation is not complete for this chapter yet.")
+
+    path, storage_key, file_exists = _resolve_local_audio_path(asset)
+    if not path or not file_exists:
+        _log_audio_download_result(
+            request=request,
+            user=user,
+            asset=asset,
+            book_id=book.id,
+            chapter_id=chapter.id,
+            storage_key=storage_key,
+            file_exists=file_exists,
+            status_code=404,
+            error_category="file_missing",
+        )
+        raise HTTPException(status_code=404, detail="Audio file is missing from storage. Please regenerate this chapter.")
+
     audio_format = (asset.format or infer_audio_format_from_url(asset.audio_url) or path.suffix.lstrip(".") or "mp3").lower()
+    if audio_format not in SUPPORTED_AUDIO_FORMATS:
+        audio_format = "mp3"
     filename = asset.filename or clean_audio_filename(book, chapter, audio_format)
+    _log_audio_download_result(
+        request=request,
+        user=user,
+        asset=asset,
+        book_id=book.id,
+        chapter_id=chapter.id,
+        storage_key=storage_key,
+        file_exists=True,
+        status_code=200,
+        error_category="none",
+    )
     return FileResponse(
         path,
         media_type=CONTENT_TYPES.get(audio_format, "audio/mpeg"),
@@ -197,10 +318,10 @@ def download_audio(audio_id: int, request: Request, db: Session = Depends(get_db
 
 
 @router.post("/regenerate")
-def regenerate_audio(payload: RegenerateAudioRequest, request: Request, db: Session = Depends(get_db)):
+def regenerate_audio(payload: RegenerateAudioRequest, request: Request, db: Session = Depends(get_db), user: User = Depends(require_permission("audiobook:generate_audio_self"))):
     if not payload.confirm:
         raise HTTPException(status_code=400, detail="Regenerating may use a new AI voice request. Continue?")
-    book, chapter = get_owned_book_chapter(db, request, payload.bookId, payload.chapterId)
+    book, chapter = get_owned_book_chapter(db, user, payload.bookId, payload.chapterId)
     audio_url, cached = generate_tts_audio_url(request=None, text=chapter.text, voice=book.voice, base_url=str(request.base_url), force=True)
     asset = find_saved_asset(db, book, chapter, book.voice)
     if not asset:

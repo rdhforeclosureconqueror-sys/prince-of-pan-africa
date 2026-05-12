@@ -39,8 +39,9 @@ class AudioAssetReuseDownloadTest(unittest.TestCase):
             db.query(User).delete()
             db.commit()
 
-            user = User(email='audio-owner@example.com', password_hash=hash_password('password123'), role='member')
-            db.add(user)
+            owner = User(email='audio-owner@example.com', password_hash=hash_password('password123'), role='member')
+            other = User(email='audio-other@example.com', password_hash=hash_password('password123'), role='member')
+            db.add_all([owner, other])
             db.commit()
             seed_rbac_defaults(db)
 
@@ -48,8 +49,8 @@ class AudioAssetReuseDownloadTest(unittest.TestCase):
         self.audio_path.parent.mkdir(parents=True, exist_ok=True)
         self.audio_path.write_bytes(b'ID3\x04\x00\x00\x00\x00\x00\x00test-audio')
 
-    def _authed_client(self):
-        cookie_res = self.client.post('/auth/login', json={'email': 'audio-owner@example.com', 'password': 'password123'})
+    def _authed_client(self, email='audio-owner@example.com'):
+        cookie_res = self.client.post('/auth/login', json={'email': email, 'password': 'password123'})
         self.assertEqual(cookie_res.status_code, 200)
         client = TestClient(self.client.app)
         client.cookies.set('mufasa_session', cookie_res.cookies.get('mufasa_session'))
@@ -67,13 +68,9 @@ class AudioAssetReuseDownloadTest(unittest.TestCase):
         book = created.json()['audiobook']
         return book, book['chapters'][0]
 
-    def test_save_retrieve_download_and_reuse_without_provider_call(self):
-        import app.routes.audiobook as audiobook_routes
-
-        client = self._authed_client()
+    def _saved_audio(self, client):
         book, chapter = self._create_draft_book(client)
         audio_url = f'http://testserver/static/audio/{self.audio_path.name}'
-
         saved = client.post('/api/audio/save', json={
             'bookId': book['id'],
             'chapterId': chapter['id'],
@@ -85,7 +82,13 @@ class AudioAssetReuseDownloadTest(unittest.TestCase):
             'audioUrl': audio_url,
         })
         self.assertEqual(saved.status_code, 200)
-        saved_audio = saved.json()['audio']
+        return book, chapter, saved.json()['audio']
+
+    def test_save_retrieve_download_and_reuse_without_provider_call(self):
+        import app.routes.audiobook as audiobook_routes
+
+        client = self._authed_client()
+        book, chapter, saved_audio = self._saved_audio(client)
         self.assertEqual(saved_audio['format'], 'mp3')
         self.assertEqual(saved_audio['storageKey'], 'audio/reuse-test.mp3')
 
@@ -98,6 +101,7 @@ class AudioAssetReuseDownloadTest(unittest.TestCase):
         self.assertEqual(download.headers['content-type'].split(';')[0], 'audio/mpeg')
         self.assertIn('attachment;', download.headers['content-disposition'])
         self.assertIn('al-andalus-chapter-01-chapter-1.mp3', download.headers['content-disposition'])
+        self.assertTrue(download.content.startswith(b'ID3'))
 
         original_generate = audiobook_routes.generate_tts_audio_url
 
@@ -113,6 +117,77 @@ class AudioAssetReuseDownloadTest(unittest.TestCase):
         self.assertEqual(reused.status_code, 200)
         self.assertFalse(reused.json()['provider_called'])
         self.assertEqual(reused.json()['default_action'], 'use_saved_audio')
+
+    def test_audio_download_requires_auth(self):
+        owner_client = self._authed_client()
+        _book, _chapter, saved_audio = self._saved_audio(owner_client)
+
+        res = TestClient(self.client.app).get(f"/api/audio/download/{saved_audio['id']}")
+
+        self.assertEqual(res.status_code, 401)
+
+    def test_non_owner_cannot_download_another_users_audio(self):
+        owner_client = self._authed_client()
+        _book, _chapter, saved_audio = self._saved_audio(owner_client)
+        other_client = self._authed_client('audio-other@example.com')
+
+        res = other_client.get(f"/api/audio/download/{saved_audio['id']}")
+
+        self.assertEqual(res.status_code, 404)
+
+    def test_missing_audio_file_returns_clear_404(self):
+        owner_client = self._authed_client()
+        _book, _chapter, saved_audio = self._saved_audio(owner_client)
+        self.audio_path.unlink()
+
+        res = owner_client.get(f"/api/audio/download/{saved_audio['id']}")
+
+        self.assertEqual(res.status_code, 404)
+        self.assertEqual(res.json()['detail'], 'Audio file is missing from storage. Please regenerate this chapter.')
+
+    def test_incomplete_generation_returns_409(self):
+        from app.models import AudiobookChapter
+
+        owner_client = self._authed_client()
+        _book, chapter, saved_audio = self._saved_audio(owner_client)
+        with self.SessionLocal() as db:
+            db.query(AudiobookChapter).filter(AudiobookChapter.id == chapter['id']).update({'status': 'generating'})
+            db.commit()
+
+        res = owner_client.get(f"/api/audio/download/{saved_audio['id']}")
+
+        self.assertEqual(res.status_code, 409)
+        self.assertEqual(res.json()['detail'], 'Audio generation is not complete for this chapter yet.')
+
+    def test_audio_download_path_traversal_storage_key_returns_404(self):
+        from app.models import AudioAsset
+
+        owner_client = self._authed_client()
+        _book, _chapter, saved_audio = self._saved_audio(owner_client)
+        with self.SessionLocal() as db:
+            db.query(AudioAsset).filter(AudioAsset.id == saved_audio['id']).update({'storage_key': 'audio/../secret.mp3'})
+            db.commit()
+
+        res = owner_client.get(f"/api/audio/download/{saved_audio['id']}")
+
+        self.assertEqual(res.status_code, 404)
+        self.assertEqual(res.json()['detail'], 'Audio file is missing from storage. Please regenerate this chapter.')
+
+    def test_signed_in_user_without_audio_permission_gets_403(self):
+        from app.models import Permission, Role
+
+        with self.SessionLocal() as db:
+            member = db.query(Role).filter(Role.name == 'member').first()
+            permission = db.query(Permission).filter(Permission.name == 'audiobook:read_self').first()
+            self.assertIsNotNone(member)
+            self.assertIsNotNone(permission)
+            if permission in member.permissions:
+                member.permissions.remove(permission)
+            db.commit()
+
+        res = self._authed_client().get('/api/audio/download/1')
+
+        self.assertEqual(res.status_code, 403)
 
 
 if __name__ == '__main__':
