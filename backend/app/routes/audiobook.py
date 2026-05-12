@@ -1689,6 +1689,47 @@ def _wrap_pdf_text(text: str, max_chars: int = 72) -> list[str]:
     return wrapped
 
 
+def _estimate_pdf_text_width(text: str, size: int = 11, font: str = "R") -> float:
+    width_units = 0.0
+    for char in text or "":
+        if char == " ":
+            width_units += 0.25
+        elif char in ".,:;?!\'\"-–—":
+            width_units += 0.28
+        elif char in "ilI1|":
+            width_units += 0.25
+        elif char in "mwMW":
+            width_units += 0.82
+        elif char.isupper():
+            width_units += 0.68
+        elif char.islower():
+            width_units += 0.48
+        else:
+            width_units += 0.5
+    if font == "B":
+        width_units *= 1.04
+    elif font == "I":
+        width_units *= 0.98
+    return width_units * size
+
+
+def _wrap_pdf_text_to_width(text: str, max_width: float, size: int = 11, font: str = "R") -> list[str]:
+    lines: list[str] = []
+    for para in re.split(r"\n\s*\n", text or ""):
+        words = para.replace("\n", " ").split()
+        line = ""
+        for word in words:
+            candidate = f"{line} {word}".strip()
+            if line and _estimate_pdf_text_width(candidate, size, font) > max_width:
+                lines.append(line)
+                line = word
+            else:
+                line = candidate
+        if line:
+            lines.append(line)
+    return lines
+
+
 def _add_wrapped_pdf_lines(add_line, text: str, size: int = 11, indent: int = 0, max_chars: int = 70) -> None:
     for line in _wrap_pdf_text(text, max_chars):
         add_line(line, size, indent)
@@ -1701,6 +1742,12 @@ def _build_pdf_export(project: BookProject, trim_size: str = "6x9", chapter_star
     header_y = height - 44
     footer_y = 34
     max_body_chars = 62
+    chapter_title_size = 19
+    chapter_title_leading = 24
+    chapter_title_block_width = min(width - margin_left - margin_right - 48, 270)
+    chapter_title_top_gap = 34
+    chapter_title_to_section_gap = 14
+    section_to_body_gap = 6
     chapter_start_mode = "right_hand" if chapter_start == "right_hand" else "next_page"
     page_records: list[dict] = []
     current: list[tuple[str, int, float, float, str]] = []
@@ -1725,10 +1772,10 @@ def _build_pdf_export(project: BookProject, trim_size: str = "6x9", chapter_star
             y -= line_height
             return
         if align == "center":
-            approx_width = len(text) * size * (0.24 if font == "I" else 0.27)
-            x = max(margin_left, (width - approx_width) / 2)
+            approx_width = _estimate_pdf_text_width(text, size, font)
+            x = max(margin_left, min(width - margin_right - approx_width, (width - approx_width) / 2))
         elif align == "right":
-            approx_width = len(text) * size * 0.5
+            approx_width = _estimate_pdf_text_width(text, size, font)
             x = max(margin_left, width - margin_right - approx_width)
         else:
             x = margin_left + indent
@@ -1809,10 +1856,10 @@ def _build_pdf_export(project: BookProject, trim_size: str = "6x9", chapter_star
             y -= line_height
             return
         if align == "center":
-            approx_width = len(text) * size * (0.24 if font == "I" else 0.27)
-            x = max(margin_left, (width - approx_width) / 2)
+            approx_width = _estimate_pdf_text_width(text, size, font)
+            x = max(margin_left, min(width - margin_right - approx_width, (width - approx_width) / 2))
         elif align == "right":
-            approx_width = len(text) * size * 0.5
+            approx_width = _estimate_pdf_text_width(text, size, font)
             x = max(margin_left, width - margin_right - approx_width)
         else:
             x = margin_left + indent
@@ -1827,15 +1874,17 @@ def _build_pdf_export(project: BookProject, trim_size: str = "6x9", chapter_star
         if chapter_start_mode == "right_hand" and len(body_pages) % 2 == 1:
             add_blank_verso_page()
         chapter_starts[chapter.chapter_index] = len([page for page in body_pages if page.get("show_number")]) + 1
-        y -= 24
-        add_body_line(chapter.title, 19, align="center", font="B", leading=26)
-        y -= 10
+        y -= chapter_title_top_gap
+        chapter_title_lines = _wrap_pdf_text_to_width(chapter.title, chapter_title_block_width, chapter_title_size, "B") or [chapter.title]
+        for title_line in chapter_title_lines:
+            add_body_line(title_line, chapter_title_size, align="center", font="B", leading=chapter_title_leading)
+        y -= chapter_title_to_section_gap
         for section_index, section in enumerate(chapter.sections):
             if section.title:
                 if section_index:
                     y -= 6
-                add_body_line(section.title, 13, align="center", font="B", leading=20)
-                y -= 2
+                add_body_line(section.title, 13, align="center", font="B", leading=19)
+                y -= section_to_body_gap
             for block_type, block_body in _iter_export_blocks(section.body):
                 if block_type == "divider":
                     y -= 3
