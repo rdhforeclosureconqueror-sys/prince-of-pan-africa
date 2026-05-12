@@ -89,6 +89,7 @@ class OrganizerExportRequest(OrganizerPreviewRequest):
     publisher: str | None = Field(default=None, max_length=255)
     copyright_year: str | None = Field(default=None, max_length=16)
     trim_size: str = Field(default="6x9", max_length=20)
+    chapter_start: str = Field(default="next_page", max_length=20)
 
 class OrganizerStructureEditRequest(BaseModel):
     document_id: int = Field(ge=1)
@@ -1693,43 +1694,46 @@ def _add_wrapped_pdf_lines(add_line, text: str, size: int = 11, indent: int = 0,
         add_line(line, size, indent)
 
 
-def _build_pdf_export(project: BookProject, trim_size: str = "6x9") -> bytes:
+def _build_pdf_export(project: BookProject, trim_size: str = "6x9", chapter_start: str = "next_page") -> bytes:
     project = _sanitize_export_project(project)
     width, height = (432, 648) if trim_size == "6x9" else (432, 648)
-    margin_left, margin_top, margin_bottom = 54, 72, 72
-    footer_y = 36
-    max_body_chars = 66
+    margin_left, margin_right, margin_top, margin_bottom = 60, 54, 78, 84
+    header_y = height - 44
+    footer_y = 34
+    max_body_chars = 62
+    chapter_start_mode = "right_hand" if chapter_start == "right_hand" else "next_page"
     page_records: list[dict] = []
-    current: list[tuple[str, int, float, float]] = []
+    current: list[tuple[str, int, float, float, str]] = []
     y = height - margin_top
 
-    def commit_page(show_number: bool = True, number: int | None = None) -> None:
+    def has_visible_lines(lines: list[tuple[str, int, float, float, str]] | None = None) -> bool:
+        return any(line[0].strip() for line in (current if lines is None else lines))
+
+    def commit_page(show_number: bool = True, number: int | None = None, running_header: str = "") -> None:
         nonlocal current
-        page_records.append({"lines": current, "show_number": show_number, "number": number})
+        if has_visible_lines():
+            page_records.append({"lines": current, "show_number": show_number, "number": number, "running_header": running_header})
         current = []
 
-    def new_page(show_number: bool = True, number: int | None = None):
-        nonlocal current, y
-        if current:
-            commit_page(show_number=show_number, number=number)
-        current = []
-        y = height - margin_top
-
-    def add_line(text: str, size: int = 11, indent: int = 0, align: str = "left"):
+    def add_line(text: str, size: int = 11, indent: int = 0, align: str = "left", font: str = "R", leading: float | None = None):
         nonlocal y
+        line_height = leading if leading is not None else size + 5
         if y < margin_bottom:
             commit_page()
             y = height - margin_top
+        if not text.strip() and not has_visible_lines():
+            y -= line_height
+            return
         if align == "center":
-            approx_width = len(text) * size * 0.27
+            approx_width = len(text) * size * (0.24 if font == "I" else 0.27)
             x = max(margin_left, (width - approx_width) / 2)
         elif align == "right":
             approx_width = len(text) * size * 0.5
-            x = max(margin_left, width - margin_left - approx_width)
+            x = max(margin_left, width - margin_right - approx_width)
         else:
             x = margin_left + indent
-        current.append((text, size, x, y))
-        y -= size + 5
+        current.append((text, size, x, y, font))
+        y -= line_height
 
     def build_toc_pages(chapter_starts: dict[int, int]) -> list[dict]:
         nonlocal current, y
@@ -1738,30 +1742,30 @@ def _build_pdf_export(project: BookProject, trim_size: str = "6x9") -> bytes:
         current = []
         y = height - margin_top
 
-        add_line("Table of Contents", 18, align="center")
+        add_line("Table of Contents", 18, align="center", font="B", leading=24)
         add_line("")
         for chapter in project.chapters:
             page_number = str(chapter_starts.get(chapter.chapter_index, ""))
             label = chapter.title
-            dots = "." * max(3, 58 - len(label) - len(page_number))
+            dots = "." * max(3, 56 - len(label) - len(page_number))
             add_line(f"{label} {dots} {page_number}", 11)
-        if current:
-            toc_pages.append({"lines": current, "show_number": False, "number": None})
+        if has_visible_lines():
+            toc_pages.append({"lines": current, "show_number": False, "number": None, "running_header": ""})
         current, y = saved_current, saved_y
         return toc_pages
 
-    # Title page: no visible page number, with clearer title hierarchy.
-    y = height / 2 + 70
-    add_line(project.title, 22, align="center")
+    # Title page: no visible page number, with a print-book hierarchy.
+    y = height / 2 + 82
+    add_line(project.title, 24, align="center", font="B", leading=30)
     if project.subtitle:
-        add_line(project.subtitle, 15, align="center")
-    y -= 12
-    add_line(f"by {project.author}", 13, align="center")
+        add_line(project.subtitle, 15, align="center", font="I", leading=22)
+    y -= 16
+    add_line(f"by {project.author}", 13, align="center", leading=20)
     commit_page(show_number=False)
 
-    # Copyright page: no visible page number.
+    # Copyright page: no visible page number and exact user-provided publisher metadata.
     y = height - margin_top
-    add_line("Copyright", 18, align="center")
+    add_line("Copyright", 18, align="center", font="B", leading=24)
     add_line("")
     _add_wrapped_pdf_lines(add_line, _copyright_notice(project), 11, max_chars=max_body_chars)
     if project.publisher:
@@ -1773,53 +1777,82 @@ def _build_pdf_export(project: BookProject, trim_size: str = "6x9") -> bytes:
     chapter_starts: dict[int, int] = {}
     current = []
     y = height - margin_top
+    active_header = ""
 
-    def commit_body_page() -> None:
+    def commit_body_page(show_number: bool = True) -> None:
         nonlocal current
-        if current:
-            body_pages.append({"lines": current, "show_number": True, "number": len(body_pages) + 1})
-            current = []
+        if has_visible_lines():
+            body_pages.append({
+                "lines": current,
+                "show_number": show_number,
+                "number": len([page for page in body_pages if page.get("show_number")]) + 1 if show_number else None,
+                "running_header": active_header,
+            })
+        current = []
+
+    def add_blank_verso_page() -> None:
+        body_pages.append({"lines": [], "show_number": False, "number": None, "running_header": ""})
 
     def new_body_page():
         nonlocal y
         commit_body_page()
         y = height - margin_top
 
-    def add_body_line(text: str, size: int = 11, indent: int = 0, align: str = "left"):
+    def add_body_line(text: str, size: int = 11, indent: int = 0, align: str = "left", font: str = "R", leading: float | None = None):
         nonlocal y
+        line_height = leading if leading is not None else size + 5
         if y < margin_bottom:
             new_body_page()
+        if not text.strip() and not has_visible_lines():
+            y -= line_height
+            return
         if align == "center":
-            approx_width = len(text) * size * 0.27
+            approx_width = len(text) * size * (0.24 if font == "I" else 0.27)
             x = max(margin_left, (width - approx_width) / 2)
+        elif align == "right":
+            approx_width = len(text) * size * 0.5
+            x = max(margin_left, width - margin_right - approx_width)
         else:
             x = margin_left + indent
-        current.append((text, size, x, y))
-        y -= size + 5
+        current.append((text, size, x, y, font))
+        y -= line_height
 
     for chapter in project.chapters:
         if current:
             new_body_page()
-        chapter_starts[chapter.chapter_index] = len(body_pages) + 1
-        add_body_line(chapter.title, 18, align="center")
-        add_body_line("")
-        for section in chapter.sections:
+        active_header = chapter.title
+        if chapter_start_mode == "right_hand" and len(body_pages) % 2 == 1:
+            add_blank_verso_page()
+        chapter_starts[chapter.chapter_index] = len([page for page in body_pages if page.get("show_number")]) + 1
+        y -= 24
+        add_body_line(chapter.title, 19, align="center", font="B", leading=26)
+        y -= 10
+        for section_index, section in enumerate(chapter.sections):
             if section.title:
-                add_body_line(section.title, 14, align="center")
+                if section_index:
+                    y -= 6
+                add_body_line(section.title, 13, align="center", font="B", leading=20)
+                y -= 2
             for block_type, block_body in _iter_export_blocks(section.body):
                 if block_type == "divider":
-                    add_body_line("***", 11, align="center")
+                    y -= 3
+                    add_body_line("•  •  •", 12, align="center", leading=19)
+                    y -= 3
                     continue
                 if block_type == "list":
                     for item in block_body:
-                        for wrapped_index, line in enumerate(_wrap_pdf_text(str(item), 62)):
+                        for wrapped_index, line in enumerate(_wrap_pdf_text(str(item), 58)):
                             if line:
                                 prefix = "• " if wrapped_index == 0 else "  "
-                                add_body_line(f"{prefix}{line}", 11, indent=18)
-                    add_body_line("")
+                                add_body_line(f"{prefix}{line}", 11, indent=20, leading=16)
+                    add_body_line("", 11, leading=8)
                     continue
-                for line in _wrap_pdf_text(str(block_body), max_body_chars):
-                    add_body_line(line, 11)
+                for wrapped_index, line in enumerate(_wrap_pdf_text(str(block_body), max_body_chars)):
+                    if line:
+                        paragraph_indent = 16 if wrapped_index == 0 else 0
+                        add_body_line(line, 11, indent=paragraph_indent, leading=16)
+                    else:
+                        add_body_line("", 11, leading=7)
     commit_body_page()
 
     page_records.extend(build_toc_pages(chapter_starts))
@@ -1834,16 +1867,23 @@ def _build_pdf_export(project: BookProject, trim_size: str = "6x9") -> bytes:
         page_obj = 3 + i * 2
         content_obj = page_obj + 1
         stream_parts = [b"BT /F1 11 Tf"]
-        for text, size, x, line_y in page_lines:
+        header = (page.get("running_header") or "").strip()
+        if page.get("show_number") and header:
+            stream_parts.append(b"/F3 8 Tf " + f"{margin_left:.0f} {header_y:.0f}".encode() + b" Td " + _pdf_literal_bytes(header[:70]) + b" Tj " + f"{-margin_left:.0f} {-header_y:.0f}".encode() + b" Td")
+        for text, size, x, line_y, font in page_lines:
             if text == "":
                 continue
-            stream_parts.append(b"/F1 " + str(size).encode() + b" Tf " + f"{x:.0f} {line_y:.0f}".encode() + b" Td " + _pdf_literal_bytes(text) + b" Tj " + f"{-(x):.0f} {-(line_y):.0f}".encode() + b" Td")
+            font_name = {"B": b"/F2", "I": b"/F3"}.get(font, b"/F1")
+            stream_parts.append(font_name + b" " + str(size).encode() + b" Tf " + f"{x:.0f} {line_y:.0f}".encode() + b" Td " + _pdf_literal_bytes(text) + b" Tj " + f"{-(x):.0f} {-(line_y):.0f}".encode() + b" Td")
         if page.get("show_number"):
             number = page.get("number") or i + 1
-            stream_parts.append(b"/F1 9 Tf " + f"{width/2-10:.0f} {footer_y:.0f}".encode() + b" Td " + _pdf_literal_bytes(str(number)) + b" Tj")
+            number_text = str(number)
+            number_x = (width / 2) - (len(number_text) * 2.25)
+            stream_parts.append(b"/F1 9 Tf " + f"{number_x:.0f} {footer_y:.0f}".encode() + b" Td " + _pdf_literal_bytes(number_text) + b" Tj")
         stream_parts.append(b"ET")
         content = b"\n".join(stream_parts)
-        objects.append(f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {width} {height}] /Resources << /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Times-Roman /Encoding /WinAnsiEncoding >> >> >> /Contents {content_obj} 0 R >>".encode())
+        resources = b"<< /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Times-Roman /Encoding /WinAnsiEncoding >> /F2 << /Type /Font /Subtype /Type1 /BaseFont /Times-Bold /Encoding /WinAnsiEncoding >> /F3 << /Type /Font /Subtype /Type1 /BaseFont /Times-Italic /Encoding /WinAnsiEncoding >> >> >>"
+        objects.append(f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {width} {height}] /Resources ".encode() + resources + f" /Contents {content_obj} 0 R >>".encode())
         objects.append(b"<< /Length " + str(len(content)).encode() + b" >>\nstream\n" + content + b"\nendstream")
     info_obj_num = len(objects) + 1
     info_parts = [
@@ -2116,7 +2156,7 @@ def export_organization_print_pdf(
     export = BookExport(
         filename=f"{_safe_export_basename(project.title or document.title)}-print-interior.pdf",
         media_type="application/pdf",
-        payload=_build_pdf_export(project, trim_size=payload.trim_size),
+        payload=_build_pdf_export(project, trim_size=payload.trim_size, chapter_start=payload.chapter_start),
     )
     return Response(content=export.payload, media_type=export.media_type, headers={"Content-Disposition": f'attachment; filename="{export.filename}"'})
 

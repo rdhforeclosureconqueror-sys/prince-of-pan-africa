@@ -116,9 +116,55 @@ class ExplicitChapterDetectionUnitTests(unittest.TestCase):
         body_text = extracted_text.split("Opening", 1)[1]
         self.assertNotIn("Chapter One: Who Really Freed the Slaves?\nChapter One: Who Really Freed the Slaves?", extracted_text)
         self.assertIn("“If I could save…” — Sherman’s field order.", body_text)
-        self.assertIn("***", body_text)
+        self.assertIn("•  •  •", body_text)
         self.assertIn("• banks", body_text)
         self.assertIn("• shipping industries", body_text)
+
+    def test_print_pdf_does_not_emit_blank_numbered_pages_between_chapters(self):
+        from pypdf import PdfReader
+
+        from app.routes.audiobook import BookChapter, BookProject, BookSection, _build_pdf_export
+
+        chapters = [
+            BookChapter(
+                chapter_index=index,
+                title=f"Chapter {index}",
+                sections=[BookSection(title="Opening", body="Short paragraph." if index == 2 else "First paragraph.\n\n")],
+            )
+            for index in range(1, 3)
+        ]
+        project = BookProject(title="Print Test", author="SimbaWaUjamaa.com", language="en", front_matter=[], chapters=chapters)
+
+        pdf = _build_pdf_export(project)
+        page_texts = [page.extract_text() or "" for page in PdfReader(io.BytesIO(pdf)).pages]
+        body_page_texts = [text.strip() for text in page_texts if text.strip().split("\n")[-1].isdigit()]
+
+        self.assertTrue(body_page_texts)
+        self.assertFalse(any(text.isdigit() for text in body_page_texts))
+        self.assertIn("Chapter 1", "\n".join(page_texts))
+        self.assertIn("Chapter 2", "\n".join(page_texts))
+
+    def test_print_pdf_right_hand_blank_pages_are_unnumbered_when_enabled(self):
+        from pypdf import PdfReader
+
+        from app.routes.audiobook import BookChapter, BookProject, BookSection, _build_pdf_export
+
+        project = BookProject(
+            title="Right Hand Test",
+            author="SimbaWaUjamaa.com",
+            language="en",
+            front_matter=[],
+            chapters=[
+                BookChapter(chapter_index=1, title="Chapter 1", sections=[BookSection(title="Opening", body="Short one.")]),
+                BookChapter(chapter_index=2, title="Chapter 2", sections=[BookSection(title="Opening", body="Short two.")]),
+            ],
+        )
+
+        pdf = _build_pdf_export(project, chapter_start="right_hand")
+        page_texts = [page.extract_text() or "" for page in PdfReader(io.BytesIO(pdf)).pages]
+
+        self.assertIn("Chapter 2", "\n".join(page_texts))
+        self.assertFalse(any(text.strip().isdigit() for text in page_texts))
 
 
     def test_does_not_split_on_bullet_lists(self):
