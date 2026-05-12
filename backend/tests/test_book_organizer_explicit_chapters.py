@@ -120,6 +120,80 @@ class ExplicitChapterDetectionUnitTests(unittest.TestCase):
         self.assertIn("• banks", body_text)
         self.assertIn("• shipping industries", body_text)
 
+    def test_print_pdf_chapter_opening_page_has_single_heading_before_opening(self):
+        from pypdf import PdfReader
+
+        from app.routes.audiobook import BookChapter, BookProject, BookSection, _build_pdf_export
+
+        chapter_title = "Chapter One: Who Really Freed the Slaves?"
+        project = BookProject(
+            title="Print Regression",
+            author="SimbaWaUjamaa.com",
+            language="en",
+            front_matter=[],
+            chapters=[
+                BookChapter(
+                    chapter_index=1,
+                    title=chapter_title,
+                    sections=[
+                        BookSection(
+                            title="Opening",
+                            body=(
+                                f"{chapter_title}\n\n"
+                                "“If I could save the Union without freeing any slave, I would do it.”"
+                            ),
+                        )
+                    ],
+                )
+            ],
+        )
+
+        pdf = _build_pdf_export(project)
+        page_texts = [page.extract_text() or "" for page in PdfReader(io.BytesIO(pdf)).pages]
+        opening_page = next(text for text in page_texts if chapter_title in text and "Opening" in text)
+        before_opening = opening_page.split("Opening", 1)[0]
+
+        self.assertEqual(before_opening.count(chapter_title), 1)
+        self.assertIn("Opening\n“If I could save the Union without freeing any slave, I would do it.”", opening_page)
+
+    def test_print_pdf_running_headers_only_on_continuation_pages(self):
+        from pypdf import PdfReader
+
+        from app.routes.audiobook import BookChapter, BookProject, BookSection, _build_pdf_export
+
+        chapter_one_title = "Chapter One: Who Really Freed the Slaves?"
+        chapter_two_title = "Chapter Two: When Did the War Become Black?"
+        long_body = "\n\n".join(
+            f"Continuation paragraph {index} with enough words to wrap across the print PDF body page."
+            for index in range(1, 75)
+        )
+        project = BookProject(
+            title="Running Header Regression",
+            author="SimbaWaUjamaa.com",
+            language="en",
+            front_matter=[],
+            chapters=[
+                BookChapter(chapter_index=1, title=chapter_one_title, sections=[BookSection(title="Opening", body=long_body)]),
+                BookChapter(chapter_index=2, title=chapter_two_title, sections=[BookSection(title="Opening", body=long_body)]),
+            ],
+        )
+
+        pdf = _build_pdf_export(project)
+        page_texts = [page.extract_text() or "" for page in PdfReader(io.BytesIO(pdf)).pages]
+        chapter_one_opening_page_index = next(
+            index for index, text in enumerate(page_texts) if chapter_one_title in text and "Opening" in text
+        )
+        chapter_two_opening_page_index = next(
+            index for index, text in enumerate(page_texts) if chapter_two_title in text and "Opening" in text
+        )
+        chapter_one_opening_page = page_texts[chapter_one_opening_page_index]
+        chapter_two_opening_page = page_texts[chapter_two_opening_page_index]
+        chapter_one_continuation_pages = page_texts[chapter_one_opening_page_index + 1:chapter_two_opening_page_index]
+
+        self.assertEqual(chapter_one_opening_page.count(chapter_one_title), 1)
+        self.assertEqual(chapter_two_opening_page.count(chapter_two_title), 1)
+        self.assertTrue(any(text.count(chapter_one_title) == 1 and "Opening" not in text for text in chapter_one_continuation_pages))
+
     def test_print_pdf_does_not_emit_blank_numbered_pages_between_chapters(self):
         from pypdf import PdfReader
 

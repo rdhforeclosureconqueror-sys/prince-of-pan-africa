@@ -1778,6 +1778,7 @@ def _build_pdf_export(project: BookProject, trim_size: str = "6x9", chapter_star
     current = []
     y = height - margin_top
     active_header = ""
+    current_body_running_header = ""
 
     def commit_body_page(show_number: bool = True) -> None:
         nonlocal current
@@ -1786,7 +1787,7 @@ def _build_pdf_export(project: BookProject, trim_size: str = "6x9", chapter_star
                 "lines": current,
                 "show_number": show_number,
                 "number": len([page for page in body_pages if page.get("show_number")]) + 1 if show_number else None,
-                "running_header": active_header,
+                "running_header": current_body_running_header,
             })
         current = []
 
@@ -1794,8 +1795,9 @@ def _build_pdf_export(project: BookProject, trim_size: str = "6x9", chapter_star
         body_pages.append({"lines": [], "show_number": False, "number": None, "running_header": ""})
 
     def new_body_page():
-        nonlocal y
+        nonlocal y, current_body_running_header
         commit_body_page()
+        current_body_running_header = active_header
         y = height - margin_top
 
     def add_body_line(text: str, size: int = 11, indent: int = 0, align: str = "left", font: str = "R", leading: float | None = None):
@@ -1821,6 +1823,7 @@ def _build_pdf_export(project: BookProject, trim_size: str = "6x9", chapter_star
         if current:
             new_body_page()
         active_header = chapter.title
+        current_body_running_header = ""
         if chapter_start_mode == "right_hand" and len(body_pages) % 2 == 1:
             add_blank_verso_page()
         chapter_starts[chapter.chapter_index] = len([page for page in body_pages if page.get("show_number")]) + 1
