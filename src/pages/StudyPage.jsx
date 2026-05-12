@@ -39,6 +39,26 @@ function absoluteApiUrl(path) {
   return path.startsWith("http") ? path : `${API_BASE_URL}${path}`;
 }
 
+function filenameFromContentDisposition(header, fallback = "chapter-audio.mp3") {
+  if (!header) return fallback;
+  const utf8Match = header.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match?.[1]) return decodeURIComponent(utf8Match[1].replace(/["']/g, ""));
+  const quotedMatch = header.match(/filename="([^\"]+)"/i);
+  if (quotedMatch?.[1]) return quotedMatch[1];
+  const bareMatch = header.match(/filename=([^;]+)/i);
+  return bareMatch?.[1]?.trim() || fallback;
+}
+
+async function readDownloadError(response) {
+  const contentType = response.headers.get("content-type") || "";
+  if (contentType.includes("application/json")) {
+    const data = await response.json();
+    return data?.detail || data?.error || "Audio download failed.";
+  }
+  const text = await response.text();
+  return text || "Audio download failed.";
+}
+
 export default function StudyPage() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -368,12 +388,46 @@ export default function StudyPage() {
     }, 0);
   }
 
-  function downloadSavedAudio() {
+  async function downloadSavedAudio() {
     if (!activeSavedAudio?.downloadUrl) {
       setError("Audio download failed. Please try again.");
       return;
     }
-    window.location.href = absoluteApiUrl(activeSavedAudio.downloadUrl);
+
+    setError("");
+    setStatus("Preparing audio download...");
+    try {
+      const response = await fetch(absoluteApiUrl(activeSavedAudio.downloadUrl), {
+        method: "GET",
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        throw new Error(await readDownloadError(response));
+      }
+
+      const contentType = response.headers.get("content-type") || "";
+      if (!contentType.startsWith("audio/")) {
+        throw new Error("Audio download failed: server did not return an audio file.");
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filenameFromContentDisposition(
+        response.headers.get("content-disposition"),
+        activeSavedAudio.filename || "chapter-audio.mp3",
+      );
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      setStatus("Audio download started.");
+    } catch (err) {
+      setError(err.message || "Audio download failed. Please try again.");
+      setStatus("");
+    }
   }
 
   async function persistProgress(positionOverride) {
