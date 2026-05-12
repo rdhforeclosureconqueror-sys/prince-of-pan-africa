@@ -1393,7 +1393,7 @@ def _resolve_organizer_export_project(
             for index, chapter in enumerate(chapter_dicts, start=1)
         ],
     )
-    return document, plan, project
+    return document, plan, _sanitize_export_project(project)
 
 
 def _log_organizer_export(
@@ -1416,6 +1416,7 @@ def _log_organizer_export(
     )
 
 def _canonical_plaintext(project: BookProject) -> str:
+    project = _sanitize_export_project(project)
     parts: list[str] = []
     for chapter in project.chapters:
         parts.append(chapter.title)
@@ -1438,7 +1439,83 @@ def _normalize_dividers_for_text(text: str) -> str:
     return "\n".join(lines).strip()
 
 
+def _normalize_heading_for_compare(text: str) -> str:
+    return re.sub(r"\s+", " ", (text or "").strip().casefold())
+
+
+def _strip_leading_chapter_heading(text: str, chapter_title: str) -> str:
+    """Remove duplicated canonical chapter headings from exported body text.
+
+    The renderer owns chapter titles. Source blocks can still include the same
+    title as the first body line, especially after explicit chapter detection or
+    review edits. Strip only leading exact canonical matches so intentional
+    later references remain untouched.
+    """
+    if not (text or "").strip() or not chapter_title.strip():
+        return text or ""
+    lines = (text or "").splitlines()
+    title_key = _normalize_heading_for_compare(chapter_title)
+    start = 0
+    while start < len(lines) and not lines[start].strip():
+        start += 1
+    while start < len(lines) and _normalize_heading_for_compare(lines[start]) == title_key:
+        start += 1
+        while start < len(lines) and not lines[start].strip():
+            start += 1
+    return "\n".join(lines[start:]).strip()
+
+
+def _sanitize_export_project(project: BookProject) -> BookProject:
+    sanitized_chapters: list[BookChapter] = []
+    for chapter in project.chapters:
+        sanitized_sections: list[BookSection] = []
+        stripped_heading = False
+        for section in chapter.sections:
+            body = section.body or ""
+            if not stripped_heading and body.strip():
+                body = _strip_leading_chapter_heading(body, chapter.title)
+                stripped_heading = True
+            sanitized_sections.append(BookSection(title=section.title, body=body))
+        sanitized_chapters.append(
+            BookChapter(
+                chapter_index=chapter.chapter_index,
+                title=chapter.title,
+                kind=chapter.kind,
+                sections=sanitized_sections,
+            )
+        )
+    return BookProject(
+        title=project.title,
+        subtitle=project.subtitle,
+        author=project.author,
+        language=project.language,
+        publisher=project.publisher,
+        copyright_year=project.copyright_year,
+        front_matter=list(project.front_matter),
+        chapters=sanitized_chapters,
+        back_matter=list(project.back_matter),
+    )
+
+
+def _iter_export_blocks(text: str) -> list[tuple[str, str | list[str]]]:
+    blocks: list[tuple[str, str | list[str]]] = []
+    for para in re.split(r"\n\s*\n", _normalize_dividers_for_text(text or "")):
+        stripped = para.strip()
+        if not stripped:
+            continue
+        if stripped == "***":
+            blocks.append(("divider", "***"))
+            continue
+        lines = [line.strip() for line in stripped.split("\n") if line.strip()]
+        if lines and all(line.startswith(("- ", "* ", "• ")) for line in lines):
+            blocks.append(("list", [line[2:].strip() if line[:2] in {"- ", "* ", "• "} else line.lstrip("-*• ").strip() for line in lines]))
+            continue
+        blocks.append(("paragraph", stripped))
+    return blocks
+
+
 def _canonical_markdown(project: BookProject) -> str:
+    project = _sanitize_export_project(project)
     title_parts = [f"# {project.title}"]
     if project.subtitle:
         title_parts.append(project.subtitle)
@@ -1471,6 +1548,7 @@ def _docx_paragraph(text: str, style: str | None = None, page_break_before: bool
 
 
 def _build_docx_export(project: BookProject) -> bytes:
+    project = _sanitize_export_project(project)
     title_page = [_docx_paragraph(project.title, "Title")]
     if project.subtitle:
         title_page.append(_docx_paragraph(project.subtitle, "Subtitle"))
@@ -1487,9 +1565,14 @@ def _build_docx_export(project: BookProject) -> bytes:
         for section in chapter.sections:
             if section.title:
                 body.append(_docx_paragraph(section.title, "Heading2"))
-            for para in re.split(r"\n\s*\n", _normalize_dividers_for_text(section.body)):
-                if para.strip():
-                    body.append(_docx_paragraph(para.strip(), "ListParagraph" if para.lstrip().startswith(("- ", "* ", "• ")) else None))
+            for block_type, block_body in _iter_export_blocks(section.body):
+                if block_type == "list":
+                    for item in block_body:
+                        body.append(_docx_paragraph(f"• {item}", "ListParagraph"))
+                elif block_type == "divider":
+                    body.append(_docx_paragraph(str(block_body)))
+                else:
+                    body.append(_docx_paragraph(str(block_body)))
     sect = '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1080" w:bottom="1440" w:left="1080" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr>'
     document_xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' + ''.join(body) + sect + '</w:body></w:document>'
     styles_xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/></w:style><w:style w:type="paragraph" w:styleId="Subtitle"><w:name w:val="Subtitle"/></w:style><w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:pPr><w:outlineLvl w:val="0"/></w:pPr></w:style><w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/><w:pPr><w:outlineLvl w:val="1"/></w:pPr></w:style><w:style w:type="paragraph" w:styleId="ListParagraph"><w:name w:val="List Paragraph"/></w:style></w:styles>'
@@ -1523,6 +1606,7 @@ def _epub_toc_chapters(project: BookProject) -> list[BookChapter]:
 
 
 def _build_epub_export(project: BookProject) -> bytes:
+    project = _sanitize_export_project(project)
     uid = hashlib.sha1(f"{project.title}:{project.author}".encode()).hexdigest()
     toc_chapters = _epub_toc_chapters(project)
     nav_items = ''.join(f'<li><a href="chapter-{chapter.chapter_index}.xhtml">{html.escape(chapter.title)}</a></li>' for chapter in toc_chapters)
@@ -1559,23 +1643,32 @@ def _build_epub_export(project: BookProject) -> bytes:
             for section in chapter.sections:
                 if section.title:
                     body_parts.append(f'<h2>{html.escape(section.title)}</h2>')
-                for para in re.split(r"\n\s*\n", _normalize_dividers_for_text(section.body)):
-                    stripped = para.strip()
-                    if not stripped:
-                        continue
-                    if stripped == "***":
+                for block_type, block_body in _iter_export_blocks(section.body):
+                    if block_type == "divider":
                         body_parts.append('<p class="section-divider">***</p>')
-                    elif stripped.startswith(("- ", "* ", "• ")):
-                        items = ''.join(f'<li>{html.escape(line.lstrip("-*• ").strip())}</li>' for line in stripped.split("\n") if line.strip())
+                    elif block_type == "list":
+                        items = ''.join(f'<li>{html.escape(item)}</li>' for item in block_body)
                         body_parts.append(f"<ul>{items}</ul>")
                     else:
-                        body_parts.append(f"<p>{html.escape(stripped).replace(chr(10), '<br/>')}</p>")
+                        body_parts.append(f"<p>{html.escape(str(block_body)).replace(chr(10), '<br/>')}</p>")
             zf.writestr(f"OEBPS/chapter-{chapter.chapter_index}.xhtml", _epub_xhtml(chapter.title, ''.join(body_parts), project.language), compress_type=zipfile.ZIP_DEFLATED)
     return bio.getvalue()
 
 
 def _pdf_escape(text: str) -> str:
     return (text or "").replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+
+
+def _pdf_literal_bytes(text: str) -> bytes:
+    encoded = (text or "").encode("cp1252", errors="replace")
+    out = bytearray(b"(")
+    for value in encoded:
+        if value in (40, 41, 92) or value < 32 or value > 126:
+            out.extend(f"\\{value:03o}".encode("ascii"))
+        else:
+            out.append(value)
+    out.extend(b")")
+    return bytes(out)
 
 
 def _wrap_pdf_text(text: str, max_chars: int = 72) -> list[str]:
@@ -1595,71 +1688,162 @@ def _wrap_pdf_text(text: str, max_chars: int = 72) -> list[str]:
     return wrapped
 
 
+def _add_wrapped_pdf_lines(add_line, text: str, size: int = 11, indent: int = 0, max_chars: int = 70) -> None:
+    for line in _wrap_pdf_text(text, max_chars):
+        add_line(line, size, indent)
+
+
 def _build_pdf_export(project: BookProject, trim_size: str = "6x9") -> bytes:
+    project = _sanitize_export_project(project)
     width, height = (432, 648) if trim_size == "6x9" else (432, 648)
-    margin_left, margin_top, margin_bottom = 54, 54, 54
-    pages: list[list[tuple[str, int, float, float]]] = []
+    margin_left, margin_top, margin_bottom = 54, 72, 72
+    footer_y = 36
+    max_body_chars = 66
+    page_records: list[dict] = []
     current: list[tuple[str, int, float, float]] = []
     y = height - margin_top
 
-    def new_page(header: str | None = None):
+    def commit_page(show_number: bool = True, number: int | None = None) -> None:
+        nonlocal current
+        page_records.append({"lines": current, "show_number": show_number, "number": number})
+        current = []
+
+    def new_page(show_number: bool = True, number: int | None = None):
         nonlocal current, y
         if current:
-            pages.append(current)
+            commit_page(show_number=show_number, number=number)
         current = []
         y = height - margin_top
-        if header:
-            current.append((header, 9, margin_left, height - 28))
 
-    def add_line(text: str, size: int = 11, indent: int = 0):
+    def add_line(text: str, size: int = 11, indent: int = 0, align: str = "left"):
         nonlocal y
-        if y < margin_bottom + 28:
-            new_page()
-        current.append((text, size, margin_left + indent, y))
-        y -= size + 4
+        if y < margin_bottom:
+            commit_page()
+            y = height - margin_top
+        if align == "center":
+            approx_width = len(text) * size * 0.27
+            x = max(margin_left, (width - approx_width) / 2)
+        elif align == "right":
+            approx_width = len(text) * size * 0.5
+            x = max(margin_left, width - margin_left - approx_width)
+        else:
+            x = margin_left + indent
+        current.append((text, size, x, y))
+        y -= size + 5
 
-    new_page()
-    y = height / 2 + 40
-    add_line(project.title, 22)
-    if project.subtitle:
-        add_line(project.subtitle, 16)
-    add_line(f"by {project.author}", 14)
-    new_page()
-    add_line("Copyright", 18)
-    add_line(_copyright_notice(project), 11)
-    if project.publisher:
-        add_line(f"Publisher: {project.publisher}", 11)
-    new_page()
-    add_line("Table of Contents", 18)
-    for chapter in project.chapters:
-        add_line(chapter.title, 11)
-    for chapter in project.chapters:
-        new_page(chapter.title if chapter.kind == "chapter" else None)
-        add_line(chapter.title, 18)
+    def build_toc_pages(chapter_starts: dict[int, int]) -> list[dict]:
+        nonlocal current, y
+        saved_current, saved_y = current, y
+        toc_pages: list[dict] = []
+        current = []
+        y = height - margin_top
+
+        add_line("Table of Contents", 18, align="center")
         add_line("")
+        for chapter in project.chapters:
+            page_number = str(chapter_starts.get(chapter.chapter_index, ""))
+            label = chapter.title
+            dots = "." * max(3, 58 - len(label) - len(page_number))
+            add_line(f"{label} {dots} {page_number}", 11)
+        if current:
+            toc_pages.append({"lines": current, "show_number": False, "number": None})
+        current, y = saved_current, saved_y
+        return toc_pages
+
+    # Title page: no visible page number, with clearer title hierarchy.
+    y = height / 2 + 70
+    add_line(project.title, 22, align="center")
+    if project.subtitle:
+        add_line(project.subtitle, 15, align="center")
+    y -= 12
+    add_line(f"by {project.author}", 13, align="center")
+    commit_page(show_number=False)
+
+    # Copyright page: no visible page number.
+    y = height - margin_top
+    add_line("Copyright", 18, align="center")
+    add_line("")
+    _add_wrapped_pdf_lines(add_line, _copyright_notice(project), 11, max_chars=max_body_chars)
+    if project.publisher:
+        _add_wrapped_pdf_lines(add_line, f"Publisher: {project.publisher}", 11, max_chars=max_body_chars)
+    commit_page(show_number=False)
+
+    # Body pages are built separately so body numbering starts at Chapter One.
+    body_pages: list[dict] = []
+    chapter_starts: dict[int, int] = {}
+    current = []
+    y = height - margin_top
+
+    def commit_body_page() -> None:
+        nonlocal current
+        if current:
+            body_pages.append({"lines": current, "show_number": True, "number": len(body_pages) + 1})
+            current = []
+
+    def new_body_page():
+        nonlocal y
+        commit_body_page()
+        y = height - margin_top
+
+    def add_body_line(text: str, size: int = 11, indent: int = 0, align: str = "left"):
+        nonlocal y
+        if y < margin_bottom:
+            new_body_page()
+        if align == "center":
+            approx_width = len(text) * size * 0.27
+            x = max(margin_left, (width - approx_width) / 2)
+        else:
+            x = margin_left + indent
+        current.append((text, size, x, y))
+        y -= size + 5
+
+    for chapter in project.chapters:
+        if current:
+            new_body_page()
+        chapter_starts[chapter.chapter_index] = len(body_pages) + 1
+        add_body_line(chapter.title, 18, align="center")
+        add_body_line("")
         for section in chapter.sections:
             if section.title:
-                add_line(section.title, 14)
-            for line in _wrap_pdf_text(_normalize_dividers_for_text(section.body), 70):
-                add_line(line, 11)
-    if current:
-        pages.append(current)
+                add_body_line(section.title, 14, align="center")
+            for block_type, block_body in _iter_export_blocks(section.body):
+                if block_type == "divider":
+                    add_body_line("***", 11, align="center")
+                    continue
+                if block_type == "list":
+                    for item in block_body:
+                        for wrapped_index, line in enumerate(_wrap_pdf_text(str(item), 62)):
+                            if line:
+                                prefix = "• " if wrapped_index == 0 else "  "
+                                add_body_line(f"{prefix}{line}", 11, indent=18)
+                    add_body_line("")
+                    continue
+                for line in _wrap_pdf_text(str(block_body), max_body_chars):
+                    add_body_line(line, 11)
+    commit_body_page()
+
+    page_records.extend(build_toc_pages(chapter_starts))
+    page_records.extend(body_pages)
 
     objects: list[bytes] = []
     objects.append(b"<< /Type /Catalog /Pages 2 0 R >>")
-    kids = " ".join(f"{3 + i * 2} 0 R" for i in range(len(pages)))
-    objects.append(f"<< /Type /Pages /Kids [{kids}] /Count {len(pages)} >>".encode())
-    for i, page_lines in enumerate(pages):
+    kids = " ".join(f"{3 + i * 2} 0 R" for i in range(len(page_records)))
+    objects.append(f"<< /Type /Pages /Kids [{kids}] /Count {len(page_records)} >>".encode())
+    for i, page in enumerate(page_records):
+        page_lines = page["lines"]
         page_obj = 3 + i * 2
         content_obj = page_obj + 1
-        stream_lines = ["BT /F1 11 Tf"]
+        stream_parts = [b"BT /F1 11 Tf"]
         for text, size, x, line_y in page_lines:
             if text == "":
                 continue
-            stream_lines.append(f"/F1 {size} Tf {x:.0f} {line_y:.0f} Td ({_pdf_escape(text)}) Tj {-(x):.0f} {-(line_y):.0f} Td")
-        stream_lines.append(f"/F1 9 Tf {width/2-10:.0f} 24 Td ({i + 1}) Tj ET")
-        content = "\n".join(stream_lines).encode("latin-1", errors="replace")
-        objects.append(f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {width} {height}] /Resources << /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Times-Roman >> >> >> /Contents {content_obj} 0 R >>".encode())
+            stream_parts.append(b"/F1 " + str(size).encode() + b" Tf " + f"{x:.0f} {line_y:.0f}".encode() + b" Td " + _pdf_literal_bytes(text) + b" Tj " + f"{-(x):.0f} {-(line_y):.0f}".encode() + b" Td")
+        if page.get("show_number"):
+            number = page.get("number") or i + 1
+            stream_parts.append(b"/F1 9 Tf " + f"{width/2-10:.0f} {footer_y:.0f}".encode() + b" Td " + _pdf_literal_bytes(str(number)) + b" Tj")
+        stream_parts.append(b"ET")
+        content = b"\n".join(stream_parts)
+        objects.append(f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {width} {height}] /Resources << /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Times-Roman /Encoding /WinAnsiEncoding >> >> >> /Contents {content_obj} 0 R >>".encode())
         objects.append(b"<< /Length " + str(len(content)).encode() + b" >>\nstream\n" + content + b"\nendstream")
     info_obj_num = len(objects) + 1
     info_parts = [
@@ -1672,7 +1856,7 @@ def _build_pdf_export(project: BookProject, trim_size: str = "6x9") -> bytes:
         info_parts.append(f"/Publisher ({_pdf_escape(project.publisher)})")
     if project.copyright_year:
         info_parts.append(f"/Rights ({_pdf_escape(_copyright_notice(project))})")
-    objects.append(("<< " + " ".join(info_parts) + " >>").encode("latin-1", errors="replace"))
+    objects.append(("<< " + " ".join(info_parts) + " >>").encode("cp1252", errors="replace"))
 
     out = io.BytesIO()
     out.write(b"%PDF-1.4\n")

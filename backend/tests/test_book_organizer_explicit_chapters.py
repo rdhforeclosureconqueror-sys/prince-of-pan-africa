@@ -79,6 +79,47 @@ class ExplicitChapterDetectionUnitTests(unittest.TestCase):
         self.assertEqual(len(chapters), 2)
         self.assertIn("⸻", chapters[0]["body"])
 
+    def test_print_pdf_strips_duplicate_heading_and_preserves_unicode_punctuation(self):
+        from pypdf import PdfReader
+
+        from app.routes.audiobook import BookChapter, BookProject, BookSection, _build_pdf_export
+
+        project = BookProject(
+            title="Who Really Freed the Slaves?",
+            subtitle="The Erasure of Self Emancipation",
+            author="SimbaWaUjamaa.com",
+            language="en",
+            front_matter=[],
+            chapters=[
+                BookChapter(
+                    chapter_index=1,
+                    title="Chapter One: Who Really Freed the Slaves?",
+                    sections=[
+                        BookSection(
+                            title="Opening",
+                            body=(
+                                "Chapter One: Who Really Freed the Slaves?\n\n"
+                                "“If I could save…” — Sherman’s field order.\n\n"
+                                "⸻\n\n"
+                                "- banks\n- shipping industries\n- insurance companies"
+                            ),
+                        )
+                    ],
+                )
+            ],
+        )
+
+        pdf = _build_pdf_export(project)
+        extracted_text = "\n".join(page.extract_text() or "" for page in PdfReader(io.BytesIO(pdf)).pages)
+
+        self.assertEqual(extracted_text.count("Chapter One: Who Really Freed the Slaves?"), 2)  # TOC plus body heading.
+        body_text = extracted_text.split("Opening", 1)[1]
+        self.assertNotIn("Chapter One: Who Really Freed the Slaves?\nChapter One: Who Really Freed the Slaves?", extracted_text)
+        self.assertIn("“If I could save…” — Sherman’s field order.", body_text)
+        self.assertIn("***", body_text)
+        self.assertIn("• banks", body_text)
+        self.assertIn("• shipping industries", body_text)
+
 
     def test_does_not_split_on_bullet_lists(self):
         from app.routes.audiobook import _detect_book_organizer_explicit_chapters
