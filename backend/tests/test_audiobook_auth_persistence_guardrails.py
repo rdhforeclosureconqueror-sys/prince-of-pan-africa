@@ -123,6 +123,32 @@ class AudiobookAuthPersistenceGuardrails(unittest.TestCase):
             self.assertEqual(prog.user_id, user.id)
             self.assertEqual(prog.position_seconds, 42)
 
+    def test_generation_status_surfaces_failed_chapter_details(self):
+        from app.models import AudiobookChapter
+
+        cookie = self._login_cookie('owner1@example.com')
+        authed_client = TestClient(self.client.app)
+        authed_client.cookies.set('mufasa_session', cookie)
+        created = authed_client.post('/audiobooks/create', json={
+            'title': 'Failed Chapter Book', 'author': 'A', 'text': 'failed chapter text', 'generate_audio': False,
+        })
+        self.assertEqual(created.status_code, 200)
+        book_id = created.json()['audiobook']['id']
+        chapter_id = created.json()['audiobook']['chapters'][0]['id']
+
+        with self.SessionLocal() as db:
+            db.query(AudiobookChapter).filter(AudiobookChapter.id == chapter_id).update({'status': 'failed'})
+            db.commit()
+
+        status = authed_client.get(f'/audiobooks/{book_id}/generation-status')
+
+        self.assertEqual(status.status_code, 200)
+        progress = status.json()['generation_progress']
+        self.assertEqual(progress['failed_chapters'], 1)
+        self.assertEqual(progress['failed_chapter_indexes'], [1])
+        self.assertEqual(progress['failed_chapter_errors'][0]['chapter_index'], 1)
+        self.assertIn('Chapter generation failed', progress['failed_chapter_errors'][0]['message'])
+
 
 if __name__ == '__main__':
     unittest.main()
