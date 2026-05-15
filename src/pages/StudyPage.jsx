@@ -51,12 +51,28 @@ function filenameFromContentDisposition(header, fallback = "chapter-audio.mp3") 
 
 async function readDownloadError(response) {
   const contentType = response.headers.get("content-type") || "";
+  let detail = "";
   if (contentType.includes("application/json")) {
     const data = await response.json();
-    return data?.detail || data?.error || "Audio download failed.";
+    detail = data?.detail || data?.error || "";
+  } else {
+    detail = await response.text();
   }
-  const text = await response.text();
-  return text || "Audio download failed.";
+
+  if (response.status === 401 || response.status === 403) {
+    return "Audio download is not authorized. Please sign in with access to this audiobook.";
+  }
+  if (response.status === 404) {
+    return detail || "Audio file is missing from storage. Please regenerate this chapter.";
+  }
+  if (response.status === 409) {
+    return detail || "Audio generation is not complete for this chapter yet.";
+  }
+  return detail || "Audio download failed.";
+}
+
+function isGenerationTerminal(progressState) {
+  return ["complete", "failed", "partially_complete"].includes(progressState?.status);
 }
 
 export default function StudyPage() {
@@ -160,23 +176,51 @@ export default function StudyPage() {
 
   useEffect(() => {
     if (!selectedBook?.id) return undefined;
-    const activeStatuses = new Set(["pending", "chunking", "generating_chapters", "partially_complete"]);
+    const activeStatuses = new Set(["pending", "chunking", "generating_chapters"]);
     if (!activeStatuses.has(selectedBook.status)) return undefined;
 
-    const timer = window.setInterval(async () => {
+    let cancelled = false;
+    let inFlight = false;
+    let timer = null;
+
+    const scheduleNextPoll = () => {
+      if (!cancelled) {
+        timer = window.setTimeout(pollGenerationStatus, 3000);
+      }
+    };
+
+    const pollGenerationStatus = async () => {
+      if (cancelled || inFlight) return;
+      inFlight = true;
       try {
         const response = await api(`/audiobooks/${selectedBook.id}/generation-status`, { method: "GET", credentials: "include" });
-        setGenerationProgress(response.generation_progress || null);
-        await loadLibrary();
-        if (["complete", "failed", "partially_complete"].includes(response.generation_progress?.status)) {
-          await loadBook(selectedBook.id);
-        }
-      } catch (pollError) {
-        setError(pollError.message || "Unable to poll generation progress.");
-      }
-    }, 3000);
+        const nextProgress = response.generation_progress || null;
+        if (cancelled) return;
 
-    return () => window.clearInterval(timer);
+        setGenerationProgress(nextProgress);
+        if (isGenerationTerminal(nextProgress)) {
+          await loadBook(selectedBook.id);
+          await loadLibrary();
+          return;
+        }
+
+        scheduleNextPoll();
+      } catch (pollError) {
+        if (!cancelled) {
+          setError(pollError.message || "Unable to poll generation progress.");
+          scheduleNextPoll();
+        }
+      } finally {
+        inFlight = false;
+      }
+    };
+
+    pollGenerationStatus();
+
+    return () => {
+      cancelled = true;
+      if (timer) window.clearTimeout(timer);
+    };
   }, [selectedBook?.id, selectedBook?.status]);
 
   useEffect(() => {
@@ -577,10 +621,19 @@ export default function StudyPage() {
     if (progressState.status === "pending") return "Pending";
     if (progressState.status === "chunking") return "Chunking";
     if (progressState.status === "generating_chapters") return "Generating chapters";
-    if (progressState.status === "partially_complete") return "Partially complete";
+    if (progressState.status === "partially_complete") return "Completed with errors";
     if (progressState.status === "complete") return "Complete";
     if (progressState.status === "failed") return "Failed";
     return progressState.status;
+  }
+
+  function generationErrorSummary(progressState) {
+    const errors = progressState?.failed_chapter_errors || [];
+    if (!errors.length) return "";
+    return errors
+      .slice(0, 3)
+      .map((item) => `Chapter ${item.chapter_index}: ${item.message}`)
+      .join(" • ");
   }
 
   return (
@@ -628,6 +681,7 @@ export default function StudyPage() {
                   {statusLabelFromProgress(generationProgress)} • {generationProgress.completed_chapters}/{generationProgress.total_chapters} chapters complete
                   {generationProgress.current_chapter_index ? ` • Generating chapter ${generationProgress.current_chapter_index} of ${generationProgress.total_chapters}` : ""}
                   {generationProgress.failed_chapters ? ` • ${generationProgress.failed_chapters} failed` : ""}
+                  {generationErrorSummary(generationProgress) ? ` • ${generationErrorSummary(generationProgress)}` : ""}
                 </p>
               )}
               {error && <p className="study-error">{error}</p>}
@@ -665,6 +719,7 @@ export default function StudyPage() {
                     {statusLabelFromProgress(generationProgress)} — {generationProgress.completed_chapters}/{generationProgress.total_chapters} complete
                     {generationProgress.current_chapter_index ? ` — Generating chapter ${generationProgress.current_chapter_index} of ${generationProgress.total_chapters}` : ""}
                     {generationProgress.message ? ` — ${generationProgress.message}` : ""}
+                    {generationErrorSummary(generationProgress) ? ` — ${generationErrorSummary(generationProgress)}` : ""}
                   </p>
                 )}
               </div>

@@ -788,8 +788,17 @@ def _build_generation_progress(book: Audiobook) -> dict:
     current_step = runtime_state.get("current_step") or book.status
     if book.status in {"queued", "draft"}:
         current_step = "pending"
-    elif book.status in {"generating", "audio-generated", "ready", "complete"}:
+    elif book.status in {"generating", "audio-generated", "ready"}:
         current_step = "generating_chapters"
+
+    failed_chapter_indexes = [chapter.chapter_index for chapter in ordered_chapters if chapter.status == "failed"]
+    runtime_errors = list(runtime_state.get("failed_chapter_errors") or [])
+    runtime_error_indexes = {item.get("chapter_index") for item in runtime_errors if isinstance(item, dict)}
+    failed_chapter_errors = runtime_errors + [
+        {"chapter_index": chapter_index, "message": "Chapter generation failed. Please retry or regenerate this chapter."}
+        for chapter_index in failed_chapter_indexes
+        if chapter_index not in runtime_error_indexes
+    ]
 
     return {
         "status": book.status,
@@ -797,6 +806,8 @@ def _build_generation_progress(book: Audiobook) -> dict:
         "total_chapters": total_chapters,
         "completed_chapters": completed_chapters,
         "failed_chapters": failed_chapters,
+        "failed_chapter_indexes": failed_chapter_indexes,
+        "failed_chapter_errors": failed_chapter_errors,
         "generating_chapters": generating_chapters,
         "queued_chapters": queued_chapters,
         "current_chapter_index": runtime_state.get("current_chapter_index") or current_chapter,
@@ -819,10 +830,28 @@ def _clear_runtime_generation_state(audiobook_id: int) -> None:
         _book_generation_threads.pop(audiobook_id, None)
 
 
+def _release_generation_thread(audiobook_id: int) -> None:
+    with _generation_lock:
+        _book_generation_threads.pop(audiobook_id, None)
+
+
+def _record_chapter_generation_error(audiobook_id: int, chapter_index: int, error: Exception) -> None:
+    with _generation_lock:
+        current = dict(_book_generation_state.get(audiobook_id, {}))
+        errors = list(current.get("failed_chapter_errors") or [])
+        errors.append({
+            "chapter_index": chapter_index,
+            "message": str(error)[:500] or "Chapter generation failed.",
+        })
+        current["failed_chapter_errors"] = errors
+        current["updated_at"] = datetime.utcnow().isoformat()
+        _book_generation_state[audiobook_id] = current
+
+
 def _generate_audio_for_book_job(*, audiobook_id: int, user_id: int, base_url: str) -> None:
     started_at = time.monotonic()
     db = SessionLocal()
-    _update_runtime_generation_state(audiobook_id, current_step="generating_chapters", message="Job started")
+    _update_runtime_generation_state(audiobook_id, current_step="generating_chapters", message="Job started", failed_chapter_errors=[])
     try:
         _ensure_generation_slot(user_id)
         book = db.query(Audiobook).filter(Audiobook.id == audiobook_id, Audiobook.user_id == user_id).first()
@@ -886,6 +915,7 @@ def _generate_audio_for_book_job(*, audiobook_id: int, user_id: int, base_url: s
             except Exception as chapter_error:
                 chapter.status = "failed"
                 db.commit()
+                _record_chapter_generation_error(audiobook_id, chapter.chapter_index, chapter_error)
                 logger.exception(
                     "audiobook_generation chapter_failed book_id=%s chapter=%s error=%s",
                     audiobook_id,
@@ -913,7 +943,7 @@ def _generate_audio_for_book_job(*, audiobook_id: int, user_id: int, base_url: s
     finally:
         _track_generation(user_id, -1)
         db.close()
-        _clear_runtime_generation_state(audiobook_id)
+        _release_generation_thread(audiobook_id)
 
 
 def _start_background_generation(*, audiobook_id: int, user_id: int, base_url: str) -> bool:
@@ -930,7 +960,7 @@ def _start_background_generation(*, audiobook_id: int, user_id: int, base_url: s
         )
         _book_generation_threads[audiobook_id] = worker
 
-    _update_runtime_generation_state(audiobook_id, current_step="pending", message="Job queued", current_chapter_index=None)
+    _update_runtime_generation_state(audiobook_id, current_step="pending", message="Job queued", current_chapter_index=None, failed_chapter_errors=[])
     worker.start()
     return True
 
