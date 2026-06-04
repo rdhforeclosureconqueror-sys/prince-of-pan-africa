@@ -71,6 +71,20 @@ async function readDownloadError(response) {
   return detail || "Audio download failed.";
 }
 
+function isMissingSavedChapterAudioError(err) {
+  const detail = err?.payload?.detail || err?.message || "";
+  return err?.status === 404 && detail.includes("No saved audio found for this chapter.");
+}
+
+function generatedAudioUrlFromResponse(response) {
+  const raw = response?.audio_url || response?.audioUrl || "";
+  return absoluteApiUrl(raw);
+}
+
+function logChapterAudioFlow(flow, details = {}) {
+  console.info("[StudyPage] chapter audio flow", { flow, ...details });
+}
+
 function isGenerationTerminal(progressState) {
   return ["complete", "failed", "partially_complete"].includes(progressState?.status);
 }
@@ -237,6 +251,11 @@ export default function StudyPage() {
     let cancelled = false;
     async function loadSavedAudioMetadata() {
       try {
+        logChapterAudioFlow("saved chapter audio metadata lookup", {
+          bookId: selectedBook.id,
+          chapterId: activeChapter.id,
+          chapterIndex: activeChapter.chapter_index,
+        });
         const response = await api(`/api/audio/book/${selectedBook.id}/chapter/${activeChapter.id}`, { method: "GET", credentials: "include" });
         if (cancelled || !response?.audio) return;
         setSavedAudioNotice(response.message || "Saved audio already exists. Use saved audio or regenerate?");
@@ -373,22 +392,83 @@ export default function StudyPage() {
     }
   }
 
+  async function generateSkillWorldChapterAudio() {
+    if (!selectedBook?.id || !activeChapter?.id) return "";
+    const chapterText = (activeChapter.text || "").trim();
+    if (!chapterText) {
+      throw new Error("No chapter text is available for generated voice.");
+    }
+
+    const chapterVoice = selectedBook.voice || voice || "alloy";
+    logChapterAudioFlow("generated Skill World TTS flow", {
+      bookId: selectedBook.id,
+      chapterId: activeChapter.id,
+      chapterIndex: activeChapter.chapter_index,
+      voice: chapterVoice,
+    });
+    setStatus("No saved chapter audio found. Generating Skill World voice...");
+
+    const response = await api("/api/skill-world/audio", {
+      method: "POST",
+      credentials: "include",
+      body: JSON.stringify({
+        text: chapterText,
+        voice_model: chapterVoice,
+        voice: chapterVoice,
+        format: "mp3",
+        speed: playbackRate,
+        pitch: 1,
+      }),
+    });
+    const audioUrl = generatedAudioUrlFromResponse(response);
+    if (!audioUrl) {
+      throw new Error("Generated Skill World TTS response did not include audio_url.");
+    }
+
+    setSelectedBook((prev) => ({
+      ...prev,
+      chapters: prev.chapters.map((chapter) =>
+        chapter.id === activeChapter.id
+          ? { ...chapter, audio_url: audioUrl, generated_audio: { audio_url: audioUrl, cached: Boolean(response.cached) }, status: "completed" }
+          : chapter,
+      ),
+    }));
+    setStatus(`Generated Skill World voice${response.cached ? " from cache" : ""}.`);
+    return audioUrl;
+  }
+
   async function useSavedAudio() {
-    if (!selectedBook?.id || !activeChapter?.id) return;
+    if (!selectedBook?.id || !activeChapter?.id) return "";
     setError("");
+    logChapterAudioFlow("saved chapter audio flow", {
+      bookId: selectedBook.id,
+      chapterId: activeChapter.id,
+      chapterIndex: activeChapter.chapter_index,
+    });
     try {
       const response = await api(`/api/audio/book/${selectedBook.id}/chapter/${activeChapter.id}`, { method: "GET", credentials: "include" });
+      const audioUrl = response.audio.audioUrl || response.audio.audio_url || "";
       setSelectedBook((prev) => ({
         ...prev,
         chapters: prev.chapters.map((chapter) =>
           chapter.id === activeChapter.id
-            ? { ...chapter, audio_url: response.audio.audioUrl, saved_audio: response.audio, audio_asset_id: response.audio.id, status: "completed" }
+            ? { ...chapter, audio_url: audioUrl, saved_audio: response.audio, audio_asset_id: response.audio.id, status: "completed" }
             : chapter,
         ),
       }));
       setStatus("Using saved audio. AI voice provider was not called.");
+      return audioUrl;
     } catch (err) {
+      if (isMissingSavedChapterAudioError(err)) {
+        try {
+          return await generateSkillWorldChapterAudio();
+        } catch (generationErr) {
+          setError(generationErr.message || "Generated Skill World voice failed.");
+          return "";
+        }
+      }
       setError(err.message || "No saved audio found for this chapter.");
+      return "";
     }
   }
 
@@ -423,13 +503,19 @@ export default function StudyPage() {
   }
 
   async function playSavedAudio() {
-    await useSavedAudio();
-    window.setTimeout(async () => {
-      if (audioRef.current) {
-        await audioRef.current.play();
-        setIsPlaying(true);
-      }
-    }, 0);
+    try {
+      const audioUrl = await useSavedAudio();
+      if (!audioUrl) return;
+      window.setTimeout(async () => {
+        if (audioRef.current) {
+          audioRef.current.src = audioUrl;
+          await audioRef.current.play();
+          setIsPlaying(true);
+        }
+      }, 0);
+    } catch (err) {
+      setError(err.message || "Unable to play chapter audio.");
+    }
   }
 
   async function downloadSavedAudio() {
@@ -584,13 +670,21 @@ export default function StudyPage() {
   }
 
   async function togglePlayPause() {
-    if (!audioRef.current) return;
-    if (audioRef.current.paused) {
-      await audioRef.current.play();
-      setIsPlaying(true);
-    } else {
-      audioRef.current.pause();
-      setIsPlaying(false);
+    try {
+      if (!activeChapter?.audio_url) {
+        await playSavedAudio();
+        return;
+      }
+      if (!audioRef.current) return;
+      if (audioRef.current.paused) {
+        await audioRef.current.play();
+        setIsPlaying(true);
+      } else {
+        audioRef.current.pause();
+        setIsPlaying(false);
+      }
+    } catch (err) {
+      setError(err.message || "Unable to play chapter audio.");
     }
   }
 
@@ -811,29 +905,26 @@ export default function StudyPage() {
                 <span>{formatTime(duration)}</span>
               </div>
 
-              {activeChapter?.audio_url ? (
-                <audio
-                  ref={audioRef}
-                  src={activeChapter.audio_url}
-                  preload="metadata"
-                  onPlay={() => setIsPlaying(true)}
-                  onPause={async () => {
-                    setIsPlaying(false);
-                    await persistProgress();
-                  }}
-                  onLoadedMetadata={() => {
-                    setDuration(audioRef.current?.duration || 0);
-                  }}
-                  onTimeUpdate={handleTimeUpdate}
-                  onEnded={async () => {
-                    await completeCurrentChapterAndPrompt();
-                    setIsPlaying(false);
-                  }}
-                  style={{ width: "100%" }}
-                />
-              ) : (
-                <p>Chapter audio is not generated yet. Use “Generate Missing Audio”.</p>
-              )}
+              <audio
+                ref={audioRef}
+                src={activeChapter?.audio_url || undefined}
+                preload="metadata"
+                onPlay={() => setIsPlaying(true)}
+                onPause={async () => {
+                  setIsPlaying(false);
+                  await persistProgress();
+                }}
+                onLoadedMetadata={() => {
+                  setDuration(audioRef.current?.duration || 0);
+                }}
+                onTimeUpdate={handleTimeUpdate}
+                onEnded={async () => {
+                  await completeCurrentChapterAndPrompt();
+                  setIsPlaying(false);
+                }}
+                style={{ width: "100%" }}
+              />
+              {!activeChapter?.audio_url && <p>Chapter audio is not saved yet. Press Play to generate Skill World voice.</p>}
             </div>
 
             {showReflectionPrompt && (
