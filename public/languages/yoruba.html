@@ -476,6 +476,9 @@
 <script>
   const DATA_URL = "yoruba_30days.json";
   const TTS_ENDPOINT = "/api/skill-world/audio";
+  const LANGUAGE_CODE = "yoruba";
+  const DEFAULT_TTS_SPEED = 1.0;
+  const DEFAULT_TTS_PITCH = 0.0;
 
   let PACK = null;
   let idx = 0;
@@ -654,14 +657,20 @@
     setStatus("Stopped.", "ready");
   }
 
-  async function speak(text){
-    if(!text || !text.trim()) return;
+  async function speak(text, options = {}){
+    const lessonText = (text || "").trim();
+    if(!lessonText) return;
     setStatus("Generating AI voice…", "loading");
     try{
       await window.lessonTts.speak({
-        text,
+        text: lessonText,
         voice: (voiceSelect?.value || "alloy"),
         endpoint: TTS_ENDPOINT,
+        language: LANGUAGE_CODE,
+        format: "mp3",
+        speed: DEFAULT_TTS_SPEED,
+        pitch: DEFAULT_TTS_PITCH,
+        cacheKey: options.cacheKey,
         onStatus: (msg) => setStatus(msg, msg.includes("playing") ? "playing" : "ready"),
       });
     }catch(err){
@@ -718,7 +727,7 @@
         yorubaProgress.heardWords.add(wordIdx);
         renderUnlockProgress();
         const parts = [w.yoruba, w.english, w.pronunciation_hint ? `Pronunciation: ${w.pronunciation_hint}` : null, w.example_yoruba, w.example_english].filter(Boolean);
-        await speak(parts.join(". "));
+        await speak(parts.join(". "), { cacheKey: `${LANGUAGE_CODE}-day-${d.day}-word-${wordIdx}` });
       });
     });
 
@@ -737,8 +746,7 @@
     if(activeTab === "match") renderMatchGame();
   }
 
-  async function speakAll(){
-    const d = PACK.days[idx];
+  function buildVisibleLessonText(d){
     const parts = [`Yoruba lesson, day ${d.day}. Theme: ${d.theme || ""}.`];
     (d.words || []).forEach((w) => {
       if(w.yoruba) parts.push(w.yoruba);
@@ -749,7 +757,12 @@
     });
     if(d.daily_tip || d.tip) parts.push(`Tip: ${d.daily_tip || d.tip}`);
     if(d.culture_note || d.culture) parts.push(`Culture note: ${d.culture_note || d.culture}`);
-    await speak(parts.join(". "));
+    return parts.filter(Boolean).join(". ").trim();
+  }
+
+  async function speakAll(){
+    const d = PACK.days[idx];
+    await speak(buildVisibleLessonText(d), { cacheKey: `${LANGUAGE_CODE}-day-${d.day}-lesson` });
   }
 
   async function load(){
@@ -809,7 +822,7 @@
   document.getElementById("btnSpeakSentence").addEventListener("click", async () => {
     if(!PACK) return;
     const s = buildSentence(PACK.days[idx]);
-    if(s) await speak(s);
+    if(s) await speak(s, { cacheKey: `${LANGUAGE_CODE}-day-${PACK.days[idx].day}-sentence` });
   });
 
   async function prefetchNextDay(){
@@ -822,6 +835,11 @@
         text: preview,
         voice: (voiceSelect?.value || "alloy"),
         endpoint: TTS_ENDPOINT,
+        language: LANGUAGE_CODE,
+        format: "mp3",
+        speed: DEFAULT_TTS_SPEED,
+        pitch: DEFAULT_TTS_PITCH,
+        cacheKey: `${LANGUAGE_CODE}-day-${next.day}-prefetch`,
       });
     }catch(_){}
   }
