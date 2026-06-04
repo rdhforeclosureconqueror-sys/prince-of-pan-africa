@@ -1,5 +1,5 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException
-from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi.responses import Response, JSONResponse
 from pydantic import BaseModel
 import requests
 import os
@@ -22,6 +22,8 @@ class TTSRequest(BaseModel):
     text: str
     format: str | None = "mp3"
     voice: str | None = "alloy"
+    speed: float | None = None
+    pitch: float | None = None
 
 
 def _aivoice_headers() -> dict:
@@ -31,30 +33,57 @@ def _aivoice_headers() -> dict:
     return headers
 
 
+def _aivoice_tts_headers() -> dict:
+    return {"Content-Type": "application/json"}
+
+
+def _aivoice_base_url() -> str:
+    base_url = AIVOICE_BASE_URL.rstrip("/")
+    for stale_path in ("/tts", "/speak"):
+        if base_url.endswith(stale_path):
+            return base_url[: -len(stale_path)]
+    return base_url
+
+
+def _aivoice_speak_url() -> str:
+    return f"{_aivoice_base_url()}/speak"
+
+
+def _tts_payload(req: TTSRequest) -> dict:
+    text = (req.text or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="No text provided for TTS.")
+
+    payload = {"text": text}
+    for key in ("voice", "format", "speed", "pitch"):
+        value = getattr(req, key)
+        if value is not None:
+            payload[key] = value
+    return payload
+
+
 @router.post("/tts")
 async def proxy_tts(req: TTSRequest):
+    provider_url = _aivoice_speak_url()
+    payload = _tts_payload(req)
     try:
         res = requests.post(
-            f"{AIVOICE_BASE_URL}/tts",
-            json=req.dict(),
-            headers=_aivoice_headers(),
+            provider_url,
+            json=payload,
+            headers=_aivoice_tts_headers(),
             timeout=60,
         )
+    except requests.RequestException as e:
+        logger.error(f"TTS upstream request error: {e}")
+        raise HTTPException(status_code=502, detail=f"TTS upstream request failed: {e}") from e
 
-        if res.status_code != 200:
-            logger.error(f"TTS failed [{res.status_code}]: {res.text}")
-            raise HTTPException(status_code=res.status_code, detail=res.text)
+    if res.status_code != 200:
+        detail = res.text[:500]
+        logger.error(f"TTS failed [{res.status_code}]: {detail}")
+        raise HTTPException(status_code=res.status_code, detail=detail)
 
-        media_type = res.headers.get("content-type", "audio/mpeg")
-
-        def iter_bytes():
-            yield res.content
-
-        return StreamingResponse(iter_bytes(), media_type=media_type)
-
-    except Exception as e:
-        logger.error(f"TTS error: {e}")
-        raise HTTPException(status_code=500, detail=f"TTS failed: {e}")
+    media_type = res.headers.get("content-type", "audio/mpeg")
+    return Response(content=res.content, media_type=media_type, status_code=res.status_code)
 
 
 @router.post("/stt")

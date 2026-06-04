@@ -123,6 +123,16 @@ def generate_tts_audio_url(*, request: Request | None, text: str, voice: str = "
 
     audio_url = build_audio_url(request, cached_file, base_url=base_url)
     return audio_url, cached
+
+
+def _aivoice_base_url() -> str:
+    base_url = AIVOICE_BASE_URL.rstrip("/")
+    for stale_path in ("/tts", "/speak"):
+        if base_url.endswith(stale_path):
+            return base_url[: -len(stale_path)]
+    return base_url
+
+
 def request_aivoice_tts(
     *,
     text: str,
@@ -135,10 +145,9 @@ def request_aivoice_tts(
         payload["voice"] = voice
     if format:
         payload["format"] = format
-    provider_url = f"{AIVOICE_BASE_URL.rstrip('/')}/speak"
-    headers = aivoice_headers()
+    provider_url = f"{_aivoice_base_url()}/speak"
+    headers = {"Content-Type": "application/json"}
     logged_headers = dict(headers)
-    logged_headers["X-AIVOICE-KEY"] = _masked_key(headers.get("X-AIVOICE-KEY"))
 
     logger.info(
         "aiVoice request url=%s headers=%s payload_keys=%s text_len=%s",
