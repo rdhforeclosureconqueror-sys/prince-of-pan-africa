@@ -133,6 +133,10 @@ def _aivoice_base_url() -> str:
     return base_url
 
 
+def _aivoice_speak_url() -> str:
+    return f"{_aivoice_base_url()}/speak"
+
+
 def request_aivoice_tts(
     *,
     text: str,
@@ -140,12 +144,16 @@ def request_aivoice_tts(
     format: str | None = "mp3",
     timeout: int = 45,
 ):
-    payload = {"text": text}
+    normalized_text = normalize_tts_text(text)
+    if not normalized_text:
+        raise HTTPException(status_code=400, detail="No text provided for TTS.")
+
+    payload = {"text": normalized_text}
     if voice:
         payload["voice"] = voice
     if format:
         payload["format"] = format
-    provider_url = f"{_aivoice_base_url()}/speak"
+    provider_url = _aivoice_speak_url()
     headers = {"Content-Type": "application/json"}
     logged_headers = dict(headers)
 
