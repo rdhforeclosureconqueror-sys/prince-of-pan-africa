@@ -7,6 +7,12 @@ import logging
 
 router = APIRouter()
 
+SKILL_WORLD_TTS_URL = (
+    os.getenv("SKILL_WORLD_TTS_URL")
+    or os.getenv("AIVOICE_BASE_URL")
+    or os.getenv("OPENVOICE_URL")
+    or "https://aivoice-wmrv.onrender.com/speak"
+)
 AIVOICE_BASE_URL = (
     os.getenv("AIVOICE_BASE_URL")
     or os.getenv("OPENVOICE_URL")
@@ -26,27 +32,25 @@ class TTSRequest(BaseModel):
     pitch: float | None = None
 
 
-def _aivoice_headers() -> dict:
-    headers = {"Content-Type": "application/json"}
-    if AIVOICE_API_KEY:
-        headers["X-AIVOICE-KEY"] = AIVOICE_API_KEY
-    return headers
-
-
 def _aivoice_tts_headers() -> dict:
     return {"Content-Type": "application/json"}
 
 
 def _aivoice_base_url() -> str:
-    base_url = AIVOICE_BASE_URL.rstrip("/")
+    configured_url = (SKILL_WORLD_TTS_URL or AIVOICE_BASE_URL).rstrip("/")
     for stale_path in ("/tts", "/speak"):
-        if base_url.endswith(stale_path):
-            return base_url[: -len(stale_path)]
-    return base_url
+        if configured_url.endswith(stale_path):
+            return configured_url[: -len(stale_path)]
+    return configured_url
 
 
 def _aivoice_speak_url() -> str:
-    return f"{_aivoice_base_url()}/speak"
+    configured_url = (SKILL_WORLD_TTS_URL or AIVOICE_BASE_URL).rstrip("/")
+    if configured_url.endswith("/speak"):
+        return configured_url
+    if configured_url.endswith("/tts"):
+        return f"{configured_url[:-len('/tts')]}/speak"
+    return f"{configured_url}/speak"
 
 
 def _tts_payload(req: TTSRequest) -> dict:
@@ -66,23 +70,56 @@ def _tts_payload(req: TTSRequest) -> dict:
 async def proxy_tts(req: TTSRequest):
     provider_url = _aivoice_speak_url()
     payload = _tts_payload(req)
+    headers = _aivoice_tts_headers()
+    auth_header_sent = False
+    logger.info(
+        "aiVoice TTS upstream request url=%s method=POST auth_header_sent=%s payload_keys=%s text_len=%s",
+        provider_url,
+        auth_header_sent,
+        sorted(payload.keys()),
+        len(payload.get("text", "")),
+    )
     try:
         res = requests.post(
             provider_url,
             json=payload,
-            headers=_aivoice_tts_headers(),
+            headers=headers,
             timeout=60,
         )
     except requests.RequestException as e:
-        logger.error(f"TTS upstream request error: {e}")
+        logger.error(
+            "aiVoice TTS upstream network error url=%s method=POST auth_header_sent=%s error=%s",
+            provider_url,
+            auth_header_sent,
+            e,
+        )
         raise HTTPException(status_code=502, detail=f"TTS upstream request failed: {e}") from e
 
+    media_type = res.headers.get("content-type", "audio/mpeg")
     if res.status_code != 200:
         detail = res.text[:500]
-        logger.error(f"TTS failed [{res.status_code}]: {detail}")
-        raise HTTPException(status_code=res.status_code, detail=detail)
+        mismatch = (
+            " production aiVoice behavior does not match the repo truth report."
+            if res.status_code == 401 and "missing_internal_token" in detail.lower()
+            else ""
+        )
+        logger.error(
+            "aiVoice TTS upstream response url=%s method=POST auth_header_sent=%s status=%s content_type=%s body=%s",
+            provider_url,
+            auth_header_sent,
+            res.status_code,
+            media_type,
+            detail,
+        )
+        raise HTTPException(status_code=res.status_code, detail=f"{detail}{mismatch}")
 
-    media_type = res.headers.get("content-type", "audio/mpeg")
+    logger.info(
+        "aiVoice TTS upstream response url=%s method=POST auth_header_sent=%s status=%s content_type=%s",
+        provider_url,
+        auth_header_sent,
+        res.status_code,
+        media_type,
+    )
     return Response(content=res.content, media_type=media_type, status_code=res.status_code)
 
 

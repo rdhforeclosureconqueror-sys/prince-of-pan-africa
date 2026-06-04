@@ -6,7 +6,15 @@ load_dotenv()
 
 class Settings:
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
-    # AIVOICE_BASE_URL is the preferred name. OPENVOICE_URL is supported as a legacy alias.
+    # SKILL_WORLD_TTS_URL is the canonical public aiVoice /speak endpoint for TTS.
+    # AIVOICE_BASE_URL / OPENVOICE_URL remain legacy aliases for older deployments.
+    SKILL_WORLD_TTS_URL: str = (
+        os.getenv("SKILL_WORLD_TTS_URL")
+        or os.getenv("AIVOICE_BASE_URL")
+        or os.getenv("OPENVOICE_URL")
+        or "https://aivoice-wmrv.onrender.com/speak"
+    )
+    SKILL_WORLD_TTS_TOKEN: str = os.getenv("SKILL_WORLD_TTS_TOKEN", "")
     AIVOICE_BASE_URL: str = (
         os.getenv("AIVOICE_BASE_URL")
         or os.getenv("OPENVOICE_URL")
