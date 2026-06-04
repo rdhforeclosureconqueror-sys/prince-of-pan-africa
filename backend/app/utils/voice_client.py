@@ -12,11 +12,19 @@ def _openvoice_base_url() -> str:
     return base_url
 
 
+def _openvoice_speak_url() -> str:
+    return f"{_openvoice_base_url()}/speak"
+
+
 async def text_to_speech(text: str):
+    normalized_text = (text or "").strip()
+    if not normalized_text:
+        raise ValueError("No text provided for TTS.")
+
     async with httpx.AsyncClient() as client:
         res = await client.post(
-            f"{_openvoice_base_url()}/speak",
-            json={"text": text, "voice": "alloy", "format": "mp3"},
+            _openvoice_speak_url(),
+            json={"text": normalized_text, "voice": "alloy", "format": "mp3"},
         )
         res.raise_for_status()
         return {"audio": res.content, "content_type": res.headers.get("content-type", "audio/mpeg")}

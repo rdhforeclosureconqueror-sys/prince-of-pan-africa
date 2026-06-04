@@ -14,6 +14,11 @@ class AudioResponse:
         raise AssertionError("Successful TTS audio responses must not be parsed as JSON")
 
 
+class WavAudioResponse(AudioResponse):
+    content = b"RIFF fake wav bytes"
+    headers = {"content-type": "audio/wav"}
+
+
 class ErrorResponse:
     status_code = 405
     content = b'{"detail":"Method Not Allowed"}'
@@ -21,11 +26,24 @@ class ErrorResponse:
     text = '{"detail":"Method Not Allowed"}'
 
 
-
 def make_client():
     app = FastAPI()
     app.include_router(voice.router, prefix="/api/voice")
     return TestClient(app)
+
+
+def test_tts_proxy_normalizes_configured_urls_to_canonical_speak_endpoint(monkeypatch):
+    variants = [
+        "https://aivoice-wmrv.onrender.com",
+        "https://aivoice-wmrv.onrender.com/",
+        "https://aivoice-wmrv.onrender.com/tts",
+        "https://aivoice-wmrv.onrender.com/speak",
+    ]
+
+    for configured_url in variants:
+        monkeypatch.setattr(voice, "AIVOICE_BASE_URL", configured_url)
+
+        assert voice._aivoice_speak_url() == "https://aivoice-wmrv.onrender.com/speak"
 
 
 def test_tts_proxy_posts_json_to_canonical_speak_endpoint(monkeypatch):
@@ -56,15 +74,15 @@ def test_tts_proxy_posts_json_to_canonical_speak_endpoint(monkeypatch):
 
 def test_tts_proxy_forwards_raw_audio_and_preserves_content_type(monkeypatch):
     def fake_post(url, **kwargs):
-        return AudioResponse()
+        return WavAudioResponse()
 
     monkeypatch.setattr(voice.requests, "post", fake_post)
 
     response = make_client().post("/api/voice/tts", json={"text": "Testing audio"})
 
     assert response.status_code == 200
-    assert response.content == AudioResponse.content
-    assert response.headers["content-type"] == "audio/mpeg"
+    assert response.content == WavAudioResponse.content
+    assert response.headers["content-type"] == "audio/wav"
 
 
 def test_tts_proxy_rejects_empty_text_before_upstream_call(monkeypatch):
