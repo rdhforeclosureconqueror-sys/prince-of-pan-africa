@@ -7,12 +7,11 @@ load_dotenv()
 class Settings:
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
     # SKILL_WORLD_TTS_URL is the canonical public aiVoice /speak endpoint for TTS.
-    # AIVOICE_BASE_URL / OPENVOICE_URL remain legacy aliases for older deployments.
-    SKILL_WORLD_TTS_URL: str = (
-        os.getenv("SKILL_WORLD_TTS_URL")
-        or os.getenv("AIVOICE_BASE_URL")
-        or os.getenv("OPENVOICE_URL")
-        or "https://aivoice-wmrv.onrender.com/speak"
+    # Legacy AIVOICE_BASE_URL / OPENVOICE_URL are kept for older non-Skill-World callers,
+    # but they must not override the canonical Skill World URL.
+    SKILL_WORLD_TTS_URL: str = os.getenv(
+        "SKILL_WORLD_TTS_URL",
+        "https://aivoice-wmrv.onrender.com/speak",
     )
     SKILL_WORLD_TTS_TOKEN: str = os.getenv("SKILL_WORLD_TTS_TOKEN", "")
     AIVOICE_BASE_URL: str = (

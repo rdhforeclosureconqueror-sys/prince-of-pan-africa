@@ -45,7 +45,7 @@ def test_skill_world_audio_posts_contract_payload_to_speak_and_returns_audio_url
         json={
             "cache_key": "lesson-1",
             "text": " Testing audio ",
-            "voice": "alloy",
+            "voice_model": "alloy",
             "format": "mp3",
             "speed": 1.1,
             "pitch": 0.2,

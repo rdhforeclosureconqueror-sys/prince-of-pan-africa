@@ -169,6 +169,7 @@ def request_aivoice_tts(
     speed: float | None = None,
     pitch: float | None = None,
     timeout: int = 45,
+    debug_callback=None,
 ):
     normalized_text = normalize_tts_text(text)
     if not normalized_text:
@@ -223,6 +224,13 @@ def request_aivoice_tts(
                 "provider_body_snippet": str(exc)[:200],
             },
         ) from exc
+
+    if debug_callback is not None:
+        debug_callback(
+            provider_url,
+            response.status_code,
+            response.headers.get("content-type"),
+        )
 
     if response.status_code != 200:
         detail = response.text[:200]
