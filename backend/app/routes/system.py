@@ -75,6 +75,7 @@ def test_routes(request: Request):
         "/member/overview",
         "/member/activity",
         "/chat/tts",
+        "/api/skill-world/audio",
     ]
     missing = [endpoint for endpoint in expected if endpoint not in routes]
     return {

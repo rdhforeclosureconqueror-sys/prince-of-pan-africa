@@ -73,7 +73,7 @@ export async function generateTTS(text, voiceModel = "alloy") {
   if (!text?.trim()) return { error: "No text provided." };
 
   try {
-    const data = await callMufasaAPI("/chat/tts", {
+    const data = await callMufasaAPI("/api/skill-world/audio", {
       text,
       voice_model: voiceModel,
     });

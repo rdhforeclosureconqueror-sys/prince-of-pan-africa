@@ -174,7 +174,7 @@ export default function VoiceControls({ latestMessage, onVoiceSend }) {
       setTtsState("generating");
       setTtsInfo("Generating audio…");
 
-      const res = await fetch(`${baseURL}/chat/tts`, {
+      const res = await fetch(`${baseURL}/api/skill-world/audio`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
