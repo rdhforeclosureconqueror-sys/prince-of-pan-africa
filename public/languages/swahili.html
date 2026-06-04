@@ -537,6 +537,9 @@
 <script>
   const DATA_URL = "swahili_30days.json";
   const TTS_ENDPOINT = "/api/skill-world/audio";
+  const LANGUAGE_CODE = "swahili";
+  const DEFAULT_TTS_SPEED = 1.0;
+  const DEFAULT_TTS_PITCH = 0.0;
 
   let PACK = null;
   let idx = 0;
@@ -710,16 +713,22 @@
     setStatus("Stopped.", "ready");
   }
 
-  async function speak(text){
-    if(!text || !text.trim()) return;
+  async function speak(text, options = {}){
+    const lessonText = (text || "").trim();
+    if(!lessonText) return;
 
     setStatus("Generating AI voice…", "loading");
 
     try{
       await window.lessonTts.speak({
-        text,
+        text: lessonText,
         voice: (voiceSelect?.value || "alloy"),
         endpoint: TTS_ENDPOINT,
+        language: LANGUAGE_CODE,
+        format: "mp3",
+        speed: DEFAULT_TTS_SPEED,
+        pitch: DEFAULT_TTS_PITCH,
+        cacheKey: options.cacheKey,
         onStatus: (msg) => setStatus(msg, msg.includes("playing") ? "playing" : "ready"),
       });
     }catch(err){
@@ -778,7 +787,7 @@
         const w = d.words[wordIdx];
         swahiliProgress.heardWords.add(wordIdx);
         renderUnlockProgress();
-        await speak(`${w.swahili}. ${w.english}. Pronunciation: ${w.pronunciation}.`);
+        await speak(`${w.swahili}. ${w.english}. Pronunciation: ${w.pronunciation}.`, { cacheKey: `${LANGUAGE_CODE}-day-${d.day}-word-${wordIdx}` });
       });
     });
 
@@ -796,16 +805,20 @@
     if(activeTab === "match") renderMatchGame();
   }
 
-  async function speakAll(){
-    const d = PACK.days[idx];
+  function buildVisibleLessonText(d){
     const parts = [];
     parts.push(`Swahili lesson, day ${d.day}. Theme: ${d.theme}.`);
-    d.words.forEach(w => parts.push(`${w.swahili}. ${w.english}. Pronunciation: ${w.pronunciation}.`));
+    (d.words || []).forEach(w => parts.push(`${w.swahili}. ${w.english}. Pronunciation: ${w.pronunciation}.`));
     const sentence = d.words?.[2]?.sentence;
     if(sentence) parts.push(`Sentence: ${sentence}`);
-    parts.push(`Tip: ${d.tip}`);
-    parts.push(`Culture note: ${d.culture}`);
-    await speak(parts.join(" "));
+    if(d.tip) parts.push(`Tip: ${d.tip}`);
+    if(d.culture) parts.push(`Culture note: ${d.culture}`);
+    return parts.filter(Boolean).join(" ").trim();
+  }
+
+  async function speakAll(){
+    const d = PACK.days[idx];
+    await speak(buildVisibleLessonText(d), { cacheKey: `${LANGUAGE_CODE}-day-${d.day}-lesson` });
   }
 
   async function load(){
@@ -862,7 +875,7 @@
     if(!PACK) return;
     const d = PACK.days[idx];
     const sentence = d.words?.[2]?.sentence || "";
-    if(sentence) await speak(sentence);
+    if(sentence) await speak(sentence, { cacheKey: `${LANGUAGE_CODE}-day-${d.day}-sentence` });
   });
 
   async function prefetchNextDay(){
@@ -878,6 +891,11 @@
         text: preview,
         voice: (voiceSelect?.value || "alloy"),
         endpoint: TTS_ENDPOINT,
+        language: LANGUAGE_CODE,
+        format: "mp3",
+        speed: DEFAULT_TTS_SPEED,
+        pitch: DEFAULT_TTS_PITCH,
+        cacheKey: `${LANGUAGE_CODE}-day-${next.day}-prefetch`,
       });
     }catch(_){}
   }
