@@ -41,7 +41,7 @@ def test_tts_proxy_normalizes_configured_urls_to_canonical_speak_endpoint(monkey
     ]
 
     for configured_url in variants:
-        monkeypatch.setattr(voice, "AIVOICE_BASE_URL", configured_url)
+        monkeypatch.setattr(voice, "SKILL_WORLD_TTS_URL", configured_url)
 
         assert voice._aivoice_speak_url() == "https://aivoice-wmrv.onrender.com/speak"
 
@@ -53,7 +53,7 @@ def test_tts_proxy_posts_json_to_canonical_speak_endpoint(monkeypatch):
         calls.append({"url": url, **kwargs})
         return AudioResponse()
 
-    monkeypatch.setattr(voice, "AIVOICE_BASE_URL", "https://aivoice-wmrv.onrender.com/tts")
+    monkeypatch.setattr(voice, "SKILL_WORLD_TTS_URL", "https://aivoice-wmrv.onrender.com/tts")
     monkeypatch.setattr(voice.requests, "post", fake_post)
 
     response = make_client().post(
@@ -107,3 +107,21 @@ def test_tts_proxy_preserves_upstream_error_status_and_message(monkeypatch):
 
     assert response.status_code == 405
     assert response.json() == {"detail": ErrorResponse.text}
+
+
+def test_tts_proxy_reports_missing_internal_token_contract_mismatch(monkeypatch):
+    class MissingInternalTokenResponse(ErrorResponse):
+        status_code = 401
+        text = '{"error":"missing_internal_token"}'
+        content = text.encode("utf-8")
+
+    def fake_post(url, **kwargs):
+        return MissingInternalTokenResponse()
+
+    monkeypatch.setattr(voice.requests, "post", fake_post)
+
+    response = make_client().post("/api/voice/tts", json={"text": "Testing production mismatch"})
+
+    assert response.status_code == 401
+    assert "missing_internal_token" in response.json()["detail"]
+    assert "does not match the repo truth report" in response.json()["detail"]

@@ -12,6 +12,8 @@ services:
         sync: false
       - key: ENABLE_TEXT_BOOK_ORGANIZER
         value: "true"
+      - key: SKILL_WORLD_TTS_URL
+        value: https://aivoice-wmrv.onrender.com/speak
       - key: AIVOICE_BASE_URL
         value: https://aivoice-wmrv.onrender.com
       - key: OPENVOICE_URL

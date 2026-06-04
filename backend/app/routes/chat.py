@@ -17,33 +17,23 @@ STATIC_AUDIO_DIR = Path(__file__).resolve().parents[1] / "static" / "audio"
 STATIC_AUDIO_DIR.mkdir(parents=True, exist_ok=True)
 
 MUFASA_MODEL = "gpt-4o-mini"
+SKILL_WORLD_TTS_URL = settings.SKILL_WORLD_TTS_URL
 AIVOICE_BASE_URL = settings.AIVOICE_BASE_URL
-AIVOICE_API_KEY = settings.AIVOICE_API_KEY
 OPENAI_API_KEY = settings.OPENAI_API_KEY
 
 client = OpenAI(api_key=OPENAI_API_KEY or "DUMMY_KEY")
 logger = logging.getLogger("mufasa-chat-voice")
 
 
-def aivoice_headers():
-    headers = {"Content-Type": "application/json"}
-    if AIVOICE_API_KEY:
-        headers["X-AIVOICE-KEY"] = AIVOICE_API_KEY
-    return headers
-
-
-def _masked_key(value: str | None) -> str:
-    if not value:
-        return "<missing>"
-    if len(value) <= 8:
-        return "*" * len(value)
-    return f"{value[:4]}...{value[-4:]}"
-
-
 def _tts_error_reason(status_code: int | None, body_snippet: str, err: Exception | None = None) -> str:
     lowered = (body_snippet or "").lower()
     if err is not None:
         return "network unreachable"
+    if status_code == 401 and "missing_internal_token" in lowered:
+        return (
+            "production aiVoice /speak requires an internal token, "
+            "which does not match the repo truth report"
+        )
     if status_code in {401, 403} or "invalid api key" in lowered or "unauthorized" in lowered:
         return "invalid API key"
     if status_code == 404:
@@ -64,8 +54,15 @@ def save_audio_file(audio_bytes, ext="mp3"):
     return filename
 
 
-def cache_audio_filename(text: str, voice: str, ext: str = "mp3") -> Path:
-    digest = hashlib.sha256(f"{voice}|{(text or '').strip()}".encode("utf-8")).hexdigest()
+def cache_audio_filename(
+    text: str,
+    voice: str,
+    ext: str = "mp3",
+    speed: float | None = None,
+    pitch: float | None = None,
+) -> Path:
+    cache_key = f"{voice}|{ext}|{speed}|{pitch}|{(text or '').strip()}"
+    digest = hashlib.sha256(cache_key.encode("utf-8")).hexdigest()
     return STATIC_AUDIO_DIR / f"{digest}.{ext}"
 
 
@@ -101,22 +98,44 @@ def build_audio_url(request: Request | None, audio_file: Path, base_url: str | N
 
 
 
-
 def normalize_tts_text(text: str) -> str:
     normalized = " ".join((text or "").split())
     return normalized.strip()
 
 
-def generate_tts_audio_url(*, request: Request | None, text: str, voice: str = "alloy", base_url: str | None = None, force: bool = False) -> tuple[str, bool]:
+def generate_tts_audio_url(
+    *,
+    request: Request | None,
+    text: str,
+    voice: str = "alloy",
+    format: str = "mp3",
+    speed: float | None = None,
+    pitch: float | None = None,
+    base_url: str | None = None,
+    force: bool = False,
+) -> tuple[str, bool]:
     normalized_text = normalize_tts_text(text)
     if not normalized_text:
         raise HTTPException(status_code=400, detail="No text provided for TTS.")
 
-    cached_file = cache_audio_filename(text=normalized_text, voice=voice)
+    tts_format = (format or "mp3").strip().lower()
+    cached_file = cache_audio_filename(
+        text=normalized_text,
+        voice=voice,
+        ext=tts_format,
+        speed=speed,
+        pitch=pitch,
+    )
     cached = cached_file.exists()
 
     if force or not cached:
-        audio_bytes = request_aivoice_tts(text=normalized_text, voice=voice, format="mp3")
+        audio_bytes = request_aivoice_tts(
+            text=normalized_text,
+            voice=voice,
+            format=tts_format,
+            speed=speed,
+            pitch=pitch,
+        )
         with open(cached_file, "wb") as f:
             f.write(audio_bytes)
         cached = False
@@ -126,15 +145,20 @@ def generate_tts_audio_url(*, request: Request | None, text: str, voice: str = "
 
 
 def _aivoice_base_url() -> str:
-    base_url = AIVOICE_BASE_URL.rstrip("/")
+    configured_url = (SKILL_WORLD_TTS_URL or AIVOICE_BASE_URL).rstrip("/")
     for stale_path in ("/tts", "/speak"):
-        if base_url.endswith(stale_path):
-            return base_url[: -len(stale_path)]
-    return base_url
+        if configured_url.endswith(stale_path):
+            return configured_url[: -len(stale_path)]
+    return configured_url
 
 
 def _aivoice_speak_url() -> str:
-    return f"{_aivoice_base_url()}/speak"
+    configured_url = (SKILL_WORLD_TTS_URL or AIVOICE_BASE_URL).rstrip("/")
+    if configured_url.endswith("/speak"):
+        return configured_url
+    if configured_url.endswith("/tts"):
+        return f"{configured_url[:-len('/tts')]}/speak"
+    return f"{configured_url}/speak"
 
 
 def request_aivoice_tts(
@@ -142,6 +166,8 @@ def request_aivoice_tts(
     text: str,
     voice: str | None = None,
     format: str | None = "mp3",
+    speed: float | None = None,
+    pitch: float | None = None,
     timeout: int = 45,
 ):
     normalized_text = normalize_tts_text(text)
@@ -153,14 +179,18 @@ def request_aivoice_tts(
         payload["voice"] = voice
     if format:
         payload["format"] = format
+    if speed is not None:
+        payload["speed"] = speed
+    if pitch is not None:
+        payload["pitch"] = pitch
     provider_url = _aivoice_speak_url()
     headers = {"Content-Type": "application/json"}
-    logged_headers = dict(headers)
+    auth_header_sent = False
 
     logger.info(
-        "aiVoice request url=%s headers=%s payload_keys=%s text_len=%s",
+        "aiVoice TTS upstream request url=%s method=POST auth_header_sent=%s payload_keys=%s text_len=%s",
         provider_url,
-        logged_headers,
+        auth_header_sent,
         sorted(payload.keys()),
         len(text or ""),
     )
@@ -176,9 +206,9 @@ def request_aivoice_tts(
     except requests.RequestException as exc:
         reason = _tts_error_reason(None, "", exc)
         logger.error(
-            "aiVoice network error url=%s headers=%s reason=%s error=%s",
+            "aiVoice TTS upstream network error url=%s method=POST auth_header_sent=%s reason=%s error=%s",
             provider_url,
-            logged_headers,
+            auth_header_sent,
             reason,
             exc,
         )
@@ -188,7 +218,7 @@ def request_aivoice_tts(
                 "error": "TTS provider request failed",
                 "reason": reason,
                 "provider_url": provider_url,
-                "headers_sent": logged_headers,
+                "auth_header_sent": auth_header_sent,
                 "provider_status": None,
                 "provider_body_snippet": str(exc)[:200],
             },
@@ -198,10 +228,11 @@ def request_aivoice_tts(
         detail = response.text[:200]
         reason = _tts_error_reason(response.status_code, detail)
         logger.error(
-            "aiVoice /speak rejected url=%s headers=%s status=%s reason=%s body=%s",
+            "aiVoice TTS upstream response url=%s method=POST auth_header_sent=%s status=%s content_type=%s reason=%s body=%s",
             provider_url,
-            logged_headers,
+            auth_header_sent,
             response.status_code,
+            response.headers.get("content-type"),
             reason,
             detail,
         )
@@ -211,7 +242,7 @@ def request_aivoice_tts(
                 "error": "TTS provider rejected request",
                 "reason": reason,
                 "provider_url": provider_url,
-                "headers_sent": logged_headers,
+                "auth_header_sent": auth_header_sent,
                 "provider_status": response.status_code,
                 "provider_body_snippet": detail,
                 "request_payload_shape": sorted(payload.keys()),
@@ -219,8 +250,9 @@ def request_aivoice_tts(
         )
 
     logger.info(
-        "aiVoice /speak success url=%s status=%s content_type=%s",
+        "aiVoice TTS upstream response url=%s method=POST auth_header_sent=%s status=%s content_type=%s",
         provider_url,
+        auth_header_sent,
         response.status_code,
         response.headers.get("content-type"),
     )
@@ -286,9 +318,19 @@ async def generate_openai_response(payload: dict, request: Request):
 async def text_to_speech(payload: dict, request: Request):
     text = payload.get("text", "")
     voice = payload.get("voice_model") or payload.get("voice") or "alloy"
+    tts_format = payload.get("format") or "mp3"
+    speed = payload.get("speed")
+    pitch = payload.get("pitch")
 
     started = time.perf_counter()
-    audio_url, cached = generate_tts_audio_url(request=request, text=text, voice=voice)
+    audio_url, cached = generate_tts_audio_url(
+        request=request,
+        text=text,
+        voice=voice,
+        format=tts_format,
+        speed=speed,
+        pitch=pitch,
+    )
     elapsed_ms = round((time.perf_counter() - started) * 1000, 2)
     return {"audio_url": audio_url, "voice": voice, "cached": cached, "latency_ms": elapsed_ms}
 

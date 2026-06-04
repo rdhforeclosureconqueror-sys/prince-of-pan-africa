@@ -16,7 +16,9 @@ Coordinates OpenAI GPT and OpenVoice APIs for text, speech, and structured porta
 
 ## Environment Variables
 - `OPENAI_API_KEY`
-- `OPENVOICE_URL` (default: https://ffmpeg-9xhs.onrender.com)
+- `SKILL_WORLD_TTS_URL` (canonical public TTS endpoint: https://aivoice-wmrv.onrender.com/speak)
+- `SKILL_WORLD_TTS_TOKEN` (not required for public `/speak`; reserved only if production aiVoice diverges from the repo contract)
+- `OPENVOICE_URL` (legacy fallback; default: https://ffmpeg-9xhs.onrender.com)
 - `ALLOWED_ORIGINS` (comma-separated list of frontend URLs for CORS)
 - `SESSION_SECRET` (required outside local/test environments)
 - `SESSION_COOKIE_SAMESITE` (defaults to `lax`; production same-site auth uses `lax`)
