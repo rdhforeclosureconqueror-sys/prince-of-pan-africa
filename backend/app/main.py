@@ -15,7 +15,7 @@ from app.database import (
     is_production_like_environment,
     is_unsafe_sqlite_fallback,
 )
-from app.routes import admin, assessment, audio, audiobook, auth, chat, member, portal, system, tts, voice
+from app.routes import admin, assessment, audio, audiobook, auth, chat, member, portal, skill_world, system, tts, voice
 from app.services.admin_seed import seed_admin
 from app.authz import seed_rbac_defaults
 from app.session import SessionValidationError, get_session_secret
@@ -170,9 +170,18 @@ STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 os.makedirs(STATIC_DIR, exist_ok=True)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
+GENERATED_SKILL_WORLD_AUDIO_DIR = os.path.join(os.path.dirname(__file__), "generated-audio", "skill-world")
+os.makedirs(GENERATED_SKILL_WORLD_AUDIO_DIR, exist_ok=True)
+app.mount(
+    "/generated-audio/skill-world",
+    StaticFiles(directory=GENERATED_SKILL_WORLD_AUDIO_DIR),
+    name="generated-skill-world-audio",
+)
+
 app.include_router(chat.router, prefix="/chat", tags=["Chat"])
 app.include_router(portal.router, prefix="/portal", tags=["Portals"])
 app.include_router(voice.router, prefix="/api/voice", tags=["Voice"])
+app.include_router(skill_world.router, tags=["Skill World Audio"])
 app.include_router(system.router)
 app.include_router(auth.router)
 app.include_router(tts.router)

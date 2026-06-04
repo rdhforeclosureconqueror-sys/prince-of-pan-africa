@@ -3,7 +3,7 @@ import { API_BASE_URL } from "../config";
 const API_BASE = API_BASE_URL;
 
 export async function requestAiVoice(text, voiceModel = "alloy") {
-  const res = await fetch(`${API_BASE}/chat/tts`, {
+  const res = await fetch(`${API_BASE}/api/skill-world/audio`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text, voice_model: voiceModel }),

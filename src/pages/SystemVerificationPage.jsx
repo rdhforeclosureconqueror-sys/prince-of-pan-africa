@@ -7,7 +7,7 @@ const CATEGORY_FIXES = {
   member: "Ensure users/member_profiles/activity_logs contain records and /member routes are registered.",
   leadership: "Verify assessment submit/results/analytics routes and DB write permissions.",
   admin_ai: "Ensure /admin/ai endpoints are mounted and returning JSON.",
-  tts: "Confirm /chat/tts is registered and AIVOICE/OpenAI env vars are set.",
+  tts: "Confirm /api/skill-world/audio and fallback /chat/tts are registered and AIVOICE/OpenAI env vars are set.",
   fitness: "Verify MufasaCoach throttling constants and anti-spam logic remain enabled.",
   env: "Populate missing env vars in backend and frontend deployment settings.",
   cors_routes: "Update ALLOWED_ORIGINS/CORS_ALLOWED_ORIGINS and verify required routes are mounted.",
