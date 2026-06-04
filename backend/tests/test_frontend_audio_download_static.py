@@ -32,3 +32,22 @@ def test_study_page_download_errors_are_user_specific():
     assert 'Audio download is not authorized. Please sign in with access to this audiobook.' in source
     assert 'Audio file is missing from storage. Please regenerate this chapter.' in source
     assert 'Audio generation is not complete for this chapter yet.' in source
+
+
+def test_study_page_falls_back_to_skill_world_tts_when_saved_audio_missing():
+    source = Path('src/pages/StudyPage.jsx').read_text()
+
+    assert 'api(`/api/audio/book/${selectedBook.id}/chapter/${activeChapter.id}`' in source
+    assert 'isMissingSavedChapterAudioError(err)' in source
+    assert 'return await generateSkillWorldChapterAudio()' in source
+    assert 'api("/api/skill-world/audio", {' in source
+    assert 'text: chapterText' in source
+    assert 'voice_model: chapterVoice' in source
+    assert 'voice: chapterVoice' in source
+    assert 'format: "mp3"' in source
+    assert 'speed: playbackRate' in source
+    assert 'pitch: 1' in source
+    assert 'generatedAudioUrlFromResponse(response)' in source
+    assert 'logChapterAudioFlow("saved chapter audio flow"' in source
+    assert 'logChapterAudioFlow("generated Skill World TTS flow"' in source
+    assert 'Press Play to generate Skill World voice.' in source
