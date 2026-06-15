@@ -115,6 +115,18 @@ def _run_sqlite_compat_migrations() -> None:
             if subscription_cols and column not in subscription_cols:
                 conn.execute(text(f"ALTER TABLE subscriptions ADD COLUMN {column} {column_type}"))
 
+        webhook_event_cols = [row[1] for row in conn.execute(text("PRAGMA table_info(stripe_webhook_events)"))]
+        if not webhook_event_cols:
+            conn.execute(text(
+                "CREATE TABLE IF NOT EXISTS stripe_webhook_events ("
+                "id INTEGER PRIMARY KEY, "
+                "stripe_event_id TEXT NOT NULL UNIQUE, "
+                "event_type TEXT NOT NULL, "
+                "created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP"
+                ")"
+            ))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_stripe_webhook_events_stripe_event_id ON stripe_webhook_events (stripe_event_id)"))
+
         audio_asset_cols = [row[1] for row in conn.execute(text("PRAGMA table_info(audio_assets)"))]
         audio_asset_compat_columns = {
             "audiobook_id": "INTEGER",
@@ -224,6 +236,16 @@ def _run_generic_compat_migrations() -> None:
         }
         for column, column_type in subscription_columns.items():
             conn.execute(text(f"ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS {column} {column_type}"))
+
+        conn.execute(text(
+            "CREATE TABLE IF NOT EXISTS stripe_webhook_events ("
+            "id SERIAL PRIMARY KEY, "
+            "stripe_event_id TEXT NOT NULL UNIQUE, "
+            "event_type TEXT NOT NULL, "
+            "created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
+            ")"
+        ))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_stripe_webhook_events_stripe_event_id ON stripe_webhook_events (stripe_event_id)"))
 
         audio_asset_columns = {
             "audiobook_id": "INTEGER",
