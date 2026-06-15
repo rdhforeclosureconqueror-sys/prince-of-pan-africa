@@ -184,15 +184,21 @@ def auth_join(payload: AuthPayload, response: Response, db: Session = Depends(ge
     if existing:
         raise HTTPException(status_code=409, detail="Email already exists")
 
-    user = User(email=normalized_email, password_hash=hash_password(payload.password), role="member")
+    user = User(email=normalized_email, password_hash=hash_password(payload.password), role="community_member")
     db.add(user)
     db.flush()
 
     db.add(
         MemberProfile(
             user_id=user.id,
-            role="member",
-            attributes={"status": "active", "onboarding": "joined"},
+            role="community_member",
+            attributes={
+                "membership_status": "active",
+                "membership_type": "community_member",
+                "orientation_status": "not_started",
+                "discord_status": "not_connected",
+                "onboarding": "joined",
+            },
         )
     )
     db.commit()

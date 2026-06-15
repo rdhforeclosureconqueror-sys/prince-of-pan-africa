@@ -17,6 +17,7 @@ import AuthDebugPage from "./pages/AuthDebugPage";
 import PilotDeferredPage from "./pages/PilotDeferredPage";
 import StudyPage from "./pages/StudyPage";
 import BrainTraining from "./pages/BrainTraining";
+import { BuilderMembershipPage, CommunityMembershipPage, MembershipOverviewPage } from "./pages/MembershipPages";
 import { getBackgroundForPath } from "./utils/backgroundSystem";
 import { API_DEBUG, AUTH_DEBUG, ENABLE_TEXT_BOOK_ORGANIZER } from "./config";
 import { api } from "./api/api";
@@ -108,7 +109,7 @@ function OrganizerRoute({ authChecked, user, rbac, canAccessOrganizer }) {
   return (
     <OrganizerAccessNotice
       title="Text Book Organizer access required"
-      detail="Upgrade to a subscriber account or contact support if your account should include book_organizer:create_self."
+      detail="Upgrade to Builder Membership or contact support if your account should include book_organizer:create_self."
     />
   );
 }
@@ -146,7 +147,9 @@ function AppRoutes({ user, rbac, isAdmin, canAccessOrganizer, authChecked, refre
         <Route path="/study" element={<StudyPage />} />
         <Route path="/brain-training" element={<BrainTraining />} />
         <Route path="/pagt" element={<PilotDeferredPage title="Pan-Africa’s Got Talent is deferred for pilot" />} />
-        <Route path="/membership" element={<PilotDeferredPage title="Membership plan is deferred for pilot" />} />
+        <Route path="/membership" element={<MembershipOverviewPage />} />
+        <Route path="/membership/community" element={<CommunityMembershipPage />} />
+        <Route path="/membership/builder" element={<BuilderMembershipPage />} />
         <Route path="/leadership" element={<LeadershipAssessmentPage />} />
         <Route path="/results" element={<LeadershipResultsPage />} />
         <Route path="/ops/verification" element={<SystemVerificationPage />} />

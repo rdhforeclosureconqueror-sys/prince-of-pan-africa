@@ -6,6 +6,17 @@ import "../styles/studyPage.css";
 
 const SPEED_OPTIONS = [0.75, 1, 1.25, 1.5, 2];
 const ACCESS_OPTIONS = ["free", "member", "subscriber", "purchased"];
+const ACCESS_LABELS = {
+  free: "Free",
+  member: "Community Member",
+  subscriber: "Builder Member",
+  builder_member: "Builder Member",
+  purchased: "Purchased",
+};
+
+function formatAccessLevel(accessLevel) {
+  return ACCESS_LABELS[accessLevel] || accessLevel || "Unknown";
+}
 
 function splitIntoSentences(text = "") {
   return (
@@ -753,7 +764,7 @@ export default function StudyPage() {
                 <select value={accessLevel} onChange={(e) => setAccessLevel(e.target.value)}>
                   {ACCESS_OPTIONS.map((option) => (
                     <option value={option} key={option}>
-                      Access: {option}
+                      Access: {formatAccessLevel(option)}
                     </option>
                   ))}
                 </select>
@@ -790,7 +801,7 @@ export default function StudyPage() {
                     <button className={selectedBookId === book.id ? "is-active" : ""} onClick={() => setSelectedBookId(book.id)}>
                       <strong>{book.title}</strong> — {book.author}
                       <span>
-                        {book.status} • {book.access_level} • {book.audio_chapter_count}/{book.chapter_count} chapters voiced
+                        {book.status} • {formatAccessLevel(book.access_level)} • {book.audio_chapter_count}/{book.chapter_count} chapters voiced
                       </span>
                     </button>
                   </li>
@@ -806,7 +817,7 @@ export default function StudyPage() {
               <div>
                 <h2>{selectedBook.title}</h2>
                 <p>
-                  {selectedBook.author} • {selectedBook.status} • access: {selectedBook.access_level} • {selectedBook.segmentation_strategy}
+                  {selectedBook.author} • {selectedBook.status} • access: {formatAccessLevel(selectedBook.access_level)} • {selectedBook.segmentation_strategy}
                 </p>
                 {generationProgress && (
                   <p>

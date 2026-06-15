@@ -32,6 +32,18 @@ const PHASES = [
   },
 ];
 
+const ACCESS_LABELS = {
+  free: "Free",
+  member: "Community Member",
+  subscriber: "Builder Member",
+  builder_member: "Builder Member",
+  purchased: "Purchased",
+};
+
+function formatAccessLevel(accessLevel) {
+  return ACCESS_LABELS[accessLevel] || accessLevel || "Unknown";
+}
+
 export default function LibraryDecolonize({ canAccessOrganizer = false, authChecked = false, user = null }) {
   const [items, setItems] = useState([]);
 
@@ -67,7 +79,7 @@ export default function LibraryDecolonize({ canAccessOrganizer = false, authChec
             </Link>
           ) : null}
           {ENABLE_TEXT_BOOK_ORGANIZER && authChecked && user && !canAccessOrganizer ? (
-            <span className="library-access-note">Text Book Organizer requires subscriber or admin access.</span>
+            <span className="library-access-note">Text Book Organizer requires Builder Member or admin access.</span>
           ) : null}
         </div>
 
@@ -81,7 +93,7 @@ export default function LibraryDecolonize({ canAccessOrganizer = false, authChec
                 <p>{item.author}</p>
                 <div className="saved-meta">
                   <span>{item.status}</span>
-                  <span>{item.access_level}</span>
+                  <span>{formatAccessLevel(item.access_level)}</span>
                   <span>{item.audio_chapter_count}/{item.chapter_count} voiced</span>
                 </div>
                 <div className="saved-actions">
