@@ -269,6 +269,9 @@ export function CommunityMembershipPage() {
           <CheckoutButton plan="community" className="membership-btn membership-btn--gold">
             Join as a Community Member
           </CheckoutButton>
+          <Link to="/community/onboarding" className="membership-btn membership-btn--green">
+            Preview Community Onboarding
+          </Link>
           <Link to="/membership/builder" className="membership-btn membership-btn--ghost">
             Learn About Builder Membership
           </Link>

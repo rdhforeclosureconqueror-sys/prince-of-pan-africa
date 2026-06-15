@@ -109,6 +109,8 @@ export default function MemberDashboard() {
   const summary = overview?.summary_stats || overview || {};
   const membership = overview?.membership || {};
   const builder = membership?.builder || {};
+  const community = membership?.community || {};
+  const communityOnboarding = community?.onboarding || {};
   const communityUpdates = Array.isArray(membership?.community_updates) ? membership.community_updates : [];
   const testingOpportunities = Array.isArray(builder?.testing_opportunities) ? builder.testing_opportunities : [];
   const contributionHistory = Array.isArray(builder?.contribution_history) ? builder.contribution_history : [];
@@ -204,6 +206,10 @@ export default function MemberDashboard() {
           {recentActivity.length === 0 ? <ul className="activity-feed"><li><span className="highlight">Member wins</span><div>Share your first win to activate the feed.</div></li><li><span className="highlight">Business spotlights</span><div>Post a recommendation from today’s challenge.</div></li><li><span className="highlight">Builder announcements</span><div>Builder updates will appear here as the Discord bridge expands.</div></li><li><span className="highlight">New books & audiobooks</span><div>Library additions will be routed into this mission feed.</div></li></ul> : <ul className="activity-feed">{recentActivity.map((item, idx) => <li key={item.id || idx}><span className="highlight">{item.title || item.type}</span><div>{item.detail || item.description}</div></li>)}</ul>}
         </section>
       </main>
+
+      {membership?.type === "community_member" && !community?.community_onboarding_completed ? <section className="cosmic-section builder-dashboard-section"><h2>🌱 Community Member First 5 Minutes</h2><p>Start with a simple path: choose interests, choose a first learning path, prepare for Discord, and complete one daily mission.</p><Link to="/community/onboarding" className="member-action-btn member-action-btn--secondary">Start Community Onboarding</Link></section> : null}
+
+      {community?.community_onboarding_completed ? <section className="cosmic-section builder-dashboard-section"><h2>🌱 Community Onboarding</h2><div className="builder-dashboard-grid"><article><h3>First Start Completed</h3><p><strong>Learning path:</strong> {communityOnboarding.selected_learning_path || "Not selected"}</p><p><strong>First daily mission:</strong> {community?.first_daily_mission_completed ? "Completed" : "Not completed"}</p></article><article><h3>Learning Interests</h3><p>{Array.isArray(communityOnboarding.selected_interests) && communityOnboarding.selected_interests.length ? communityOnboarding.selected_interests.join(" · ") : "No interests selected yet."}</p></article></div></section> : null}
 
       {communityUpdates.length > 0 ? <section className="cosmic-section"><h2>📡 Command Updates</h2><ul className="activity-feed">{communityUpdates.map((update) => <li key={update}>{update}</li>)}</ul></section> : null}
 

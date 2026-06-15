@@ -20,6 +20,7 @@ import BrainTraining from "./pages/BrainTraining";
 import { BuilderMembershipPage, CommunityMembershipPage, MembershipOverviewPage } from "./pages/MembershipPages";
 import { BillingCancelPage, BillingSuccessPage } from "./pages/BillingStatusPages";
 import BuilderOnboardingPage from "./pages/BuilderOnboardingPage";
+import CommunityOnboardingPage from "./pages/CommunityOnboardingPage";
 import { getBackgroundForPath } from "./utils/backgroundSystem";
 import { API_DEBUG, AUTH_DEBUG, ENABLE_TEXT_BOOK_ORGANIZER } from "./config";
 import { api } from "./api/api";
@@ -154,6 +155,7 @@ function AppRoutes({ user, rbac, isAdmin, canAccessOrganizer, authChecked, refre
         <Route path="/membership/builder" element={<BuilderMembershipPage />} />
         <Route path="/billing/success" element={<BillingSuccessPage />} />
         <Route path="/builder/onboarding" element={<BuilderOnboardingPage />} />
+        <Route path="/community/onboarding" element={<CommunityOnboardingPage />} />
         <Route path="/billing/cancel" element={<BillingCancelPage />} />
         <Route path="/leadership" element={<LeadershipAssessmentPage />} />
         <Route path="/results" element={<LeadershipResultsPage />} />
