@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "verify-system": "python backend/verification/run_full_verification.py"
+    "verify-system": "python backend/verification/run_full_verification.py",
+    "validate:daily-spotlights": "node scripts/validateDailyHistoricalSpotlights.mjs"
   },
   "dependencies": {
     "axios": "^1.6.2",
