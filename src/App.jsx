@@ -18,6 +18,7 @@ import PilotDeferredPage from "./pages/PilotDeferredPage";
 import StudyPage from "./pages/StudyPage";
 import BrainTraining from "./pages/BrainTraining";
 import { BuilderMembershipPage, CommunityMembershipPage, MembershipOverviewPage } from "./pages/MembershipPages";
+import { BillingCancelPage, BillingSuccessPage } from "./pages/BillingStatusPages";
 import { getBackgroundForPath } from "./utils/backgroundSystem";
 import { API_DEBUG, AUTH_DEBUG, ENABLE_TEXT_BOOK_ORGANIZER } from "./config";
 import { api } from "./api/api";
@@ -150,6 +151,8 @@ function AppRoutes({ user, rbac, isAdmin, canAccessOrganizer, authChecked, refre
         <Route path="/membership" element={<MembershipOverviewPage />} />
         <Route path="/membership/community" element={<CommunityMembershipPage />} />
         <Route path="/membership/builder" element={<BuilderMembershipPage />} />
+        <Route path="/billing/success" element={<BillingSuccessPage />} />
+        <Route path="/billing/cancel" element={<BillingCancelPage />} />
         <Route path="/leadership" element={<LeadershipAssessmentPage />} />
         <Route path="/results" element={<LeadershipResultsPage />} />
         <Route path="/ops/verification" element={<SystemVerificationPage />} />

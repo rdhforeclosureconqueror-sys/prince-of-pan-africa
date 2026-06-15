@@ -10,3 +10,5 @@ pypdf==5.4.0
 
 SQLAlchemy==2.0.36
 psycopg[binary]==3.2.3
+
+stripe==11.1.1

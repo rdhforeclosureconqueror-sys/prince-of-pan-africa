@@ -98,6 +98,23 @@ def _run_sqlite_compat_migrations() -> None:
         if progress_cols and "completed_chapters" not in progress_cols:
             conn.execute(text("ALTER TABLE audiobook_progress ADD COLUMN completed_chapters TEXT NOT NULL DEFAULT '[]'"))
 
+        subscription_cols = [row[1] for row in conn.execute(text("PRAGMA table_info(subscriptions)"))]
+        subscription_compat_columns = {
+            "user_id": "INTEGER",
+            "stripe_customer_id": "TEXT",
+            "stripe_subscription_id": "TEXT",
+            "stripe_price_id": "TEXT",
+            "tier": "TEXT NOT NULL DEFAULT 'community_member'",
+            "status": "TEXT NOT NULL DEFAULT 'pending'",
+            "current_period_end": "DATETIME",
+            "raw_metadata": "JSON NOT NULL DEFAULT '{}'",
+            "created_at": "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP",
+            "updated_at": "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP",
+        }
+        for column, column_type in subscription_compat_columns.items():
+            if subscription_cols and column not in subscription_cols:
+                conn.execute(text(f"ALTER TABLE subscriptions ADD COLUMN {column} {column_type}"))
+
         audio_asset_cols = [row[1] for row in conn.execute(text("PRAGMA table_info(audio_assets)"))]
         audio_asset_compat_columns = {
             "audiobook_id": "INTEGER",
@@ -192,6 +209,21 @@ def _run_generic_compat_migrations() -> None:
         dialect = engine.dialect.name
         if dialect != "postgresql":
             return
+
+        subscription_columns = {
+            "user_id": "INTEGER",
+            "stripe_customer_id": "TEXT",
+            "stripe_subscription_id": "TEXT",
+            "stripe_price_id": "TEXT",
+            "tier": "TEXT NOT NULL DEFAULT 'community_member'",
+            "status": "TEXT NOT NULL DEFAULT 'pending'",
+            "current_period_end": "TIMESTAMP",
+            "raw_metadata": "JSONB NOT NULL DEFAULT '{}'::jsonb",
+            "created_at": "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP",
+            "updated_at": "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP",
+        }
+        for column, column_type in subscription_columns.items():
+            conn.execute(text(f"ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS {column} {column_type}"))
 
         audio_asset_columns = {
             "audiobook_id": "INTEGER",

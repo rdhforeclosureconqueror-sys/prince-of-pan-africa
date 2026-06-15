@@ -22,6 +22,11 @@ class Settings:
     AIVOICE_API_KEY: str = os.getenv("AIVOICE_API_KEY", "")
     BASE_URL: str = os.getenv("BASE_URL", "https://mufasa-knowledge-bank.onrender.com")
     ENABLE_TEXT_BOOK_ORGANIZER: bool = os.getenv("ENABLE_TEXT_BOOK_ORGANIZER", "false").strip().lower() in {"1", "true", "yes", "on"}
+    STRIPE_SECRET_KEY: str = os.getenv("STRIPE_SECRET_KEY", "")
+    STRIPE_WEBHOOK_SECRET: str = os.getenv("STRIPE_WEBHOOK_SECRET", "")
+    STRIPE_COMMUNITY_PRICE_ID: str = os.getenv("STRIPE_COMMUNITY_PRICE_ID", "")
+    STRIPE_BUILDER_PRICE_ID: str = os.getenv("STRIPE_BUILDER_PRICE_ID", "")
+    ENABLE_STRIPE_CHECKOUT: bool = os.getenv("ENABLE_STRIPE_CHECKOUT", "false").strip().lower() in {"1", "true", "yes", "on"}
 
 
 settings = Settings()
