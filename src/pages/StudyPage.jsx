@@ -123,6 +123,7 @@ export default function StudyPage() {
   const [accessLevel, setAccessLevel] = useState("free");
   const [text, setText] = useState("");
   const [file, setFile] = useState(null);
+  const [coverFile, setCoverFile] = useState(null);
   const [library, setLibrary] = useState([]);
   const [selectedBookId, setSelectedBookId] = useState(null);
   const [selectedBook, setSelectedBook] = useState(null);
@@ -343,6 +344,7 @@ export default function StudyPage() {
         form.append("author", author.trim() || "Unknown");
         form.append("voice", voice);
         form.append("file", file);
+        if (coverFile) form.append("cover_file", coverFile);
         form.append("generate_audio", generateAudio ? "true" : "false");
         form.append("access_level", accessLevel);
         const res = await fetch(`${API_BASE_URL}/audiobooks/upload`, {
@@ -353,6 +355,25 @@ export default function StudyPage() {
         const data = await res.json();
         if (!res.ok) {
           throw new Error(data?.detail || "Upload failed.");
+        }
+        response = data;
+      } else if (coverFile) {
+        const form = new FormData();
+        form.append("title", title.trim());
+        form.append("author", author.trim() || "Unknown");
+        form.append("text", text);
+        form.append("voice", voice);
+        form.append("cover_file", coverFile);
+        form.append("generate_audio", generateAudio ? "true" : "false");
+        form.append("access_level", accessLevel);
+        const res = await fetch(`${API_BASE_URL}/audiobooks/create`, {
+          method: "POST",
+          credentials: "include",
+          body: form,
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data?.detail || "Cover upload failed.");
         }
         response = data;
       } else {
@@ -784,8 +805,15 @@ export default function StudyPage() {
                 </select>
               </div>
               <textarea rows={8} value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste text here (or upload .txt/.pdf)." />
-              <input type="file" accept=".txt,.pdf" onChange={(e) => setFile(e.target.files?.[0] || null)} />
-              <p className="study-status">Supported upload types: .txt, .pdf</p>
+              <label className="study-upload-label">
+                Manuscript file
+                <input type="file" accept=".txt,.pdf" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+              </label>
+              <label className="study-upload-label">
+                Cover image
+                <input type="file" accept=".jpg,.jpeg,.png,.webp,.svg,image/jpeg,image/png,image/webp,image/svg+xml" onChange={(e) => setCoverFile(e.target.files?.[0] || null)} />
+              </label>
+              <p className="study-status">Supported upload types: manuscripts .txt/.pdf; covers .jpg, .jpeg, .png, .webp, and safe .svg.</p>
               <div className="generator-cta-row">
                 <button onClick={() => submitGeneration({ generateAudio: false })} disabled={isGenerating || (!text.trim() && !file)}>
                   {isGenerating ? "Saving..." : "Save Draft Book"}

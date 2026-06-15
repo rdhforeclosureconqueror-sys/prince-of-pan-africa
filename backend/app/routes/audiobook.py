@@ -1,4 +1,5 @@
 import hashlib
+import mimetypes
 import html
 import io
 import logging
@@ -7,6 +8,8 @@ import re
 import threading
 import time
 import zipfile
+from pathlib import Path
+from uuid import uuid4
 from dataclasses import dataclass, field
 from datetime import datetime
 from xml.sax.saxutils import escape as xml_escape
@@ -34,6 +37,66 @@ MAX_CONCURRENT_GENERATIONS = 2
 MAX_GENERATION_JOB_SECONDS = 900
 ALLOWED_ACCESS_LEVELS = {"free", "member", "subscriber", "purchased"}
 
+DEFAULT_COVER_IMAGE_PATH = "/book-covers/library-placeholder.svg"
+MAX_COVER_UPLOAD_BYTES = 5 * 1024 * 1024
+ALLOWED_COVER_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".svg"}
+ALLOWED_COVER_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp", "image/svg+xml"}
+BOOK_COVER_STORAGE_DIR = Path(settings.BOOK_COVER_STORAGE_DIR).expanduser()
+
+
+def _cover_storage_dir() -> Path:
+    BOOK_COVER_STORAGE_DIR.mkdir(parents=True, exist_ok=True)
+    return BOOK_COVER_STORAGE_DIR
+
+
+def _is_safe_svg(payload: bytes) -> bool:
+    head = payload[:4096].decode("utf-8", errors="ignore").lower()
+    if "<svg" not in head:
+        return False
+    blocked = ("<script", "javascript:", "<foreignobject", " onload=", " onerror=", " onclick=", " data:text/html")
+    return not any(item in head for item in blocked)
+
+
+def _validate_cover_upload(file: UploadFile, payload: bytes) -> str:
+    original_name = file.filename or "cover"
+    suffix = Path(original_name).suffix.lower()
+    content_type = (file.content_type or mimetypes.guess_type(original_name)[0] or "").lower()
+    if suffix not in ALLOWED_COVER_EXTENSIONS or content_type not in ALLOWED_COVER_CONTENT_TYPES:
+        raise HTTPException(status_code=415, detail="Cover image must be a JPG, JPEG, PNG, WEBP, or safe SVG file.")
+    if not payload:
+        raise HTTPException(status_code=422, detail="Cover image cannot be empty.")
+    if len(payload) > MAX_COVER_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail=f"Cover image exceeds limit ({MAX_COVER_UPLOAD_BYTES} bytes).")
+
+    signatures = {
+        ".jpg": payload.startswith(b"\xff\xd8\xff"),
+        ".jpeg": payload.startswith(b"\xff\xd8\xff"),
+        ".png": payload.startswith(b"\x89PNG\r\n\x1a\n"),
+        ".webp": payload.startswith(b"RIFF") and payload[8:12] == b"WEBP",
+        ".svg": _is_safe_svg(payload),
+    }
+    if not signatures.get(suffix, False):
+        raise HTTPException(status_code=415, detail="Cover image content does not match an allowed image type.")
+    return suffix
+
+
+async def _save_cover_upload(file: UploadFile | None) -> str:
+    if not file or not file.filename:
+        return DEFAULT_COVER_IMAGE_PATH
+    payload = await file.read()
+    suffix = _validate_cover_upload(file, payload)
+    storage_dir = _cover_storage_dir()
+    for _ in range(10):
+        filename = f"{datetime.utcnow().strftime('%Y%m%d%H%M%S')}-{uuid4().hex}{suffix}"
+        destination = storage_dir / filename
+        try:
+            with destination.open("xb") as handle:
+                handle.write(payload)
+            return f"/static/book-covers/{filename}"
+        except FileExistsError:
+            continue
+    raise HTTPException(status_code=500, detail="Could not reserve a unique cover filename.")
+
 _generation_lock = threading.Lock()
 _generation_counts: dict[int, int] = {}
 _book_generation_threads: dict[int, threading.Thread] = {}
@@ -46,7 +109,7 @@ class AudiobookCreateRequest(BaseModel):
     title: str = Field(min_length=1, max_length=255)
     author: str = Field(default="Unknown", max_length=255)
     description: str = Field(default="", max_length=2000)
-    cover_image_path: str = Field(default="/book-covers/library-placeholder.svg", max_length=500)
+    cover_image_path: str = Field(default=DEFAULT_COVER_IMAGE_PATH, max_length=500)
     text: str = Field(min_length=1)
     voice: str = Field(default="alloy", max_length=64)
     generate_audio: bool = True
@@ -723,8 +786,8 @@ def _serialize_audiobook(book: Audiobook, include_text: bool = False) -> dict:
         "title": book.title,
         "author": book.author,
         "description": book.description,
-        "cover_image_path": book.cover_image_path or "/book-covers/library-placeholder.svg",
-        "cover_asset_key": book.cover_image_path or "/book-covers/library-placeholder.svg",
+        "cover_image_path": book.cover_image_path or DEFAULT_COVER_IMAGE_PATH,
+        "cover_asset_key": book.cover_image_path or DEFAULT_COVER_IMAGE_PATH,
         "voice": book.voice,
         "source_type": book.source_type,
         "access_level": book.access_level,
@@ -973,7 +1036,7 @@ def _start_background_generation(*, audiobook_id: int, user_id: int, base_url: s
 
 def _create_or_reuse_audiobook(
     *, request: Request, db: Session, user: User, title: str, author: str, text: str, voice: str, source_type: str,
-    generate_audio: bool, access_level: str, description: str = "", cover_image_path: str = "/book-covers/library-placeholder.svg",
+    generate_audio: bool, access_level: str, description: str = "", cover_image_path: str = DEFAULT_COVER_IMAGE_PATH,
 ) -> dict:
     ingest_started = time.monotonic()
     normalized_text = normalize_tts_text(text)
@@ -986,9 +1049,17 @@ def _create_or_reuse_audiobook(
     content_hash = _hash_text(f"{title.strip()}|{author.strip()}|{normalized_text}")
     existing = db.query(Audiobook).filter(Audiobook.user_id == user.id, Audiobook.content_hash == content_hash, Audiobook.voice == voice).first()
     if existing:
+        should_commit = False
+        normalized_cover_path = (cover_image_path or DEFAULT_COVER_IMAGE_PATH).strip()
+        if normalized_cover_path != DEFAULT_COVER_IMAGE_PATH and existing.cover_image_path != normalized_cover_path:
+            existing.cover_image_path = normalized_cover_path
+            should_commit = True
         if generate_audio and existing.status in {"draft", "queued", "failed", "pending", "partially_complete"}:
             existing.status = "pending"
+            should_commit = True
+        if should_commit:
             db.commit()
+        if generate_audio and existing.status in {"pending", "partially_complete"}:
             _start_background_generation(audiobook_id=existing.id, user_id=user.id, base_url=str(request.base_url))
             db.refresh(existing)
         return {"cached": True, "audiobook": _serialize_audiobook(existing)}
@@ -1015,7 +1086,7 @@ def _create_or_reuse_audiobook(
         source_type=f"segmented:{source_type}:{segmentation_strategy}",
         source_text=normalized_text,
         description=(description or "").strip() or normalized_text[:280],
-        cover_image_path=(cover_image_path or "/book-covers/library-placeholder.svg").strip(),
+        cover_image_path=(cover_image_path or DEFAULT_COVER_IMAGE_PATH).strip(),
         content_hash=content_hash,
         voice=voice,
         access_level=normalized_access,
@@ -1058,8 +1129,26 @@ def _create_or_reuse_audiobook(
 
 
 @router.post("/create")
-def create_audiobook(payload: AudiobookCreateRequest, request: Request, db: Session = Depends(get_db)):
+async def create_audiobook(request: Request, db: Session = Depends(get_db)):
     user, used_guest = _resolve_audiobook_user(request, db)
+    content_type = (request.headers.get("content-type") or "").lower()
+
+    if content_type.startswith("multipart/form-data"):
+        form = await request.form()
+        cover_image_path = await _save_cover_upload(form.get("cover_file"))
+        payload = AudiobookCreateRequest(
+            title=str(form.get("title") or ""),
+            author=str(form.get("author") or "Unknown"),
+            description=str(form.get("description") or ""),
+            cover_image_path=cover_image_path,
+            text=str(form.get("text") or ""),
+            voice=str(form.get("voice") or "alloy"),
+            generate_audio=str(form.get("generate_audio") or "true").lower() in {"1", "true", "yes", "on"},
+            access_level=str(form.get("access_level") or "free"),
+        )
+    else:
+        payload = AudiobookCreateRequest.model_validate(await request.json())
+
     result = _create_or_reuse_audiobook(
         request=request,
         db=db,
@@ -1087,6 +1176,7 @@ async def upload_audiobook(
     access_level: str = Form("free"),
     generate_audio: bool = Form(True),
     file: UploadFile = File(...),
+    cover_file: UploadFile | None = File(None),
     db: Session = Depends(get_db),
 ):
     user, used_guest = _resolve_audiobook_user(request, db)
@@ -1106,6 +1196,8 @@ async def upload_audiobook(
     else:
         text = _extract_text_from_pdf(payload)
 
+    cover_image_path = await _save_cover_upload(cover_file)
+
     result = _create_or_reuse_audiobook(
         request=request,
         db=db,
@@ -1115,6 +1207,7 @@ async def upload_audiobook(
         text=text,
         voice=voice,
         source_type="upload",
+        cover_image_path=cover_image_path,
         generate_audio=generate_audio,
         access_level=access_level,
     )
