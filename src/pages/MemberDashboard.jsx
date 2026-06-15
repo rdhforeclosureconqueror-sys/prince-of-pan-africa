@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api/api";
-import { BLACK_HISTORY_MONTHLY } from "../data/blackHistoryFacts";
+import { getDailyHistoricalSpotlight } from "../data/dailyHistoricalSpotlights";
 import { TIMELINE_A_AFRICA_ORIGINS } from "../data/timelineA_africaOrigins";
 import swahiliLessons from "../../public/languages/swahili_30days.json";
 import "../styles/dashboard.css";
@@ -117,11 +117,7 @@ export default function MemberDashboard() {
   const swahiliDays = Array.isArray(swahiliLessons?.days) ? swahiliLessons.days : [];
   const swahiliLesson = swahiliDays.length ? swahiliDays[(dayOfYear - 1) % swahiliDays.length] : null;
   const swahiliWord = swahiliLesson?.words?.[0] || null;
-  const monthName = today.toLocaleString("en-US", { month: "long" });
-  const monthlyFacts = BLACK_HISTORY_MONTHLY[monthName] || [];
-  const historicalFact = monthlyFacts.length
-    ? monthlyFacts[(today.getDate() - 1) % monthlyFacts.length]
-    : TIMELINE_A_AFRICA_ORIGINS[dayOfYear % TIMELINE_A_AFRICA_ORIGINS.length]?.summary;
+  const dailySpotlight = getDailyHistoricalSpotlight(today);
   const featuredTimeline = TIMELINE_A_AFRICA_ORIGINS[dayOfYear % TIMELINE_A_AFRICA_ORIGINS.length];
   const todayChallenge = COMMUNITY_CHALLENGES[today.getDay()];
   const learningPath = LEARNING_PATHS[(dayOfYear - 1) % LEARNING_PATHS.length];
@@ -129,8 +125,8 @@ export default function MemberDashboard() {
   const membershipStatusLabel = membership?.status === "active"
     ? "Active paid membership"
     : "Free access · payment not confirmed";
-  const historicalSpotlightTitle = historicalFact || featuredTimeline?.title || "Historical spotlight is being prepared.";
-  const historicalSpotlightContext = featuredTimeline?.summary || historicalFact || "The current source dataset has a short entry for this date. Treat this card as a launch point for deeper timeline study.";
+  const historicalSpotlightTitle = dailySpotlight?.title || featuredTimeline?.title || "Historical spotlight is being prepared.";
+  const historicalSpotlightContext = dailySpotlight?.historical_context || featuredTimeline?.summary || "The current source dataset has a short entry for this date. Treat this card as a launch point for deeper timeline study.";
   const impactStats = [
     ["Businesses Supported This Month", summary?.businesses_supported_month ?? 0],
     ["Books Completed", summary?.books_completed ?? 0],
@@ -176,8 +172,8 @@ export default function MemberDashboard() {
           <h2>African History Spotlight</h2>
           <p className="history-date">{formatDate(today)}</p>
           <p className="highlight">{historicalSpotlightTitle}</p>
-          <dl className="data-list"><dt>Context</dt><dd>{historicalSpotlightContext}</dd><dt>Who shaped it?</dt><dd>Study the leaders, institutions, and communities behind the moment—not just the headline.</dd><dt>Why was it created?</dt><dd>Connect the event to survival, self-determination, institution building, or cultural memory.</dd><dt>Why does it matter today?</dt><dd>Use the lesson to guide today’s leadership, economic choices, and community restoration.</dd><dt>Reflection question</dt><dd>What responsibility does this history place on my actions today?</dd></dl>
-          <p className="data-note">Source note: some calendar entries are still brief, so this card adds study prompts and routes you to the deeper timeline.</p>
+          <dl className="data-list"><dt>Did you know?</dt><dd>{dailySpotlight?.did_you_know || historicalSpotlightTitle}</dd><dt>Context</dt><dd>{historicalSpotlightContext}</dd><dt>Key people or places</dt><dd>{dailySpotlight?.key_people_or_places || "Study the leaders, institutions, and communities behind the moment—not just the headline."}</dd><dt>Category</dt><dd>{dailySpotlight?.category || "African and Black history"}</dd><dt>Why it matters today</dt><dd>{dailySpotlight?.why_it_matters_today || "Use the lesson to guide today’s leadership, economic choices, and community restoration."}</dd><dt>Reflection question</dt><dd>{dailySpotlight?.reflection_question || "What responsibility does this history place on my actions today?"}</dd></dl>
+          <p className="data-note">Source note: {dailySpotlight?.source_note || "Repo timeline fallback; richer daily entries are being expanded."}</p>
           <Link to="/timeline" className="member-action-btn member-action-btn--secondary">Learn More</Link>
         </section>
 
