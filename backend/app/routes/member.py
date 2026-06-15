@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Body, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.dependencies.auth import require_permission
 from app.database import get_db
-from app.models import ActivityLog, LeadershipAssessment, Subscription, User
+from app.models import ActivityLog, LeadershipAssessment, MemberProfile, Subscription, User
 from app.services.billing import (
     ACTIVE_SUBSCRIPTION_STATUSES,
     BUILDER_TIER,
@@ -96,12 +97,17 @@ def get_member_overview(
             ],
             "builder": {
                 "is_builder": is_builder,
+                "activation": profile_attributes.get("builder_activation", {}),
+                "onboarding_completed": bool(profile_attributes.get("onboarding_completed", False)),
+                "first_challenge_completed": bool(profile_attributes.get("first_challenge_completed", False)),
+                "first_contribution_completed": bool(profile_attributes.get("first_contribution_completed", False)),
+                "builder_level": profile_attributes.get("builder_level", "not_started" if is_builder else "community_only"),
                 "testing_opportunities": [
                     "Review the member onboarding flow.",
                     "Test library and foundational learning paths.",
                     "Share feedback on Builder participation workflows.",
                 ] if is_builder else [],
-                "contribution_history": [],
+                "contribution_history": profile_attributes.get("builder_contribution_history", []),
                 "feedback_participation": {
                     "status": "ready" if is_builder else "community_only",
                     "summary": "Builder feedback tracking is prepared for launch planning." if is_builder else "Upgrade to Builder Membership to participate in Builder feedback workflows.",
@@ -114,6 +120,79 @@ def get_member_overview(
         "workouts_completed": summary_stats["workouts_completed"],
         "shares": summary_stats["shares"],
         "streak_days": summary_stats["streak_days"],
+    }
+
+
+@router.post("/member/builder/onboarding")
+def save_builder_onboarding(
+    payload: dict = Body(...),
+    current_user: User = Depends(require_permission("builder:track_contributions")),
+    db: Session = Depends(get_db),
+):
+    subscription = latest_subscription_for_user(db, current_user.id)
+    if _membership_type_from_subscription(subscription) != BUILDER_TIER:
+        raise HTTPException(status_code=403, detail="Active Builder Membership is required.")
+
+    profile = db.query(MemberProfile).filter(MemberProfile.user_id == current_user.id).first()
+    if not profile:
+        profile = MemberProfile(user_id=current_user.id, role=current_user.role or "builder_member", attributes={})
+        db.add(profile)
+        db.flush()
+
+    completed = bool(payload.get("completed", False))
+    try:
+        current_step = int(payload.get("current_step", 0) or 0)
+    except (TypeError, ValueError):
+        current_step = 0
+
+    activation = {
+        "introduction": str(payload.get("introduction", "")).strip(),
+        "interests": [str(item).strip() for item in payload.get("interests", []) if str(item).strip()],
+        "team": str(payload.get("team", "")).strip(),
+        "first_challenge": str(payload.get("first_challenge", "")).strip(),
+        "first_contribution": str(payload.get("first_contribution", "")).strip(),
+        "current_step": max(0, min(current_step, 6)),
+        "steps_completed": payload.get("steps_completed", []),
+    }
+    if completed and (
+        not activation["introduction"]
+        or not activation["interests"]
+        or not activation["team"]
+        or not activation["first_challenge"]
+        or not activation["first_contribution"]
+    ):
+        raise HTTPException(status_code=422, detail="All Builder activation steps are required before completion.")
+
+    attributes = dict(profile.attributes or {})
+    already_completed = bool(attributes.get("onboarding_completed", False))
+    first_challenge_completed = bool(attributes.get("first_challenge_completed", False)) or bool(payload.get("first_challenge_completed", False))
+    first_contribution_completed = bool(attributes.get("first_contribution_completed", False)) or bool(payload.get("first_contribution_completed", False))
+    onboarding_completed = already_completed or completed
+
+    attributes["builder_activation"] = activation
+    attributes["orientation_status"] = "completed" if onboarding_completed else "in_progress"
+    attributes["onboarding_completed"] = onboarding_completed
+    attributes["first_challenge_completed"] = first_challenge_completed
+    attributes["first_contribution_completed"] = first_contribution_completed
+    attributes["builder_level"] = "activated_builder" if onboarding_completed else "activation_in_progress"
+
+    if completed and not already_completed:
+        attributes["builder_contribution_history"] = [
+            {"title": "Builder activation completed", "summary": activation["first_contribution"]}
+        ]
+
+    profile.attributes = attributes
+    flag_modified(profile, "attributes")
+    db.add(ActivityLog(user_id=current_user.id, action="builder_onboarding_completed" if completed else "builder_onboarding_saved"))
+    db.commit()
+
+    return {
+        "ok": True,
+        "onboarding_completed": attributes["onboarding_completed"],
+        "first_challenge_completed": attributes["first_challenge_completed"],
+        "first_contribution_completed": attributes["first_contribution_completed"],
+        "builder_level": attributes["builder_level"],
+        "activation": activation,
     }
 
 

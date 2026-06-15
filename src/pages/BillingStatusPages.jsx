@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { get } from "../api/api";
 import "../styles/membership.css";
 
@@ -25,7 +25,8 @@ function BillingStatusPage({ title, detail, nextLabel, nextTo, children }) {
 }
 
 export function BillingSuccessPage() {
-  const [state, setState] = useState({ loading: true, active: false, message: "Verifying subscription state…" });
+  const navigate = useNavigate();
+  const [state, setState] = useState({ loading: true, active: false, message: "Verifying subscription state…", nextTo: "/dashboard" });
 
   useEffect(() => {
     let mounted = true;
@@ -33,18 +34,23 @@ export function BillingSuccessPage() {
       .then((status) => {
         if (!mounted) return;
         if (status.active) {
-          setState({ loading: false, active: true, message: `Access is active for ${status.tier}.` });
+          const isBuilder = status.tier === "builder_member" || status.plan === "builder";
+          setState({ loading: false, active: true, message: `Access is active for ${status.tier}.`, nextTo: isBuilder ? "/builder/onboarding" : "/dashboard" });
+          if (isBuilder) {
+            window.setTimeout(() => navigate("/builder/onboarding"), 900);
+          }
         } else {
           setState({
             loading: false,
             active: false,
             message: "Checkout returned, but backend subscription state is not active yet. Please refresh after Stripe finishes processing.",
+            nextTo: "/dashboard",
           });
         }
       })
       .catch(() => {
         if (mounted) {
-          setState({ loading: false, active: false, message: "Sign in to verify your subscription status." });
+          setState({ loading: false, active: false, message: "Sign in to verify your subscription status.", nextTo: "/dashboard" });
         }
       });
     return () => {
@@ -56,8 +62,8 @@ export function BillingSuccessPage() {
     <BillingStatusPage
       title={state.active ? "Membership access active" : "Membership billing return received"}
       detail={state.message}
-      nextLabel={state.active ? "Go to Dashboard" : "Check Dashboard"}
-      nextTo="/dashboard"
+      nextLabel={state.active ? (state.nextTo === "/builder/onboarding" ? "Start Builder Activation" : "Go to Dashboard") : "Check Dashboard"}
+      nextTo={state.nextTo}
     >
       {state.loading && <p className="membership-kicker">Verifying with backend subscription records</p>}
     </BillingStatusPage>
