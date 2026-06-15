@@ -13,7 +13,7 @@ from app.config import settings
 
 router = APIRouter()
 
-STATIC_AUDIO_DIR = Path(__file__).resolve().parents[1] / "static" / "audio"
+STATIC_AUDIO_DIR = Path(settings.AUDIO_STORAGE_DIR).expanduser() if settings.AUDIO_STORAGE_DIR else Path(__file__).resolve().parents[1] / "static" / "audio"
 STATIC_AUDIO_DIR.mkdir(parents=True, exist_ok=True)
 
 MUFASA_MODEL = "gpt-4o-mini"

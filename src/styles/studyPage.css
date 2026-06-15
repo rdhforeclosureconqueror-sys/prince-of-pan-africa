@@ -227,3 +227,24 @@
   .chapter-sidebar ul.is-open { max-height: 42vh; margin-top: 0.55rem; }
   .reader-panel { max-height: 54vh; }
 }
+
+.reader-topbar--with-cover {
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.reader-cover {
+  width: 112px;
+  max-width: 28vw;
+  aspect-ratio: 2 / 3;
+  object-fit: cover;
+  border: 1px solid rgba(214, 178, 94, 0.45);
+  border-radius: 12px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
+}
+
+.reader-description {
+  max-width: 70ch;
+  color: #f4f1e8;
+  opacity: 0.92;
+}

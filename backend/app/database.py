@@ -88,7 +88,10 @@ def _run_sqlite_compat_migrations() -> None:
         audiobook_cols = [row[1] for row in conn.execute(text("PRAGMA table_info(audiobooks)"))]
         audiobook_compat_columns = {
             "source_text": "TEXT NOT NULL DEFAULT ''",
+            "description": "TEXT NOT NULL DEFAULT ''",
+            "cover_image_path": "TEXT NOT NULL DEFAULT '/book-covers/library-placeholder.svg'",
             "access_level": "TEXT NOT NULL DEFAULT 'free'",
+            "updated_at": "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP",
         }
         for column, column_type in audiobook_compat_columns.items():
             if audiobook_cols and column not in audiobook_cols:
@@ -246,6 +249,14 @@ def _run_generic_compat_migrations() -> None:
             ")"
         ))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_stripe_webhook_events_stripe_event_id ON stripe_webhook_events (stripe_event_id)"))
+
+        audiobook_columns = {
+            "description": "TEXT NOT NULL DEFAULT ''",
+            "cover_image_path": "TEXT NOT NULL DEFAULT '/book-covers/library-placeholder.svg'",
+            "updated_at": "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP",
+        }
+        for column, column_type in audiobook_columns.items():
+            conn.execute(text(f"ALTER TABLE audiobooks ADD COLUMN IF NOT EXISTS {column} {column_type}"))
 
         audio_asset_columns = {
             "audiobook_id": "INTEGER",
