@@ -106,3 +106,116 @@ class BillingSubscriptionModelTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class BillingPhase3SafetyTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        try:
+            import sqlalchemy  # noqa: F401
+        except ModuleNotFoundError as exc:
+            raise unittest.SkipTest("SQLAlchemy is required for billing phase 3 tests") from exc
+
+        cls.temp_dir = tempfile.TemporaryDirectory()
+        db_path = Path(cls.temp_dir.name) / "test_billing_phase3.db"
+        os.environ["DATABASE_URL"] = f"sqlite:///{db_path}"
+        os.environ["STRIPE_COMMUNITY_PRICE_ID"] = "price_1TiUAM3JOrXsFGB5q4mSofyD"
+        os.environ["STRIPE_BUILDER_PRICE_ID"] = "price_1TiUBJ3JOrXsFGB5OPAPcnl4"
+
+        from app import models  # noqa: F401
+        from app.database import Base, SessionLocal, engine
+        from app.authz import seed_rbac_defaults
+
+        Base.metadata.create_all(bind=engine)
+        db = SessionLocal()
+        try:
+            seed_rbac_defaults(db)
+        finally:
+            db.close()
+        cls.SessionLocal = SessionLocal
+
+    @classmethod
+    def tearDownClass(cls):
+        if hasattr(cls, "temp_dir"):
+            cls.temp_dir.cleanup()
+
+    def test_only_active_known_price_grants_builder_role(self):
+        from app.authz import get_user_role_names
+        from app.models import Subscription, User
+        from app.services.billing import sync_paid_roles_for_user
+
+        db = self.SessionLocal()
+        try:
+            user = User(email="phase3-builder@example.com", password_hash="x", role="member")
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+
+            db.add(
+                Subscription(
+                    user_id=user.id,
+                    stripe_customer_id="cus_builder",
+                    stripe_subscription_id="sub_builder_active",
+                    stripe_price_id="price_1TiUBJ3JOrXsFGB5OPAPcnl4",
+                    tier="builder_member",
+                    status="active",
+                )
+            )
+            db.flush()
+            sync_paid_roles_for_user(db, user)
+            db.commit()
+
+            roles = get_user_role_names(db, user)
+            self.assertIn("builder_member", roles)
+            self.assertEqual(user.role, "builder_member")
+        finally:
+            db.close()
+
+    def test_past_due_unpaid_incomplete_canceled_and_unknown_do_not_grant_paid_access(self):
+        from app.authz import get_user_role_names
+        from app.models import Subscription, User
+        from app.services.billing import sync_paid_roles_for_user
+
+        disallowed = ["past_due", "unpaid", "incomplete", "canceled", "unknown"]
+        db = self.SessionLocal()
+        try:
+            for status_name in disallowed:
+                user = User(email=f"phase3-{status_name}@example.com", password_hash="x", role="member")
+                db.add(user)
+                db.flush()
+                db.add(
+                    Subscription(
+                        user_id=user.id,
+                        stripe_customer_id=f"cus_{status_name}",
+                        stripe_subscription_id=f"sub_{status_name}",
+                        stripe_price_id="price_1TiUAM3JOrXsFGB5q4mSofyD",
+                        tier="community_member",
+                        status=status_name,
+                    )
+                )
+                db.flush()
+                sync_paid_roles_for_user(db, user)
+                roles = get_user_role_names(db, user)
+                self.assertNotIn("builder_member", roles)
+                self.assertEqual(user.role, "member")
+            db.rollback()
+        finally:
+            db.close()
+
+    def test_upsert_subscription_rejects_unknown_price_id(self):
+        from app.services.billing import upsert_subscription_from_stripe
+
+        db = self.SessionLocal()
+        try:
+            with self.assertRaises(ValueError):
+                upsert_subscription_from_stripe(
+                    db,
+                    {
+                        "id": "sub_unknown_price",
+                        "customer": "cus_unknown",
+                        "status": "active",
+                        "items": {"data": [{"price": {"id": "price_not_approved"}}]},
+                        "metadata": {},
+                    },
+                )
+        finally:
+            db.close()

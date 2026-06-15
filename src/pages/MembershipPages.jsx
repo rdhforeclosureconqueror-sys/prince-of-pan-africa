@@ -1,5 +1,6 @@
-import React from "react";
-import { Link } from "react-router-dom";
+import React, { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { post } from "../api/api";
 import "../styles/membership.css";
 
 const foundationalTexts = [
@@ -84,6 +85,42 @@ function MembershipCtaRow() {
   );
 }
 
+function CheckoutButton({ plan, children, className }) {
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function startCheckout() {
+    setError("");
+    setLoading(true);
+    try {
+      const response = await post("/billing/checkout", { plan });
+      if (response?.checkout_url) {
+        window.location.assign(response.checkout_url);
+        return;
+      }
+      throw new Error("Checkout URL was not returned.");
+    } catch (err) {
+      if (err.status === 401) {
+        navigate("/?auth=join");
+        return;
+      }
+      setError(err.message || "Unable to start checkout.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div>
+      <button type="button" className={className} onClick={startCheckout} disabled={loading}>
+        {loading ? "Opening Stripe…" : children}
+      </button>
+      {error && <p className="membership-error" role="alert">{error}</p>}
+    </div>
+  );
+}
+
 function PlanCard({ plan, price, statement, description, benefits, to, variant }) {
   return (
     <article className={`membership-plan membership-plan--${variant}`}>
@@ -148,7 +185,7 @@ export function MembershipOverviewPage() {
           />
           <PlanCard
             plan="Builder Member"
-            price="$25/month"
+            price="$25.99/month"
             statement="I help build the mission."
             description="Builder Members support the mission at a deeper participation level by helping test, shape, improve, and expand the ecosystem."
             benefits={builderBenefits.slice(0, 7)}
@@ -229,9 +266,9 @@ export function CommunityMembershipPage() {
         <h2>Become a Community Member</h2>
         <p>Support the mission for $10/month and help sustain the foundation of Simba wa Ujamaa.</p>
         <div className="membership-cta-row">
-          <Link to="/?auth=join" className="membership-btn membership-btn--gold">
+          <CheckoutButton plan="community" className="membership-btn membership-btn--gold">
             Join as a Community Member
-          </Link>
+          </CheckoutButton>
           <Link to="/membership/builder" className="membership-btn membership-btn--ghost">
             Learn About Builder Membership
           </Link>
@@ -250,7 +287,7 @@ export function BuilderMembershipPage() {
         subtitle="Builder Membership is for those who want to participate more deeply in the development of Simba wa Ujamaa."
       >
         <div className="membership-price-card membership-price-card--builder">
-          <strong>$25/month</strong>
+          <strong>$25.99/month</strong>
           <span>Support the mission while helping shape the ecosystem through feedback, testing, outreach, and community development discussions.</span>
         </div>
       </MembershipHero>
@@ -284,11 +321,11 @@ export function BuilderMembershipPage() {
 
       <section className="membership-section membership-final-cta cosmic-readable-shell">
         <h2>Become a Builder Member</h2>
-        <p>Support and help build the Simba wa Ujamaa ecosystem for $25/month.</p>
+        <p>Support and help build the Simba wa Ujamaa ecosystem for $25.99/month.</p>
         <div className="membership-cta-row">
-          <Link to="/?auth=join" className="membership-btn membership-btn--green">
+          <CheckoutButton plan="builder" className="membership-btn membership-btn--green">
             Join as a Builder Member
-          </Link>
+          </CheckoutButton>
           <Link to="/membership/community" className="membership-btn membership-btn--ghost">
             Compare Community Membership
           </Link>
