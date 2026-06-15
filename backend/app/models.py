@@ -22,6 +22,7 @@ class User(Base):
     audiobooks: Mapped[list["Audiobook"]] = relationship(back_populates="user")
     chapter_reflections: Mapped[list["AudiobookChapterReflection"]] = relationship(back_populates="user")
     user_roles: Mapped[list["UserRole"]] = relationship(back_populates="user")
+    subscriptions: Mapped[list["Subscription"]] = relationship(back_populates="user")
 
 
 class Role(Base):
@@ -69,6 +70,24 @@ class RolePermission(Base):
 
     __table_args__ = (UniqueConstraint("role_id", "permission_id", name="uq_role_permission"),)
 
+
+
+class Subscription(Base):
+    __tablename__ = "subscriptions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    stripe_customer_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    stripe_subscription_id: Mapped[str | None] = mapped_column(String(255), nullable=True, unique=True, index=True)
+    stripe_price_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    tier: Mapped[str] = mapped_column(String(64), nullable=False, default="community_member")
+    status: Mapped[str] = mapped_column(String(64), nullable=False, default="pending")
+    current_period_end: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    raw_metadata: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, onupdate=datetime.utcnow)
+
+    user: Mapped[User | None] = relationship(back_populates="subscriptions")
 
 
 class MemberProfile(Base):
