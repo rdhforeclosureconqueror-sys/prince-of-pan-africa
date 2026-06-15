@@ -43,10 +43,35 @@ export default function MemberDashboard() {
   if (error) return <div className="admin-error">⚠️ {error}</div>;
 
   const summary = overview?.summary_stats || overview || {};
+  const membership = overview?.membership || {};
+  const builder = membership?.builder || {};
+  const communityUpdates = Array.isArray(membership?.community_updates) ? membership.community_updates : [];
+  const testingOpportunities = Array.isArray(builder?.testing_opportunities) ? builder.testing_opportunities : [];
+  const contributionHistory = Array.isArray(builder?.contribution_history) ? builder.contribution_history : [];
+  const isBuilder = Boolean(builder?.is_builder || membership?.type === "builder_member");
 
   return (
     <div className="admin-dashboard cosmic-readable-shell">
-      <h1>🌟 Member Experience Dashboard</h1>
+      <h1>🌟 Membership Dashboard</h1>
+
+      <section className="membership-status-grid" aria-label="Membership status">
+        <article className="membership-status-card">
+          <span>Membership Status</span>
+          <strong>{membership?.status || "active"}</strong>
+        </article>
+        <article className="membership-status-card">
+          <span>Membership Type</span>
+          <strong>{membership?.label || "Community Member"}</strong>
+        </article>
+        <article className="membership-status-card">
+          <span>Orientation Status</span>
+          <strong>{membership?.orientation_status || "not_started"}</strong>
+        </article>
+        <article className="membership-status-card">
+          <span>Discord Status</span>
+          <strong>{membership?.discord_status || "not_connected"}</strong>
+        </article>
+      </section>
 
       <div className="dashboard-grid">
         <div className="stat-card">
@@ -66,6 +91,55 @@ export default function MemberDashboard() {
           <p>Consistency Streak</p>
         </div>
       </div>
+
+      <section className="cosmic-section">
+        <h2>📣 Community Updates</h2>
+        {communityUpdates.length === 0 ? (
+          <p>No community updates are posted yet.</p>
+        ) : (
+          <ul className="activity-feed">
+            {communityUpdates.map((update) => (
+              <li key={update}>{update}</li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {isBuilder ? (
+        <section className="cosmic-section builder-dashboard-section">
+          <h2>🛠️ Builder Participation</h2>
+          <div className="builder-dashboard-grid">
+            <article>
+              <h3>Testing Opportunities</h3>
+              {testingOpportunities.length === 0 ? (
+                <p>No testing opportunities are posted yet.</p>
+              ) : (
+                <ul>
+                  {testingOpportunities.map((opportunity) => (
+                    <li key={opportunity}>{opportunity}</li>
+                  ))}
+                </ul>
+              )}
+            </article>
+            <article>
+              <h3>Contribution History</h3>
+              {contributionHistory.length === 0 ? (
+                <p>No Builder contributions have been tracked yet.</p>
+              ) : (
+                <ul>
+                  {contributionHistory.map((contribution) => (
+                    <li key={contribution.id || contribution.title}>{contribution.title || contribution.summary}</li>
+                  ))}
+                </ul>
+              )}
+            </article>
+            <article>
+              <h3>Feedback Participation</h3>
+              <p>{builder?.feedback_participation?.summary || "Builder feedback tracking is being prepared."}</p>
+            </article>
+          </div>
+        </section>
+      ) : null}
 
       <section className="cosmic-section">
         <h2>📌 Recent Activity</h2>

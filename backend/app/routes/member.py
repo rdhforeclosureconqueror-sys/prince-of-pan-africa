@@ -2,10 +2,23 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session, joinedload
 
 from app.dependencies.auth import require_permission
+from app.authz import get_user_role_names
 from app.database import get_db
 from app.models import ActivityLog, LeadershipAssessment, User
 
 router = APIRouter(tags=["Member"])
+
+
+def _membership_type_from_roles(role_names: list[str], profile_role: str | None, user_role: str | None) -> str:
+    values = {*(role_names or []), profile_role or "", user_role or ""}
+    normalized = {str(value).strip().lower() for value in values}
+    if "builder_member" in normalized or "subscriber" in normalized:
+        return "builder_member"
+    return "community_member"
+
+
+def _membership_label(membership_type: str) -> str:
+    return "Builder Member" if membership_type == "builder_member" else "Community Member"
 
 
 @router.get("/member/overview")
@@ -16,6 +29,14 @@ def get_member_overview(
     user = db.query(User).options(joinedload(User.profile)).filter(User.id == current_user.id).first()
 
     profile = user.profile
+    profile_attributes = profile.attributes if profile else {}
+    role_names = get_user_role_names(db, user)
+    membership_type = _membership_type_from_roles(
+        role_names,
+        profile.role if profile else None,
+        user.role,
+    )
+    is_builder = membership_type == "builder_member"
 
     assessment_count = (
         db.query(LeadershipAssessment)
@@ -50,7 +71,32 @@ def get_member_overview(
         "member_profile": {
             "id": profile.id if profile else None,
             "role": (profile.role if profile else user.role),
-            "attributes": profile.attributes if profile else {},
+            "attributes": profile_attributes,
+        },
+        "membership": {
+            "status": profile_attributes.get("membership_status", "active"),
+            "type": membership_type,
+            "label": _membership_label(membership_type),
+            "orientation_status": profile_attributes.get("orientation_status", "not_started"),
+            "discord_status": profile_attributes.get("discord_status", "not_connected"),
+            "community_updates": [
+                "Foundation Binder locked through Section 6.",
+                "Community and Builder membership structure is being prepared for launch.",
+                "Stripe and Discord integrations are planned next, but not active yet.",
+            ],
+            "builder": {
+                "is_builder": is_builder,
+                "testing_opportunities": [
+                    "Review the member onboarding flow.",
+                    "Test library and foundational learning paths.",
+                    "Share feedback on Builder participation workflows.",
+                ] if is_builder else [],
+                "contribution_history": [],
+                "feedback_participation": {
+                    "status": "ready" if is_builder else "community_only",
+                    "summary": "Builder feedback tracking is prepared for launch planning." if is_builder else "Upgrade to Builder Membership to participate in Builder feedback workflows.",
+                },
+            },
         },
         "summary_stats": summary_stats,
         # Backward-compatible top-level keys currently read by MemberDashboard.jsx.

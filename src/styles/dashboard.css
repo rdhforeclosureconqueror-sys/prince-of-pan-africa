@@ -49,6 +49,67 @@ body {
 .admin-subtext code {
   color: #fde68a;
 }
+
+.membership-status-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  margin: 2rem auto 3rem;
+  max-width: 1000px;
+}
+
+.membership-status-card {
+  background: rgba(6, 14, 34, 0.62);
+  border: 1px solid rgba(125, 211, 252, 0.22);
+  border-radius: 16px;
+  box-shadow: inset 0 0 18px rgba(255, 255, 255, 0.035);
+  padding: 1.2rem;
+  text-align: left;
+}
+
+.membership-status-card span {
+  color: rgba(219, 234, 254, 0.76);
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.membership-status-card strong {
+  color: #fef3c7;
+  display: block;
+  font-size: 1.35rem;
+  margin-top: 0.4rem;
+  text-transform: capitalize;
+}
+
+.builder-dashboard-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  text-align: left;
+}
+
+.builder-dashboard-grid article {
+  background: rgba(20, 83, 45, 0.24);
+  border: 1px solid rgba(134, 239, 172, 0.18);
+  border-radius: 16px;
+  padding: 1rem;
+}
+
+.builder-dashboard-grid h3 {
+  color: #bbf7d0;
+  margin: 0 0 0.75rem;
+}
+
+.builder-dashboard-grid ul {
+  color: rgba(255, 255, 255, 0.85);
+  line-height: 1.6;
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
 /* 🧱 GRID — Core Stats */
 .dashboard-grid {
   display: grid;

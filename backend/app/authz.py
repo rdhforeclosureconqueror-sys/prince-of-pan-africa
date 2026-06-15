@@ -6,8 +6,12 @@ from sqlalchemy.orm import Session
 
 from app.models import Permission, Role, User, UserRole
 
-DEFAULT_ROLE_NAME = "member"
-DEFAULT_ROLE_NAMES = ("member", "subscriber", "admin", "superadmin")
+DEFAULT_ROLE_NAME = "community_member"
+DEFAULT_ROLE_NAMES = ("community_member", "builder_member", "admin", "superadmin")
+LEGACY_ROLE_ALIASES = {
+    "member": "community_member",
+    "subscriber": "builder_member",
+}
 
 DEFAULT_PERMISSION_NAMES = (
     "system:read_health",
@@ -17,6 +21,20 @@ DEFAULT_PERMISSION_NAMES = (
     "member:update_self",
     "member:read_overview_self",
     "member:read_activity_self",
+    "membership:community",
+    "membership:builder",
+    "orientation:read_self",
+    "updates:read_member",
+    "library:read_member",
+    "learning_paths:read_foundational",
+    "dashboard:read_member",
+    "discussion:access_community",
+    "builder:access_channels",
+    "builder:submit_feedback",
+    "builder:join_testing",
+    "builder:view_early_projects",
+    "builder:track_contributions",
+    "builder:participate_outreach",
     "assessment:submit_self",
     "assessment:read_self",
     "assessment:read_analytics",
@@ -50,6 +68,13 @@ MEMBER_PERMISSION_NAMES = {
     "member:update_self",
     "member:read_overview_self",
     "member:read_activity_self",
+    "membership:community",
+    "orientation:read_self",
+    "updates:read_member",
+    "library:read_member",
+    "learning_paths:read_foundational",
+    "dashboard:read_member",
+    "discussion:access_community",
     "assessment:submit_self",
     "assessment:read_self",
     "audiobook:create_self",
@@ -62,7 +87,15 @@ MEMBER_PERMISSION_NAMES = {
     "voice:use_stt",
 }
 
-SUBSCRIBER_PERMISSION_NAMES = MEMBER_PERMISSION_NAMES | BOOK_ORGANIZER_PERMISSION_NAMES
+BUILDER_PERMISSION_NAMES = MEMBER_PERMISSION_NAMES | BOOK_ORGANIZER_PERMISSION_NAMES | {
+    "membership:builder",
+    "builder:access_channels",
+    "builder:submit_feedback",
+    "builder:join_testing",
+    "builder:view_early_projects",
+    "builder:track_contributions",
+    "builder:participate_outreach",
+}
 
 ADMIN_EXTRA_PERMISSION_NAMES = {
     "admin:read_dashboard",
@@ -74,15 +107,16 @@ ADMIN_EXTRA_PERMISSION_NAMES = {
 
 
 ROLE_PERMISSION_NAMES = {
-    "member": MEMBER_PERMISSION_NAMES,
-    "subscriber": SUBSCRIBER_PERMISSION_NAMES,
-    "admin": SUBSCRIBER_PERMISSION_NAMES | ADMIN_EXTRA_PERMISSION_NAMES,
+    "community_member": MEMBER_PERMISSION_NAMES,
+    "builder_member": BUILDER_PERMISSION_NAMES,
+    "admin": BUILDER_PERMISSION_NAMES | ADMIN_EXTRA_PERMISSION_NAMES,
     "superadmin": set(DEFAULT_PERMISSION_NAMES),
 }
 
 
 def normalize_role_name(role_name: str | None) -> str:
     normalized = (role_name or "").strip().lower()
+    normalized = LEGACY_ROLE_ALIASES.get(normalized, normalized)
     return normalized if normalized in DEFAULT_ROLE_NAMES else DEFAULT_ROLE_NAME
 
 

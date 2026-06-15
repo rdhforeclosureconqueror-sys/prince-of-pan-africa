@@ -164,7 +164,7 @@ export default function Home({ user, isAdmin, canAccessOrganizer = false, authCh
                 ) : null}
                 <Link to="/dashboard" className="hero-btn hero-btn--secondary">{isAdmin ? "Open Operations Deck" : "Open Member Dashboard"}</Link>
                 {authChecked && ENABLE_TEXT_BOOK_ORGANIZER && user && !canAccessOrganizer ? (
-                  <span className="access-note">Text Book Organizer is available to subscriber, admin, and superadmin accounts.</span>
+                  <span className="access-note">Text Book Organizer is available to Builder Member, admin, and superadmin accounts.</span>
                 ) : null}
                 <button type="button" onClick={logout} className="hero-btn hero-btn--ghost">Sign out</button>
               </div>
