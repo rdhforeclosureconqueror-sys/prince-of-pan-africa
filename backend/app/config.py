@@ -22,6 +22,7 @@ class Settings:
     AIVOICE_API_KEY: str = os.getenv("AIVOICE_API_KEY", "")
     BASE_URL: str = os.getenv("BASE_URL", "https://mufasa-knowledge-bank.onrender.com")
     AUDIO_STORAGE_DIR: str = os.getenv("AUDIO_STORAGE_DIR", "")
+    BOOK_COVER_STORAGE_DIR: str = os.getenv("BOOK_COVER_STORAGE_DIR", "/var/data/static/book-covers")
     ENABLE_TEXT_BOOK_ORGANIZER: bool = os.getenv("ENABLE_TEXT_BOOK_ORGANIZER", "false").strip().lower() in {"1", "true", "yes", "on"}
     STRIPE_SECRET_KEY: str = os.getenv("STRIPE_SECRET_KEY", "")
     STRIPE_WEBHOOK_SECRET: str = os.getenv("STRIPE_WEBHOOK_SECRET", "")

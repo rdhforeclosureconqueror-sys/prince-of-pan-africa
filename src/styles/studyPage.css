@@ -248,3 +248,10 @@
   color: #f4f1e8;
   opacity: 0.92;
 }
+
+.study-upload-label {
+  display: grid;
+  gap: 0.35rem;
+  color: #f5e6b3;
+  font-size: 0.9rem;
+}
