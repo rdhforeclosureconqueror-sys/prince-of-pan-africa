@@ -130,10 +130,10 @@ export default function Home({ user, isAdmin, canAccessOrganizer = false, authCh
   return (
     <div className="home-shell">
       <section className="hero-panel cosmic-readable-shell">
-        <p className="hero-kicker">Pan-African Intelligence Platform</p>
+        <p className="hero-kicker">Simba wa Ujamaa</p>
         <h1>Mufasa The Decolonizer</h1>
         <p className="hero-subtitle">
-          A focused home for member onboarding, admin operations, decolonized learning, and leadership training.
+          Join a Pan-African learning community rooted in language, history, leadership, and cooperative institution building.
         </p>
         <div className="hero-cta-row">
           <Link to="/library" className="hero-btn">Books & Audiobooks Library</Link>
@@ -184,12 +184,11 @@ export default function Home({ user, isAdmin, canAccessOrganizer = false, authCh
         </article>
 
         <article className="panel cosmic-readable-shell">
-          <h2>Platform focus</h2>
+          <h2>Public Homepage</h2>
           <ul className="focus-list">
-            <li>Admin oversight and member onboarding are active now.</li>
-            <li>Fitness surfaces remain deferred during this phase.</li>
-            <li>Portal workflows are accessible from inside the library.</li>
-            <li>Operations Deck monitors member and AI operations status.</li>
+            <li>Explore the library, language lessons, leadership assessment, and historical learning paths.</li>
+            <li>Members continue from a dedicated dashboard built as a daily community hub.</li>
+            <li>Builder tools remain permission-gated for eligible members and administrators.</li>
           </ul>
         </article>
       </section>
