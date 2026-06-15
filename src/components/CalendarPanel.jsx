@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo } from "react";
 import useLocalMemory from "../hooks/useLocalMemory";
 import { getMonthlyHighlights } from "../data/blackHistoryFacts";
+import { DAILY_HISTORICAL_SPOTLIGHTS } from "../data/dailyHistoricalSpotlights";
 
 export default function CalendarPanel() {
   const monthNow = useMemo(
@@ -9,9 +10,18 @@ export default function CalendarPanel() {
     []
   );
 
+  const getHighlightsForMonth = (monthName) => {
+    const spotlightHighlights = DAILY_HISTORICAL_SPOTLIGHTS.filter((entry) => {
+      const entryMonth = new Date(`${entry.date}T00:00:00`).toLocaleString("default", { month: "long" });
+      return entryMonth === monthName;
+    }).map((entry) => `${entry.date.slice(5)} · ${entry.title}: ${entry.did_you_know}`);
+
+    return spotlightHighlights.length ? spotlightHighlights : getMonthlyHighlights(monthName);
+  };
+
   const [historyData, setHistoryData] = useLocalMemory("monthlyHistory", {
     month: monthNow,
-    highlights: getMonthlyHighlights(monthNow),
+    highlights: getHighlightsForMonth(monthNow),
   });
 
   // Update if real month changed OR data is missing/bad
@@ -27,7 +37,7 @@ export default function CalendarPanel() {
     if (invalid) {
       setHistoryData({
         month: realMonth,
-        highlights: getMonthlyHighlights(realMonth),
+        highlights: getHighlightsForMonth(realMonth),
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -38,12 +48,12 @@ export default function CalendarPanel() {
   const safeHighlights =
     Array.isArray(historyData?.highlights) && historyData.highlights.length
       ? historyData.highlights
-      : getMonthlyHighlights(safeMonth);
+      : getHighlightsForMonth(safeMonth);
 
   const handleRefresh = () => {
     setHistoryData({
       month: safeMonth,
-      highlights: getMonthlyHighlights(safeMonth),
+      highlights: getHighlightsForMonth(safeMonth),
     });
   };
 
