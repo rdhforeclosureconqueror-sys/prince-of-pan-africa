@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api/api";
+import { API_BASE_URL } from "../config";
 import { ENABLE_TEXT_BOOK_ORGANIZER } from "../config";
 import "../styles/library.css";
 
@@ -42,6 +43,24 @@ const ACCESS_LABELS = {
 
 function formatAccessLevel(accessLevel) {
   return ACCESS_LABELS[accessLevel] || accessLevel || "Unknown";
+}
+
+const DEFAULT_COVER_PATH = "/book-covers/library-placeholder.svg";
+
+function mediaUrl(path) {
+  if (!path) return DEFAULT_COVER_PATH;
+  if (path.startsWith("http")) return path;
+  if (path.startsWith("/static/")) return `${API_BASE_URL}${path}`;
+  return path;
+}
+
+function handleCoverError(event) {
+  if (event.currentTarget.src.endsWith(DEFAULT_COVER_PATH)) return;
+  event.currentTarget.src = DEFAULT_COVER_PATH;
+}
+
+function shortDescription(item) {
+  return item.description || "Saved for reading, listening, and resume progress.";
 }
 
 export default function LibraryDecolonize({ canAccessOrganizer = false, authChecked = false, user = null }) {
@@ -88,18 +107,25 @@ export default function LibraryDecolonize({ canAccessOrganizer = false, authChec
             <p className="saved-empty">No books saved yet. Start in Audiobook Studio to add your first title.</p>
           ) : (
             items.map((item) => (
-              <article key={item.id} className="saved-book-card">
-                <h3>{item.title}</h3>
-                <p>{item.author}</p>
-                <div className="saved-meta">
-                  <span>{item.status}</span>
-                  <span>{formatAccessLevel(item.access_level)}</span>
-                  <span>{item.audio_chapter_count}/{item.chapter_count} voiced</span>
-                </div>
-                <div className="saved-actions">
-                  <Link to={`/study?book=${item.id}`} className="library-pill phase-link">
-                    Continue Reading/Listening →
-                  </Link>
+              <article key={item.id} className="saved-book-card saved-book-card--cover">
+                <Link to={`/study?book=${item.id}`} className="saved-cover-link" aria-label={`Open ${item.title}`}>
+                  <img src={mediaUrl(item.cover_image_path)} alt={`${item.title} cover`} className="saved-cover-thumb" onError={handleCoverError} />
+                  {item.audio_chapter_count > 0 ? <span className="saved-audio-badge">Audiobook available</span> : <span className="saved-audio-badge saved-audio-badge--pending">Audio pending</span>}
+                </Link>
+                <div className="saved-book-card-body">
+                  <h3>{item.title}</h3>
+                  <p className="saved-author">{item.author}</p>
+                  <p className="saved-description">{shortDescription(item)}</p>
+                  <div className="saved-meta">
+                    <span>{item.status}</span>
+                    <span>{formatAccessLevel(item.access_level)}</span>
+                    <span>{item.audio_chapter_count}/{item.chapter_count} voiced</span>
+                  </div>
+                  <div className="saved-actions">
+                    <Link to={`/study?book=${item.id}`} className="library-pill phase-link">
+                      Read / Listen →
+                    </Link>
+                  </div>
                 </div>
               </article>
             ))

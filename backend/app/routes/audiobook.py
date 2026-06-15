@@ -45,6 +45,8 @@ logger = logging.getLogger("mufasa-audiobook")
 class AudiobookCreateRequest(BaseModel):
     title: str = Field(min_length=1, max_length=255)
     author: str = Field(default="Unknown", max_length=255)
+    description: str = Field(default="", max_length=2000)
+    cover_image_path: str = Field(default="/book-covers/library-placeholder.svg", max_length=500)
     text: str = Field(min_length=1)
     voice: str = Field(default="alloy", max_length=64)
     generate_audio: bool = True
@@ -720,6 +722,9 @@ def _serialize_audiobook(book: Audiobook, include_text: bool = False) -> dict:
         "id": book.id,
         "title": book.title,
         "author": book.author,
+        "description": book.description,
+        "cover_image_path": book.cover_image_path or "/book-covers/library-placeholder.svg",
+        "cover_asset_key": book.cover_image_path or "/book-covers/library-placeholder.svg",
         "voice": book.voice,
         "source_type": book.source_type,
         "access_level": book.access_level,
@@ -729,6 +734,7 @@ def _serialize_audiobook(book: Audiobook, include_text: bool = False) -> dict:
         "generation_progress": progress,
         "total_characters": book.total_characters,
         "created_at": book.created_at.isoformat() if book.created_at else None,
+        "updated_at": book.updated_at.isoformat() if getattr(book, "updated_at", None) else None,
         "segmentation_strategy": book.source_type if book.source_type.startswith("segmented:") else "legacy",
         "chapters": [
             {
@@ -967,7 +973,7 @@ def _start_background_generation(*, audiobook_id: int, user_id: int, base_url: s
 
 def _create_or_reuse_audiobook(
     *, request: Request, db: Session, user: User, title: str, author: str, text: str, voice: str, source_type: str,
-    generate_audio: bool, access_level: str,
+    generate_audio: bool, access_level: str, description: str = "", cover_image_path: str = "/book-covers/library-placeholder.svg",
 ) -> dict:
     ingest_started = time.monotonic()
     normalized_text = normalize_tts_text(text)
@@ -1008,6 +1014,8 @@ def _create_or_reuse_audiobook(
         author=author.strip() or "Unknown",
         source_type=f"segmented:{source_type}:{segmentation_strategy}",
         source_text=normalized_text,
+        description=(description or "").strip() or normalized_text[:280],
+        cover_image_path=(cover_image_path or "/book-covers/library-placeholder.svg").strip(),
         content_hash=content_hash,
         voice=voice,
         access_level=normalized_access,
@@ -1060,6 +1068,8 @@ def create_audiobook(payload: AudiobookCreateRequest, request: Request, db: Sess
         author=payload.author,
         text=payload.text,
         voice=payload.voice,
+        description=payload.description,
+        cover_image_path=payload.cover_image_path,
         source_type="paste",
         generate_audio=payload.generate_audio,
         access_level=payload.access_level,

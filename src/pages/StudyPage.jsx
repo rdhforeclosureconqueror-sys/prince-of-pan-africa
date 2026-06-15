@@ -50,6 +50,20 @@ function absoluteApiUrl(path) {
   return path.startsWith("http") ? path : `${API_BASE_URL}${path}`;
 }
 
+const DEFAULT_COVER_PATH = "/book-covers/library-placeholder.svg";
+
+function coverUrl(path) {
+  if (!path) return DEFAULT_COVER_PATH;
+  if (path.startsWith("http")) return path;
+  if (path.startsWith("/static/")) return `${API_BASE_URL}${path}`;
+  return path;
+}
+
+function handleCoverError(event) {
+  if (event.currentTarget.src.endsWith(DEFAULT_COVER_PATH)) return;
+  event.currentTarget.src = DEFAULT_COVER_PATH;
+}
+
 function filenameFromContentDisposition(header, fallback = "chapter-audio.mp3") {
   if (!header) return fallback;
   const utf8Match = header.match(/filename\*=UTF-8''([^;]+)/i);
@@ -813,12 +827,14 @@ export default function StudyPage() {
 
         {selectedBook && (
           <section className="reader-shell">
-            <div className="reader-topbar">
+            <div className="reader-topbar reader-topbar--with-cover">
+              <img src={coverUrl(selectedBook.cover_image_path)} alt={`${selectedBook.title} cover`} className="reader-cover" onError={handleCoverError} />
               <div>
                 <h2>{selectedBook.title}</h2>
                 <p>
                   {selectedBook.author} • {selectedBook.status} • access: {formatAccessLevel(selectedBook.access_level)} • {selectedBook.segmentation_strategy}
                 </p>
+                {selectedBook.description && <p className="reader-description">{selectedBook.description}</p>}
                 {generationProgress && (
                   <p>
                     {statusLabelFromProgress(generationProgress)} — {generationProgress.completed_chapters}/{generationProgress.total_chapters} complete
@@ -935,7 +951,7 @@ export default function StudyPage() {
                 }}
                 style={{ width: "100%" }}
               />
-              {!activeChapter?.audio_url && <p>Chapter audio is not saved yet. Press Play to generate Skill World voice.</p>}
+              {!activeChapter?.audio_url && <p className="study-status">Chapter audio is not saved yet. Generate this chapter or continue reading without audio.</p>}
             </div>
 
             {showReflectionPrompt && (

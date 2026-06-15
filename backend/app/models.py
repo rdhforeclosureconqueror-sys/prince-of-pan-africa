@@ -168,6 +168,8 @@ class Audiobook(Base):
     author: Mapped[str] = mapped_column(String(255), nullable=False, default="Unknown")
     source_type: Mapped[str] = mapped_column(String(32), nullable=False, default="paste")
     source_text: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    cover_image_path: Mapped[str] = mapped_column(Text, nullable=False, default="/book-covers/library-placeholder.svg")
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     voice: Mapped[str] = mapped_column(String(64), nullable=False, default="alloy")
     access_level: Mapped[str] = mapped_column(String(32), nullable=False, default="free")
@@ -175,6 +177,7 @@ class Audiobook(Base):
     total_characters: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     chapter_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, onupdate=datetime.utcnow)
 
     __table_args__ = (UniqueConstraint("user_id", "content_hash", "voice", name="uq_user_content_voice"),)
 

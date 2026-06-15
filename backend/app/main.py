@@ -168,6 +168,7 @@ async def log_admin_request_context(request: Request, call_next):
 
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 os.makedirs(STATIC_DIR, exist_ok=True)
+app.mount("/static/audio", StaticFiles(directory=str(chat.STATIC_AUDIO_DIR)), name="static-audio")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 GENERATED_SKILL_WORLD_AUDIO_DIR = os.path.join(os.path.dirname(__file__), "generated-audio", "skill-world")
