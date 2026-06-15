@@ -258,3 +258,92 @@ class MemberDashboardFrontendStaticTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class CommunityOnboardingTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        db_path = Path("/tmp/test_community_onboarding.db")
+        if db_path.exists():
+            db_path.unlink()
+        os.environ["DATABASE_URL"] = f"sqlite:///{db_path}"
+        os.environ["ENVIRONMENT"] = "test"
+        os.environ["SESSION_SECRET"] = "test-session-secret"
+
+        from app import models  # noqa: F401
+        from app.database import Base, SessionLocal, engine
+        from app.main import app
+
+        Base.metadata.create_all(bind=engine)
+        cls.SessionLocal = SessionLocal
+        cls.client = TestClient(app)
+
+    def setUp(self):
+        from app.authz import seed_rbac_defaults
+        from app.models import ActivityLog, MemberProfile, Permission, Role, RolePermission, Subscription, User, UserRole
+
+        db = self.SessionLocal()
+        try:
+            db.query(ActivityLog).delete()
+            db.query(MemberProfile).delete()
+            db.query(Subscription).delete()
+            db.query(UserRole).delete()
+            db.query(RolePermission).delete()
+            db.query(Role).delete()
+            db.query(Permission).delete()
+            db.query(User).delete()
+            db.commit()
+            user = User(email="community-onboarding@example.com", password_hash="x", role="member")
+            db.add(user)
+            db.commit()
+            seed_rbac_defaults(db)
+            self.user_id = user.id
+        finally:
+            db.close()
+
+    def _activate_community_subscription(self):
+        from app.models import Subscription
+
+        db = self.SessionLocal()
+        try:
+            db.add(Subscription(user_id=self.user_id, tier="community_member", status="active", stripe_subscription_id="sub_community_onboarding"))
+            db.commit()
+        finally:
+            db.close()
+
+    def test_community_onboarding_requires_active_paid_membership(self):
+        response = self.client.post(
+            "/member/community/onboarding",
+            cookies=session_cookie(self.user_id),
+            json={"selected_interests": ["African history"], "selected_learning_path": "history", "discord_prepared": True, "first_daily_mission_completed": True, "completed": True},
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["detail"], "Active Community Membership is required.")
+
+    def test_community_onboarding_tracks_requested_fields(self):
+        self._activate_community_subscription()
+
+        response = self.client.post(
+            "/member/community/onboarding",
+            cookies=session_cookie(self.user_id),
+            json={
+                "selected_interests": ["African history", "Swahili language"],
+                "selected_learning_path": "history",
+                "discord_prepared": True,
+                "first_daily_mission_completed": True,
+                "current_step": 5,
+                "completed": True,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertTrue(body["community_onboarding_completed"])
+        self.assertEqual(body["selected_interests"], ["African history", "Swahili language"])
+        self.assertEqual(body["selected_learning_path"], "history")
+        self.assertTrue(body["first_daily_mission_completed"])
+
+        overview = self.client.get("/member/overview", cookies=session_cookie(self.user_id))
+        community = overview.json()["membership"]["community"]
+        self.assertTrue(community["community_onboarding_completed"])
+        self.assertEqual(community["onboarding"]["selected_learning_path"], "history")

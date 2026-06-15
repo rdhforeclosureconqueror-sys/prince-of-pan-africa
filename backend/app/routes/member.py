@@ -95,6 +95,13 @@ def get_member_overview(
                 "Community and Builder membership structure is being prepared for launch.",
                 "Stripe and Discord integrations are planned next, but not active yet.",
             ],
+            "community": {
+                "onboarding": profile_attributes.get("community_onboarding", {}),
+                "community_onboarding_completed": bool(profile_attributes.get("community_onboarding_completed", False)),
+                "selected_interests": profile_attributes.get("selected_interests", []),
+                "selected_learning_path": profile_attributes.get("selected_learning_path", ""),
+                "first_daily_mission_completed": bool(profile_attributes.get("first_daily_mission_completed", False)),
+            },
             "builder": {
                 "is_builder": is_builder,
                 "activation": profile_attributes.get("builder_activation", {}),
@@ -193,6 +200,75 @@ def save_builder_onboarding(
         "first_contribution_completed": attributes["first_contribution_completed"],
         "builder_level": attributes["builder_level"],
         "activation": activation,
+    }
+
+
+@router.post("/member/community/onboarding")
+def save_community_onboarding(
+    payload: dict = Body(...),
+    current_user: User = Depends(require_permission("member:complete_community_onboarding")),
+    db: Session = Depends(get_db),
+):
+    subscription = latest_subscription_for_user(db, current_user.id)
+    if _membership_type_from_subscription(subscription) not in {COMMUNITY_TIER, BUILDER_TIER}:
+        raise HTTPException(status_code=403, detail="Active Community Membership is required.")
+
+    profile = db.query(MemberProfile).filter(MemberProfile.user_id == current_user.id).first()
+    if not profile:
+        profile = MemberProfile(user_id=current_user.id, role=current_user.role or "community_member", attributes={})
+        db.add(profile)
+        db.flush()
+
+    completed = bool(payload.get("completed", False))
+    try:
+        current_step = int(payload.get("current_step", 0) or 0)
+    except (TypeError, ValueError):
+        current_step = 0
+
+    selected_interests = [str(item).strip() for item in payload.get("selected_interests", []) if str(item).strip()]
+    selected_learning_path = str(payload.get("selected_learning_path", "")).strip()
+    discord_prepared = bool(payload.get("discord_prepared", False))
+    first_daily_mission_completed = bool(payload.get("first_daily_mission_completed", False))
+
+    if completed and (
+        not selected_interests
+        or not selected_learning_path
+        or not discord_prepared
+        or not first_daily_mission_completed
+    ):
+        raise HTTPException(status_code=422, detail="All Community onboarding steps are required before completion.")
+
+    onboarding = {
+        "selected_interests": selected_interests,
+        "selected_learning_path": selected_learning_path,
+        "discord_prepared": discord_prepared,
+        "current_step": max(0, min(current_step, 5)),
+    }
+
+    attributes = dict(profile.attributes or {})
+    already_completed = bool(attributes.get("community_onboarding_completed", False))
+    community_onboarding_completed = already_completed or completed
+    first_daily_mission_completed = bool(attributes.get("first_daily_mission_completed", False)) or first_daily_mission_completed
+
+    attributes["community_onboarding"] = onboarding
+    attributes["orientation_status"] = "completed" if community_onboarding_completed else "in_progress"
+    attributes["community_onboarding_completed"] = community_onboarding_completed
+    attributes["selected_interests"] = selected_interests
+    attributes["selected_learning_path"] = selected_learning_path
+    attributes["first_daily_mission_completed"] = first_daily_mission_completed
+
+    profile.attributes = attributes
+    flag_modified(profile, "attributes")
+    db.add(ActivityLog(user_id=current_user.id, action="community_onboarding_completed" if completed else "community_onboarding_saved"))
+    db.commit()
+
+    return {
+        "ok": True,
+        "community_onboarding_completed": attributes["community_onboarding_completed"],
+        "selected_interests": attributes["selected_interests"],
+        "selected_learning_path": attributes["selected_learning_path"],
+        "first_daily_mission_completed": attributes["first_daily_mission_completed"],
+        "onboarding": onboarding,
     }
 
 
