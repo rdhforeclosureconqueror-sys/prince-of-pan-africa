@@ -193,8 +193,8 @@ def auth_join(payload: AuthPayload, response: Response, db: Session = Depends(ge
             user_id=user.id,
             role="community_member",
             attributes={
-                "membership_status": "active",
-                "membership_type": "community_member",
+                "membership_status": "free",
+                "membership_type": "free_member",
                 "orientation_status": "not_started",
                 "discord_status": "not_connected",
                 "onboarding": "joined",

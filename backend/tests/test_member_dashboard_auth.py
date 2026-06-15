@@ -36,6 +36,7 @@ class MemberDashboardAuthTests(unittest.TestCase):
             RolePermission,
             User,
             UserRole,
+            Subscription,
         )
 
         db = self.SessionLocal()
@@ -43,6 +44,7 @@ class MemberDashboardAuthTests(unittest.TestCase):
             db.query(ActivityLog).delete()
             db.query(LeadershipAssessment).delete()
             db.query(MemberProfile).delete()
+            db.query(Subscription).delete()
             db.query(UserRole).delete()
             db.query(RolePermission).delete()
             db.query(Role).delete()
@@ -130,6 +132,96 @@ class MemberDashboardAuthTests(unittest.TestCase):
             self.assertIn("member:read_activity_self", permissions)
         finally:
             db.close()
+
+    def test_member_overview_does_not_mark_unpaid_roles_active(self):
+        response = self.client.get("/member/overview", cookies=session_cookie(self.subscriber_id))
+
+        self.assertEqual(response.status_code, 200)
+        membership = response.json()["membership"]
+        self.assertEqual(membership["status"], "free")
+        self.assertEqual(membership["type"], "free_member")
+        self.assertEqual(membership["label"], "Free Member")
+        self.assertFalse(membership["stripe_confirmed"])
+
+    def test_member_overview_marks_only_active_stripe_subscription_active(self):
+        from app.models import Subscription
+
+        db = self.SessionLocal()
+        try:
+            db.add(
+                Subscription(
+                    user_id=self.subscriber_id,
+                    tier="builder_member",
+                    status="active",
+                    stripe_subscription_id="sub_builder_active",
+                )
+            )
+            db.commit()
+        finally:
+            db.close()
+
+        response = self.client.get("/member/overview", cookies=session_cookie(self.subscriber_id))
+
+        self.assertEqual(response.status_code, 200)
+        membership = response.json()["membership"]
+        self.assertEqual(membership["status"], "active")
+        self.assertEqual(membership["type"], "builder_member")
+        self.assertEqual(membership["label"], "Builder Member (Paid)")
+        self.assertTrue(membership["stripe_confirmed"])
+
+    def test_member_overview_marks_active_community_subscription_active(self):
+        from app.models import Subscription
+
+        db = self.SessionLocal()
+        try:
+            db.add(
+                Subscription(
+                    user_id=self.member_id,
+                    tier="community_member",
+                    status="active",
+                    stripe_subscription_id="sub_community_active",
+                )
+            )
+            db.commit()
+        finally:
+            db.close()
+
+        response = self.client.get("/member/overview", cookies=session_cookie(self.member_id))
+
+        self.assertEqual(response.status_code, 200)
+        membership = response.json()["membership"]
+        self.assertEqual(membership["status"], "active")
+        self.assertEqual(membership["type"], "community_member")
+        self.assertEqual(membership["label"], "Community Member (Paid)")
+        self.assertTrue(membership["stripe_confirmed"])
+
+    def test_member_overview_does_not_mark_inactive_subscription_statuses_active(self):
+        from app.models import Subscription
+
+        inactive_statuses = ["canceled", "past_due", "incomplete"]
+        for index, inactive_status in enumerate(inactive_statuses, start=1):
+            db = self.SessionLocal()
+            try:
+                db.query(Subscription).delete()
+                db.add(
+                    Subscription(
+                        user_id=self.member_id,
+                        tier="community_member",
+                        status=inactive_status,
+                        stripe_subscription_id=f"sub_inactive_{index}",
+                    )
+                )
+                db.commit()
+            finally:
+                db.close()
+
+            response = self.client.get("/member/overview", cookies=session_cookie(self.member_id))
+
+            self.assertEqual(response.status_code, 200)
+            membership = response.json()["membership"]
+            self.assertEqual(membership["status"], "free")
+            self.assertEqual(membership["type"], "free_member")
+            self.assertFalse(membership["stripe_confirmed"])
 
     def test_admin_or_superadmin_dashboard_access_behavior(self):
         for user_id in (self.admin_id, self.superadmin_id):

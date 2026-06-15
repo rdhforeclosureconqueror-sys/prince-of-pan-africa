@@ -6,6 +6,64 @@ import { TIMELINE_A_AFRICA_ORIGINS } from "../data/timelineA_africaOrigins";
 import swahiliLessons from "../../public/languages/swahili_30days.json";
 import "../styles/dashboard.css";
 
+const COMMUNITY_CHALLENGES = [
+  {
+    day: "Sunday",
+    title: "Wellness Sunday",
+    action: "Restore your body, mind, and spirit.",
+    prompts: ["Fitness", "Nutrition", "Mental wellness", "Spiritual practice"],
+  },
+  {
+    day: "Monday",
+    title: "Black Business Monday",
+    action: "Support a Black-owned business and prepare a receipt, review, or recommendation for the community.",
+    prompts: ["Receipt", "Review", "Recommendation"],
+  },
+  {
+    day: "Tuesday",
+    title: "Member Spotlight Tuesday",
+    action: "Highlight a community member whose discipline, service, or creativity deserves recognition.",
+    prompts: ["Name the member", "Share the win", "Invite others to celebrate"],
+  },
+  {
+    day: "Wednesday",
+    title: "Wisdom Wednesday",
+    action: "Share a teaching that sharpened your thinking this week.",
+    prompts: ["Book insight", "Quote", "Proverb"],
+  },
+  {
+    day: "Thursday",
+    title: "Economic Power Thursday",
+    action: "Join the economic power discussion and turn one idea into a practical next step.",
+    prompts: ["Investing", "Business", "Real estate", "Cooperatives"],
+  },
+  {
+    day: "Friday",
+    title: "Family & Legacy Friday",
+    action: "Document one lesson or practice that strengthens family continuity.",
+    prompts: ["Parenting", "Traditions", "Family lessons"],
+  },
+  {
+    day: "Saturday",
+    title: "Community Service Saturday",
+    action: "Show how you are helping your neighborhood, school, family, or local organization.",
+    prompts: ["Volunteer", "Mentor", "Clean up", "Check on elders"],
+  },
+];
+
+const LEARNING_PATHS = [
+  { title: "Ancient African Science", reason: "Start the week by studying African innovation as a source of technical confidence." },
+  { title: "Forgotten Black Mega Cities", reason: "Today’s mission points toward infrastructure, trade, and city-building memory." },
+  { title: "Blackonomics", reason: "Economic support becomes stronger when daily spending connects to ownership and strategy." },
+  { title: "Leadership Foundations", reason: "Community command requires members who can organize, listen, decide, and serve." },
+  { title: "African Empires", reason: "Empire study restores a long view of governance, defense, diplomacy, and culture." },
+  { title: "Swahili Foundations", reason: "Language practice builds cultural continuity one word at a time." },
+];
+
+function formatDate(date) {
+  return date.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+}
+
 export default function MemberDashboard() {
   const [overview, setOverview] = useState(null);
   const [activity, setActivity] = useState([]);
@@ -55,7 +113,7 @@ export default function MemberDashboard() {
   const testingOpportunities = Array.isArray(builder?.testing_opportunities) ? builder.testing_opportunities : [];
   const contributionHistory = Array.isArray(builder?.contribution_history) ? builder.contribution_history : [];
   const isBuilder = Boolean(builder?.is_builder || membership?.type === "builder_member");
-  const memberName = overview?.profile?.name || overview?.user?.name || overview?.email || "Member";
+  const memberName = overview?.profile?.name || overview?.user?.name || overview?.user?.email || overview?.email || "Member";
   const swahiliDays = Array.isArray(swahiliLessons?.days) ? swahiliLessons.days : [];
   const swahiliLesson = swahiliDays.length ? swahiliDays[(dayOfYear - 1) % swahiliDays.length] : null;
   const swahiliWord = swahiliLesson?.words?.[0] || null;
@@ -65,78 +123,94 @@ export default function MemberDashboard() {
     ? monthlyFacts[(today.getDate() - 1) % monthlyFacts.length]
     : TIMELINE_A_AFRICA_ORIGINS[dayOfYear % TIMELINE_A_AFRICA_ORIGINS.length]?.summary;
   const featuredTimeline = TIMELINE_A_AFRICA_ORIGINS[dayOfYear % TIMELINE_A_AFRICA_ORIGINS.length];
-  const recentActivity = activity.slice(0, 3);
+  const todayChallenge = COMMUNITY_CHALLENGES[today.getDay()];
+  const learningPath = LEARNING_PATHS[(dayOfYear - 1) % LEARNING_PATHS.length];
+  const recentActivity = activity.slice(0, 5);
+  const membershipStatusLabel = membership?.status === "active"
+    ? "Active paid membership"
+    : "Free access · payment not confirmed";
+  const historicalSpotlightTitle = historicalFact || featuredTimeline?.title || "Historical spotlight is being prepared.";
+  const historicalSpotlightContext = featuredTimeline?.summary || historicalFact || "The current source dataset has a short entry for this date. Treat this card as a launch point for deeper timeline study.";
+  const impactStats = [
+    ["Businesses Supported This Month", summary?.businesses_supported_month ?? 0],
+    ["Books Completed", summary?.books_completed ?? 0],
+    ["Lessons Completed", summary?.lessons_completed ?? summary?.activity_count ?? 0],
+    ["Community Challenges Completed", summary?.community_challenges_completed ?? 0],
+    ["Members Participating", summary?.members_participating ?? 0],
+    ["Hours Served", summary?.hours_served ?? 0],
+  ];
 
   if (loading) return <div className="admin-loading">Loading your dashboard...</div>;
   if (error) return <div className="admin-error">⚠️ {error}</div>;
 
   return (
-    <div className="admin-dashboard member-launchpad cosmic-readable-shell">
-      <header className="member-hero dashboard-header">
-        <p className="member-kicker">Daily Community Hub</p>
+    <div className="admin-dashboard member-launchpad command-center-shell cosmic-readable-shell">
+      <header className="mission-control member-hero dashboard-header">
+        <p className="member-kicker">Today’s Mission</p>
         <h1>Welcome Back, {memberName}</h1>
-        <p className="subtitle">Pick up one lesson, one community signal, and one concrete action for today.</p>
-        <div className="member-quick-actions">
-          <Link to="/library" className="member-action-btn">Open Library</Link>
-          <Link to="/leadership" className="member-action-btn member-action-btn--secondary">Leadership Assessment</Link>
-          <a href="/languages/swahili.html" className="member-action-btn member-action-btn--ghost">Swahili Lesson</a>
+        <p className="subtitle">Daily launch sequence for learning, participation, economic support, leadership, and restoration.</p>
+        <div className="mission-status-strip">
+          <span>{membership?.label || "Free Member"}</span>
+          <span>{membershipStatusLabel}</span>
+          <span>{formatDate(today)}</span>
+        </div>
+        <div className="daily-actions-panel" aria-label="Today’s Four Actions">
+          <h2>Today’s Four Actions</h2>
+          <label><input type="checkbox" readOnly /> Learn Today’s Swahili Word</label>
+          <label><input type="checkbox" readOnly /> Read Today’s Historical Spotlight</label>
+          <label><input type="checkbox" readOnly /> Complete Today’s Community Challenge</label>
+          <label><input type="checkbox" readOnly /> Share One Insight</label>
+          <strong>Daily Progress: 0/4</strong>
         </div>
       </header>
 
-      <section className="membership-status-grid" aria-label="Membership status">
-        <article className="membership-status-card"><span>Membership Status</span><strong>{membership?.status || "active"}</strong></article>
-        <article className="membership-status-card"><span>Membership Type</span><strong>{membership?.label || "Community Member"}</strong></article>
-        <article className="membership-status-card"><span>Orientation Status</span><strong>{membership?.orientation_status || "not_started"}</strong></article>
-        <article className="membership-status-card"><span>Learning Streak</span><strong>{summary?.streak_days ?? 0} days</strong></article>
-      </section>
-
-      <main className="member-hub-grid">
-        <section className="cosmic-section member-hub-card member-hub-card--wide">
-          <h2>Continue Your Journey</h2>
-          <div className="journey-list">
-            <Link to="/library">Books & Audiobooks Library</Link>
-            <Link to="/timeline">African Origins Timeline</Link>
-            <Link to="/decolonize">30-Day Decolonization Portal</Link>
-          </div>
-        </section>
-
-        <section className="cosmic-section member-hub-card">
+      <main className="member-hub-grid command-grid">
+        <section className="cosmic-section member-hub-card swahili-command-card">
+          <p className="section-kicker">Section 2</p>
           <h2>Swahili Word of the Day</h2>
-          {swahiliWord ? <><p className="word-of-day">{swahiliWord.swahili}</p><p>{swahiliWord.english}</p><p className="timestamp">{swahiliWord.sentence || swahiliWord.example_swahili}</p><a href="/languages/swahili.html">Practice today’s Swahili lesson</a></> : <p>Swahili lesson content is being prepared.</p>}
+          {swahiliWord ? <><p className="word-of-day">{swahiliWord.swahili}</p><dl className="data-list"><dt>Pronunciation</dt><dd>{swahiliWord.pronunciation || "Practice aloud with the lesson audio."}</dd><dt>Definition</dt><dd>{swahiliWord.english}</dd><dt>Example</dt><dd>{swahiliWord.sentence || swahiliWord.example_swahili}</dd><dt>Why it matters culturally</dt><dd>{swahiliLesson?.culture || swahiliLesson?.tip || "Swahili connects millions across East Africa and helps members practice restoration through language."}</dd></dl><a href="/languages/swahili.html" className="member-action-btn">Practice Word</a></> : <p>Swahili lesson content is being prepared.</p>}
         </section>
 
-        <section className="cosmic-section member-hub-card">
-          <h2>Historical Fact of the Day</h2>
-          <p>{historicalFact || "A new historical highlight is being prepared."}</p>
+        <section className="cosmic-section member-hub-card history-command-card">
+          <p className="section-kicker">Section 3</p>
+          <h2>African History Spotlight</h2>
+          <p className="history-date">{formatDate(today)}</p>
+          <p className="highlight">{historicalSpotlightTitle}</p>
+          <dl className="data-list"><dt>Context</dt><dd>{historicalSpotlightContext}</dd><dt>Who shaped it?</dt><dd>Study the leaders, institutions, and communities behind the moment—not just the headline.</dd><dt>Why was it created?</dt><dd>Connect the event to survival, self-determination, institution building, or cultural memory.</dd><dt>Why does it matter today?</dt><dd>Use the lesson to guide today’s leadership, economic choices, and community restoration.</dd><dt>Reflection question</dt><dd>What responsibility does this history place on my actions today?</dd></dl>
+          <p className="data-note">Source note: some calendar entries are still brief, so this card adds study prompts and routes you to the deeper timeline.</p>
+          <Link to="/timeline" className="member-action-btn member-action-btn--secondary">Learn More</Link>
         </section>
 
-        <section className="cosmic-section member-hub-card">
-          <h2>Community Activity</h2>
-          {recentActivity.length === 0 ? <p>No tracked activity yet. Start a lesson, read a resource, or join a discussion.</p> : <ul className="activity-feed">{recentActivity.map((item, idx) => <li key={idx}><span className="highlight">{item.title || item.type}</span><div>{item.detail || item.description}</div></li>)}</ul>}
+        <section className="cosmic-section member-hub-card member-hub-card--wide challenge-command-card">
+          <p className="section-kicker">Section 4</p>
+          <h2>Community Challenge of the Day</h2>
+          <div className="challenge-layout"><div><p className="challenge-day">{todayChallenge.day}</p><h3>{todayChallenge.title}</h3><p>{todayChallenge.action}</p><p className="data-note">Discord bridge pending: complete the action now and save your post text for the community feed.</p></div><ul className="command-chip-list">{todayChallenge.prompts.map((prompt) => <li key={prompt}>{prompt}</li>)}</ul></div>
+          <a href="#community-feed" className="member-action-btn">Prepare Community Share</a>
         </section>
 
-        <section className="cosmic-section member-hub-card">
-          <h2>Featured Resource</h2>
-          <p className="highlight">{featuredTimeline?.title || "Forgotten Black Mega Cities"}</p>
-          <p>{featuredTimeline?.summary || "Study historical examples of community development, trade, infrastructure, and institution building."}</p>
-          <Link to="/library">Explore resource library</Link>
+        <section className="cosmic-section member-hub-card impact-command-card">
+          <p className="section-kicker">Section 5</p>
+          <h2>Community Impact</h2>
+          <p className="data-note">Tracked from current in-app records. Zero means the metric is not recorded yet—not that the community has no impact.</p>
+          <div className="impact-grid">{impactStats.map(([label, value]) => <article key={label}><strong>{value}</strong><span>{label}</span></article>)}</div>
         </section>
 
-        <section className="cosmic-section member-hub-card">
-          <h2>Community Opportunities</h2>
-          {testingOpportunities.length === 0 ? <p>Check back for testing circles, study groups, and builder calls.</p> : <ul>{testingOpportunities.map((opportunity) => <li key={opportunity}>{opportunity}</li>)}</ul>}
+        <section className="cosmic-section member-hub-card learning-path-card">
+          <p className="section-kicker">Section 6</p>
+          <h2>Today’s Learning Path</h2>
+          <p className="highlight">{learningPath.title}</p><p>{featuredTimeline?.summary || "Study a focused pathway that turns knowledge into daily practice."}</p><p><strong>Why am I seeing this today?</strong> {learningPath.reason}</p><Link to="/library" className="member-action-btn member-action-btn--secondary">Open Learning Path</Link>
         </section>
 
-        <section className="cosmic-section member-hub-card member-hub-card--action">
-          <h2>Today’s Action</h2>
-          <p>Read one page, practice one word, and share one insight with the community.</p>
-          <Link to="/library" className="member-action-btn">Start Now</Link>
+        <section className="cosmic-section member-hub-card member-hub-card--wide feed-command-card" id="community-feed">
+          <p className="section-kicker">Section 7</p>
+          <h2>Community Feed</h2>
+          {recentActivity.length === 0 ? <ul className="activity-feed"><li><span className="highlight">Member wins</span><div>Share your first win to activate the feed.</div></li><li><span className="highlight">Business spotlights</span><div>Post a recommendation from today’s challenge.</div></li><li><span className="highlight">Builder announcements</span><div>Builder updates will appear here as the Discord bridge expands.</div></li><li><span className="highlight">New books & audiobooks</span><div>Library additions will be routed into this mission feed.</div></li></ul> : <ul className="activity-feed">{recentActivity.map((item, idx) => <li key={item.id || idx}><span className="highlight">{item.title || item.type}</span><div>{item.detail || item.description}</div></li>)}</ul>}
         </section>
       </main>
 
-      {communityUpdates.length > 0 ? <section className="cosmic-section"><h2>📣 Community Updates</h2><ul className="activity-feed">{communityUpdates.map((update) => <li key={update}>{update}</li>)}</ul></section> : null}
+      {communityUpdates.length > 0 ? <section className="cosmic-section"><h2>📡 Command Updates</h2><ul className="activity-feed">{communityUpdates.map((update) => <li key={update}>{update}</li>)}</ul></section> : null}
 
-      {isBuilder ? <section className="cosmic-section builder-dashboard-section"><h2>🛠️ Builder Participation</h2><div className="builder-dashboard-grid"><article><h3>Contribution History</h3>{contributionHistory.length === 0 ? <p>No Builder contributions have been tracked yet.</p> : <ul>{contributionHistory.map((contribution) => <li key={contribution.id || contribution.title}>{contribution.title || contribution.summary}</li>)}</ul>}</article><article><h3>Feedback Participation</h3><p>{builder?.feedback_participation?.summary || "Builder feedback tracking is being prepared."}</p></article></div></section> : null}
+      {isBuilder ? <section className="cosmic-section builder-dashboard-section"><h2>🛠️ Builder Participation</h2><div className="builder-dashboard-grid"><article><h3>Contribution History</h3>{contributionHistory.length === 0 ? <p>No Builder contributions have been tracked yet.</p> : <ul>{contributionHistory.map((contribution) => <li key={contribution.id || contribution.title}>{contribution.title || contribution.summary}</li>)}</ul>}</article><article><h3>Feedback Participation</h3><p>{builder?.feedback_participation?.summary || "Builder feedback tracking is being prepared."}</p></article><article><h3>Testing Opportunities</h3>{testingOpportunities.length === 0 ? <p>No builder tests are open today.</p> : <ul>{testingOpportunities.map((opportunity) => <li key={opportunity}>{opportunity}</li>)}</ul>}</article></div></section> : null}
     </div>
   );
 }
