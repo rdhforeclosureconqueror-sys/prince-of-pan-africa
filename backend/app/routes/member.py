@@ -2,23 +2,33 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session, joinedload
 
 from app.dependencies.auth import require_permission
-from app.authz import get_user_role_names
 from app.database import get_db
-from app.models import ActivityLog, LeadershipAssessment, User
+from app.models import ActivityLog, LeadershipAssessment, Subscription, User
+from app.services.billing import (
+    ACTIVE_SUBSCRIPTION_STATUSES,
+    BUILDER_TIER,
+    COMMUNITY_TIER,
+    PAID_ACCESS_TIERS,
+    latest_subscription_for_user,
+)
 
 router = APIRouter(tags=["Member"])
 
 
-def _membership_type_from_roles(role_names: list[str], profile_role: str | None, user_role: str | None) -> str:
-    values = {*(role_names or []), profile_role or "", user_role or ""}
-    normalized = {str(value).strip().lower() for value in values}
-    if "builder_member" in normalized or "subscriber" in normalized:
-        return "builder_member"
-    return "community_member"
+def _membership_type_from_subscription(subscription: Subscription | None) -> str:
+    subscription_status = (subscription.status or "").strip().lower() if subscription else ""
+    subscription_tier = (subscription.tier or "").strip().lower() if subscription else ""
+    if subscription_status in ACTIVE_SUBSCRIPTION_STATUSES and subscription_tier in PAID_ACCESS_TIERS:
+        return subscription_tier
+    return "free_member"
 
 
 def _membership_label(membership_type: str) -> str:
-    return "Builder Member" if membership_type == "builder_member" else "Community Member"
+    if membership_type == BUILDER_TIER:
+        return "Builder Member (Paid)"
+    if membership_type == COMMUNITY_TIER:
+        return "Community Member (Paid)"
+    return "Free Member"
 
 
 @router.get("/member/overview")
@@ -30,13 +40,11 @@ def get_member_overview(
 
     profile = user.profile
     profile_attributes = profile.attributes if profile else {}
-    role_names = get_user_role_names(db, user)
-    membership_type = _membership_type_from_roles(
-        role_names,
-        profile.role if profile else None,
-        user.role,
-    )
-    is_builder = membership_type == "builder_member"
+    subscription = latest_subscription_for_user(db, user.id)
+    membership_type = _membership_type_from_subscription(subscription)
+    subscription_status = (subscription.status or "").strip().lower() if subscription else None
+    is_paid_member = membership_type in PAID_ACCESS_TIERS
+    is_builder = membership_type == BUILDER_TIER
 
     assessment_count = (
         db.query(LeadershipAssessment)
@@ -74,9 +82,11 @@ def get_member_overview(
             "attributes": profile_attributes,
         },
         "membership": {
-            "status": profile_attributes.get("membership_status", "active"),
+            "status": "active" if is_paid_member else "free",
             "type": membership_type,
             "label": _membership_label(membership_type),
+            "stripe_confirmed": is_paid_member,
+            "subscription_status": subscription_status,
             "orientation_status": profile_attributes.get("orientation_status", "not_started"),
             "discord_status": profile_attributes.get("discord_status", "not_connected"),
             "community_updates": [
