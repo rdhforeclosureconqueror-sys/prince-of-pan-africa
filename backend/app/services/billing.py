@@ -16,7 +16,7 @@ COMMUNITY_TIER = "community_member"
 BUILDER_TIER = "builder_member"
 KNOWN_SUBSCRIPTION_PLANS = {COMMUNITY_PLAN, BUILDER_PLAN}
 KNOWN_SUBSCRIPTION_TIERS = {COMMUNITY_TIER, BUILDER_TIER}
-ACTIVE_SUBSCRIPTION_STATUSES = {"active"}
+ACTIVE_SUBSCRIPTION_STATUSES = {"active", "trialing"}
 PAID_ACCESS_TIERS = {COMMUNITY_TIER, BUILDER_TIER}
 
 
@@ -111,6 +111,33 @@ def extract_subscription_price_id(subscription: dict[str, Any]) -> str | None:
     price = items[0].get("price") or {}
     return price.get("id")
 
+
+def create_pending_subscription_checkout(
+    db: "Session",
+    *,
+    user_id: int,
+    stripe_customer_id: str,
+    stripe_price_id: str,
+    plan: str,
+    checkout_session_id: str | None = None,
+) -> "Subscription":
+    from app.models import Subscription
+
+    tier = tier_for_subscription_plan(plan)
+    if tier is None or tier_for_price_id(stripe_price_id) != tier:
+        raise ValueError("Unknown Stripe checkout price ID")
+
+    record = Subscription(
+        user_id=user_id,
+        stripe_customer_id=stripe_customer_id,
+        stripe_price_id=stripe_price_id,
+        tier=tier,
+        status="checkout_pending",
+        raw_metadata={"checkout_session_id": checkout_session_id, "plan": plan},
+    )
+    db.add(record)
+    db.flush()
+    return record
 
 def upsert_subscription_from_stripe(db: "Session", subscription: dict[str, Any], user_id: int | None = None) -> "Subscription":
     from app.models import Subscription

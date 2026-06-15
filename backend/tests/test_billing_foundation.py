@@ -219,3 +219,100 @@ class BillingPhase3SafetyTests(unittest.TestCase):
                 )
         finally:
             db.close()
+
+class BillingLaunchVerificationTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        try:
+            import sqlalchemy  # noqa: F401
+        except ModuleNotFoundError as exc:
+            raise unittest.SkipTest("SQLAlchemy is required for billing launch tests") from exc
+
+        cls.temp_dir = tempfile.TemporaryDirectory()
+        db_path = Path(cls.temp_dir.name) / "test_billing_launch.db"
+        os.environ["DATABASE_URL"] = f"sqlite:///{db_path}"
+        os.environ["STRIPE_COMMUNITY_PRICE_ID"] = "price_launch_community"
+        os.environ["STRIPE_BUILDER_PRICE_ID"] = "price_launch_builder"
+
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import sessionmaker
+        from app.database import Base
+        from app import models  # noqa: F401
+
+        engine = create_engine(os.environ["DATABASE_URL"], connect_args={"check_same_thread": False})
+        Base.metadata.create_all(bind=engine)
+        cls.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+    @classmethod
+    def tearDownClass(cls):
+        if hasattr(cls, "temp_dir"):
+            cls.temp_dir.cleanup()
+
+    def test_checkout_pending_record_persists_before_stripe_redirect(self):
+        from app.models import User
+        from app.services.billing import create_pending_subscription_checkout
+
+        db = self.SessionLocal()
+        try:
+            user = User(email="launch-pending@example.com", password_hash="x", role="member")
+            db.add(user)
+            db.commit()
+            record = create_pending_subscription_checkout(
+                db,
+                user_id=user.id,
+                stripe_customer_id="cus_launch_pending",
+                stripe_price_id="price_launch_community",
+                plan="community",
+                checkout_session_id="cs_launch_pending",
+            )
+            db.commit()
+            self.assertEqual(record.status, "checkout_pending")
+            self.assertEqual(record.tier, "community_member")
+            self.assertEqual(record.raw_metadata["checkout_session_id"], "cs_launch_pending")
+        finally:
+            db.close()
+
+    def test_trialing_grants_paid_access_and_canceled_removes_it(self):
+        from app.authz import get_user_role_names, seed_rbac_defaults
+        from app.models import Subscription, User
+        from app.services.billing import sync_paid_roles_for_user
+
+        db = self.SessionLocal()
+        try:
+            seed_rbac_defaults(db)
+            user = User(email="launch-cancel@example.com", password_hash="x", role="member")
+            db.add(user)
+            db.flush()
+            subscription = Subscription(
+                user_id=user.id,
+                stripe_customer_id="cus_launch_cancel",
+                stripe_subscription_id="sub_launch_cancel",
+                stripe_price_id="price_launch_builder",
+                tier="builder_member",
+                status="trialing",
+            )
+            db.add(subscription)
+            db.flush()
+            sync_paid_roles_for_user(db, user)
+            self.assertIn("builder_member", get_user_role_names(db, user))
+
+            subscription.status = "canceled"
+            db.flush()
+            sync_paid_roles_for_user(db, user)
+            self.assertNotIn("builder_member", get_user_role_names(db, user))
+            self.assertEqual(user.role, "member")
+        finally:
+            db.rollback()
+            db.close()
+
+    def test_webhook_event_ids_are_persistable_for_idempotency(self):
+        from app.models import StripeWebhookEvent
+
+        db = self.SessionLocal()
+        try:
+            db.add(StripeWebhookEvent(stripe_event_id="evt_launch_once", event_type="charge.refunded"))
+            db.commit()
+            existing = db.query(StripeWebhookEvent).filter_by(stripe_event_id="evt_launch_once").first()
+            self.assertEqual(existing.event_type, "charge.refunded")
+        finally:
+            db.close()

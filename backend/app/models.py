@@ -90,6 +90,15 @@ class Subscription(Base):
     user: Mapped[User | None] = relationship(back_populates="subscriptions")
 
 
+class StripeWebhookEvent(Base):
+    __tablename__ = "stripe_webhook_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    stripe_event_id: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True)
+    event_type: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
 class MemberProfile(Base):
     __tablename__ = "member_profiles"
 
