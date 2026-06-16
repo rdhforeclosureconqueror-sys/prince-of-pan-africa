@@ -31,6 +31,42 @@ TABLES_REQUIRED = [
 ]
 
 
+
+def _storage_path_check(env_name: str, expected_path: str, deployed: bool, repo_root: Path) -> dict[str, Any]:
+    configured = os.getenv(env_name, "").strip()
+    status = "ok"
+    error = None
+    if deployed and configured != expected_path:
+        status = "failed"
+        error = f"{env_name} must be set to {expected_path} in deployed environments."
+    elif deployed:
+        path = Path(configured).expanduser()
+        try:
+            resolved_path = path.resolve(strict=False)
+            resolved_repo = repo_root.resolve(strict=False)
+            if resolved_path == resolved_repo or resolved_repo in resolved_path.parents:
+                status = "failed"
+                error = f"{env_name} points inside the application checkout; use Render persistent disk path {expected_path}."
+        except Exception as exc:
+            status = "failed"
+            error = str(exc)
+    return {"status": status, "details": {"path": configured, "expected_path": expected_path, "error": error}}
+
+
+def _render_disk_check(deployed: bool) -> dict[str, Any]:
+    path = Path("/var/data")
+    exists = path.exists()
+    is_mount = os.path.ismount(path)
+    status = "ok"
+    error = None
+    if deployed and not exists:
+        status = "failed"
+        error = "Render persistent disk path /var/data does not exist."
+    elif deployed and not is_mount:
+        status = "failed"
+        error = "Render persistent disk path /var/data exists but is not mounted."
+    return {"status": status, "details": {"path": str(path), "exists": exists, "is_mount": is_mount, "error": error}}
+
 def _bool_env(name: str) -> bool:
     return bool(os.getenv(name, "").strip())
 
@@ -152,29 +188,25 @@ def build_readiness_verification() -> dict[str, Any]:
         }
     )
 
-    audio_storage_dir = os.getenv("AUDIO_STORAGE_DIR", "").strip()
     repo_root = Path(__file__).resolve().parents[2]
-    audio_status = "ok"
-    audio_error = None
-    if deployed and not audio_storage_dir:
-        audio_status = "failed"
-        audio_error = "AUDIO_STORAGE_DIR is required in deployed environments so generated audio is not written to ephemeral app storage."
-    elif deployed:
-        audio_path = Path(audio_storage_dir).expanduser()
-        try:
-            resolved_audio = audio_path.resolve(strict=False)
-            resolved_repo = repo_root.resolve(strict=False)
-            if resolved_audio == resolved_repo or resolved_repo in resolved_audio.parents:
-                audio_status = "failed"
-                audio_error = "AUDIO_STORAGE_DIR points inside the application checkout; use a Render persistent disk path such as /var/data/static/audio."
-        except Exception as exc:
-            audio_status = "failed"
-            audio_error = str(exc)
+    render_disk = _render_disk_check(deployed)
+    checks.append({"name": "render_persistent_disk", **render_disk})
+
+    audio_storage = _storage_path_check("AUDIO_STORAGE_DIR", "/var/data/static/audio", deployed, repo_root)
     checks.append(
         {
             "name": "durable_audio_storage",
-            "status": audio_status,
-            "details": {"audio_storage_dir": audio_storage_dir, "error": audio_error},
+            "status": audio_storage["status"],
+            "details": {"audio_storage_dir": audio_storage["details"]["path"], **audio_storage["details"]},
+        }
+    )
+
+    cover_storage = _storage_path_check("BOOK_COVER_STORAGE_DIR", "/var/data/static/book-covers", deployed, repo_root)
+    checks.append(
+        {
+            "name": "durable_book_cover_storage",
+            "status": cover_storage["status"],
+            "details": {"book_cover_storage_dir": cover_storage["details"]["path"], **cover_storage["details"]},
         }
     )
 
