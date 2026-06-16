@@ -111,7 +111,7 @@ function logChapterAudioFlow(flow, details = {}) {
 }
 
 function isGenerationTerminal(progressState) {
-  return ["complete", "failed", "partially_complete"].includes(progressState?.status);
+  return ["complete", "failed", "partially_complete", "needs_retry"].includes(progressState?.status);
 }
 
 export default function StudyPage() {
@@ -409,7 +409,7 @@ export default function StudyPage() {
     setError("");
     try {
       const response = await api(`/audiobooks/${selectedBook.id}/generate-audio`, { method: "POST" });
-      setStatus(`Audio generation status: ${response.status}. Track progress below.`);
+      setStatus(response.audiobook?.generation_progress?.user_message || `Audio generation status: ${response.status}. Track progress below.`);
       await loadBook(selectedBook.id);
       await loadLibrary();
     } catch (err) {
@@ -762,12 +762,14 @@ export default function StudyPage() {
     if (progressState.status === "chunking") return "Chunking";
     if (progressState.status === "generating_chapters") return "Generating chapters";
     if (progressState.status === "partially_complete") return "Completed with errors";
+    if (progressState.status === "needs_retry") return "Paused — needs retry";
     if (progressState.status === "complete") return "Complete";
     if (progressState.status === "failed") return "Failed";
     return progressState.status;
   }
 
   function generationErrorSummary(progressState) {
+    if (progressState?.user_message) return progressState.user_message;
     const errors = progressState?.failed_chapter_errors || [];
     if (!errors.length) return "";
     return errors
@@ -875,7 +877,7 @@ export default function StudyPage() {
               <div className="reader-actions">
                 {selectedBook.audio_chapter_count < selectedBook.chapter_count && (
                   <button className="focus-toggle" onClick={generateAudioForSavedBook}>
-                    Generate Missing Audio
+                    {selectedBook.status === "needs_retry" || generationProgress?.retryable ? "Resume Generation / Retry Failed Chapters" : "Generate Missing Audio"}
                   </button>
                 )}
                 {!activeChapter?.audio_url && (
