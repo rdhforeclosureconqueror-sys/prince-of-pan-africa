@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 
@@ -32,6 +33,9 @@ def test_readiness_healthy_returns_ok(monkeypatch):
     )
 
     monkeypatch.setenv("AUDIO_STORAGE_DIR", "/var/data/static/audio")
+    monkeypatch.setenv("BOOK_COVER_STORAGE_DIR", "/var/data/static/book-covers")
+    monkeypatch.setattr(verification_engine.Path, "exists", lambda self: True if str(self) == "/var/data" else Path.exists(self))
+    monkeypatch.setattr(verification_engine.os.path, "ismount", lambda path: path == Path("/var/data"))
     readiness = verification_engine.build_readiness_verification()
     assert readiness["status"] == "ok"
 
@@ -98,6 +102,7 @@ def test_deployed_sqlite_is_critical_failure(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", "sqlite:///./test.db")
     monkeypatch.setenv("SESSION_SECRET", "x" * 40)
     monkeypatch.setenv("AUDIO_STORAGE_DIR", "/var/data/static/audio")
+    monkeypatch.setenv("BOOK_COVER_STORAGE_DIR", "/var/data/static/book-covers")
 
     from verification import verification_engine
 
@@ -127,6 +132,7 @@ def test_deployed_audio_storage_inside_repo_fails(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", "postgresql://user:pass@localhost/db")
     monkeypatch.setenv("SESSION_SECRET", "x" * 40)
     monkeypatch.setenv("AUDIO_STORAGE_DIR", str(os.getcwd() + "/backend/app/static/audio"))
+    monkeypatch.setenv("BOOK_COVER_STORAGE_DIR", "/var/data/static/book-covers")
 
     from verification import verification_engine
 
@@ -144,6 +150,8 @@ def test_deployed_audio_storage_inside_repo_fails(monkeypatch):
         },
     )
 
+    monkeypatch.setattr(verification_engine.Path, "exists", lambda self: True if str(self) == "/var/data" else Path.exists(self))
+    monkeypatch.setattr(verification_engine.os.path, "ismount", lambda path: path == Path("/var/data"))
     readiness = verification_engine.build_readiness_verification()
     storage = next(item for item in readiness["details"] if item["name"] == "durable_audio_storage")
     assert readiness["status"] == "failed"
