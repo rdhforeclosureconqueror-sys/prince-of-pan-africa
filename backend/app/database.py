@@ -151,7 +151,7 @@ def _run_sqlite_compat_migrations() -> None:
 # =========================
 def get_database_type() -> str:
     if SQLALCHEMY_DATABASE_URL.startswith("postgresql"):
-        return "postgresql"
+        return "postgres"
     if SQLALCHEMY_DATABASE_URL.startswith("sqlite"):
         return "sqlite"
     return "unknown"
@@ -166,6 +166,8 @@ def enforce_database_url_for_production() -> None:
         return
     if not os.getenv("DATABASE_URL"):
         raise RuntimeError("DATABASE_URL is required in production-like environments.")
+    if IS_SQLITE:
+        raise RuntimeError("Production-like environments must use a persistent Postgres DATABASE_URL, not SQLite.")
 
 
 # =========================
@@ -251,12 +253,16 @@ def _run_generic_compat_migrations() -> None:
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_stripe_webhook_events_stripe_event_id ON stripe_webhook_events (stripe_event_id)"))
 
         audiobook_columns = {
+            "source_text": "TEXT NOT NULL DEFAULT ''",
             "description": "TEXT NOT NULL DEFAULT ''",
             "cover_image_path": "TEXT NOT NULL DEFAULT '/book-covers/library-placeholder.svg'",
+            "access_level": "TEXT NOT NULL DEFAULT 'free'",
             "updated_at": "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP",
         }
         for column, column_type in audiobook_columns.items():
             conn.execute(text(f"ALTER TABLE audiobooks ADD COLUMN IF NOT EXISTS {column} {column_type}"))
+
+        conn.execute(text("ALTER TABLE audiobook_progress ADD COLUMN IF NOT EXISTS completed_chapters TEXT NOT NULL DEFAULT '[]'"))
 
         audio_asset_columns = {
             "audiobook_id": "INTEGER",
