@@ -25,7 +25,7 @@ from app.dependencies.auth import require_permission
 from app.models import AudioAsset, Audiobook, AudiobookChapter, AudiobookChapterReflection, AudiobookProgress, BookOrganizationPlan, BookOrganizerBlock, BookOrganizerDocument, User, compute_text_checksum
 from app.config import settings
 from app.session import SESSION_COOKIE, parse_session_cookie_value, should_use_secure_cookie
-from app.routes.chat import generate_tts_audio_url, infer_audio_format_from_url, normalize_tts_text
+from app.routes.chat import TTS_PROVIDER_LIMIT_MESSAGE, classify_tts_provider_error, generate_tts_audio_url, infer_audio_format_from_url, normalize_tts_text
 
 router = APIRouter(prefix="/audiobooks", tags=["Audiobooks"])
 
@@ -842,6 +842,26 @@ def _serialize_audiobook(book: Audiobook, include_text: bool = False) -> dict:
     }
 
 
+
+def _chapter_error_detail(error: Exception) -> dict:
+    detail = getattr(error, "detail", None)
+    if isinstance(detail, dict):
+        provider_status = detail.get("provider_status")
+        body = detail.get("provider_body_snippet") or detail.get("reason") or str(error)
+        classification = classify_tts_provider_error(provider_status, body)
+        return {
+            "error_type": detail.get("error_type") or classification["error_type"],
+            "message": detail.get("reason") or str(error),
+            "provider_status": provider_status,
+            "retryable": bool(detail.get("retryable", classification["retryable"])),
+        }
+    classification = classify_tts_provider_error(getattr(error, "status_code", None), str(error))
+    return {"error_type": classification["error_type"], "message": str(error), "provider_status": getattr(error, "status_code", None), "retryable": classification["retryable"]}
+
+
+def _is_provider_pause_error(error_type: str) -> bool:
+    return error_type in {"provider_quota_exceeded", "provider_rate_limited"}
+
 def _build_generation_progress(book: Audiobook) -> dict:
     ordered_chapters = sorted(book.chapters, key=lambda chapter: chapter.chapter_index)
     total_chapters = len(ordered_chapters)
@@ -849,6 +869,7 @@ def _build_generation_progress(book: Audiobook) -> dict:
     failed_chapters = sum(1 for chapter in ordered_chapters if chapter.status == "failed")
     generating_chapters = sum(1 for chapter in ordered_chapters if chapter.status == "generating")
     queued_chapters = sum(1 for chapter in ordered_chapters if chapter.status in {"queued", "draft"})
+    pending_chapters = sum(1 for chapter in ordered_chapters if chapter.status in {"queued", "draft", "generating"} or (chapter.status != "completed" and not chapter.audio_url))
     current_chapter = next((chapter.chapter_index for chapter in ordered_chapters if chapter.status == "generating"), None)
 
     with _generation_lock:
@@ -875,6 +896,12 @@ def _build_generation_progress(book: Audiobook) -> dict:
         "total_chapters": total_chapters,
         "completed_chapters": completed_chapters,
         "failed_chapters": failed_chapters,
+        "pending_chapters": pending_chapters,
+        "paused_reason": runtime_state.get("paused_reason"),
+        "retryable": bool(runtime_state.get("retryable", failed_chapters > 0 or pending_chapters > 0)),
+        "last_error_type": runtime_state.get("last_error_type"),
+        "last_error_message": runtime_state.get("last_error_message"),
+        "user_message": runtime_state.get("user_message"),
         "failed_chapter_indexes": failed_chapter_indexes,
         "failed_chapter_errors": failed_chapter_errors,
         "generating_chapters": generating_chapters,
@@ -904,17 +931,25 @@ def _release_generation_thread(audiobook_id: int) -> None:
         _book_generation_threads.pop(audiobook_id, None)
 
 
-def _record_chapter_generation_error(audiobook_id: int, chapter_index: int, error: Exception) -> None:
+def _record_chapter_generation_error(audiobook_id: int, chapter_index: int, error: Exception) -> dict:
     with _generation_lock:
         current = dict(_book_generation_state.get(audiobook_id, {}))
         errors = list(current.get("failed_chapter_errors") or [])
+        detail = _chapter_error_detail(error)
         errors.append({
             "chapter_index": chapter_index,
-            "message": str(error)[:500] or "Chapter generation failed.",
+            "message": detail["message"][:500] or "Chapter generation failed.",
+            "error_type": detail["error_type"],
+            "provider_status": detail["provider_status"],
+            "retryable": detail["retryable"],
         })
+        current["last_error_type"] = detail["error_type"]
+        current["last_error_message"] = detail["message"][:500]
+        current["retryable"] = detail["retryable"]
         current["failed_chapter_errors"] = errors
         current["updated_at"] = datetime.utcnow().isoformat()
         _book_generation_state[audiobook_id] = current
+        return detail
 
 
 def _generate_audio_for_book_job(*, audiobook_id: int, user_id: int, base_url: str) -> None:
@@ -945,7 +980,7 @@ def _generate_audio_for_book_job(*, audiobook_id: int, user_id: int, base_url: s
                 message=f"Generating chapter {chapter.chapter_index} of {len(ordered_chapters)}",
             )
             chapter_started = time.monotonic()
-            logger.info("audiobook_generation chapter_start book_id=%s chapter=%s", audiobook_id, chapter.chapter_index)
+            logger.info("audiobook_generation chapter_start book_id=%s chapter=%s title=%s character_count=%s", audiobook_id, chapter.chapter_index, chapter.title, chapter.character_count)
 
             try:
                 if chapter.audio_url:
@@ -984,22 +1019,43 @@ def _generate_audio_for_book_job(*, audiobook_id: int, user_id: int, base_url: s
             except Exception as chapter_error:
                 chapter.status = "failed"
                 db.commit()
-                _record_chapter_generation_error(audiobook_id, chapter.chapter_index, chapter_error)
+                error_detail = _record_chapter_generation_error(audiobook_id, chapter.chapter_index, chapter_error)
                 logger.exception(
-                    "audiobook_generation chapter_failed book_id=%s chapter=%s error=%s",
+                    "audiobook_generation chapter_failed book_id=%s chapter=%s title=%s character_count=%s provider_status=%s provider_error_type=%s retryable=%s error=%s",
                     audiobook_id,
                     chapter.chapter_index,
-                    chapter_error,
+                    chapter.title,
+                    chapter.character_count,
+                    error_detail.get("provider_status"),
+                    error_detail.get("error_type"),
+                    error_detail.get("retryable"),
+                    error_detail.get("message"),
                 )
+                if _is_provider_pause_error(error_detail.get("error_type")):
+                    book.status = "needs_retry"
+                    db.commit()
+                    _update_runtime_generation_state(
+                        audiobook_id,
+                        current_step="needs_retry",
+                        paused_reason=error_detail.get("error_type"),
+                        retryable=True,
+                        last_error_type=error_detail.get("error_type"),
+                        last_error_message=error_detail.get("message"),
+                        user_message=TTS_PROVIDER_LIMIT_MESSAGE,
+                        message=TTS_PROVIDER_LIMIT_MESSAGE,
+                        current_chapter_index=None,
+                    )
+                    break
 
         db.refresh(book)
         failed_count = sum(1 for chapter in book.chapters if chapter.status == "failed")
-        book.status = "partially_complete" if failed_count else "complete"
+        if book.status != "needs_retry":
+            book.status = "partially_complete" if failed_count else "complete"
         db.commit()
         _update_runtime_generation_state(
             audiobook_id,
             current_step=book.status,
-            message="Generation complete" if failed_count == 0 else "Generation complete with some failed chapters",
+            message=(TTS_PROVIDER_LIMIT_MESSAGE if book.status == "needs_retry" else ("Generation complete" if failed_count == 0 else "Generation complete with some failed chapters")),
             current_chapter_index=None,
         )
     except Exception as exc:
@@ -2519,7 +2575,13 @@ def generate_single_chapter(audiobook_id: int, chapter_index: int, request: Requ
     except Exception as exc:
         chapter.status = "failed"
         db.commit()
-        raise HTTPException(status_code=500, detail=f"Chapter generation failed: {exc}") from exc
+        detail = _chapter_error_detail(exc)
+        logger.exception(
+            "audiobook_generation single_chapter_failed book_id=%s chapter=%s title=%s character_count=%s provider_status=%s provider_error_type=%s retryable=%s error=%s",
+            audiobook_id, chapter.chapter_index, chapter.title, chapter.character_count, detail.get("provider_status"), detail.get("error_type"), detail.get("retryable"), detail.get("message"),
+        )
+        status_code = 429 if detail.get("error_type") in {"provider_quota_exceeded", "provider_rate_limited"} else 502
+        raise HTTPException(status_code=status_code, detail={**detail, "user_message": TTS_PROVIDER_LIMIT_MESSAGE if detail.get("error_type") == "provider_quota_exceeded" else detail.get("message")}) from exc
 
 
 @router.post("/{audiobook_id}/progress")

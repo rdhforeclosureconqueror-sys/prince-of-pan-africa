@@ -20,27 +20,40 @@ MUFASA_MODEL = "gpt-4o-mini"
 SKILL_WORLD_TTS_URL = settings.SKILL_WORLD_TTS_URL
 AIVOICE_BASE_URL = settings.AIVOICE_BASE_URL
 OPENAI_API_KEY = settings.OPENAI_API_KEY
+AIVOICE_API_KEY = settings.AIVOICE_API_KEY
+
+TTS_PROVIDER_LIMIT_MESSAGE = "Audiobook generation paused because the text-to-speech provider reached its usage limit. Completed chapters were saved. You can resume after quota/billing is restored."
 
 client = OpenAI(api_key=OPENAI_API_KEY or "DUMMY_KEY")
 logger = logging.getLogger("mufasa-chat-voice")
 
 
-def _tts_error_reason(status_code: int | None, body_snippet: str, err: Exception | None = None) -> str:
+def classify_tts_provider_error(status_code: int | None, body_snippet: str, err: Exception | None = None) -> dict:
     lowered = (body_snippet or "").lower()
     if err is not None:
-        return "network unreachable"
+        return {"error_type": "provider_network_error", "reason": "network unreachable", "retryable": True}
+    quota_markers = ("quota", "billing", "usage limit", "insufficient_quota", "exceeded your current quota")
+    rate_markers = ("rate limit", "rate_limit", "too many requests", "429")
+    if status_code == 429 or any(marker in lowered for marker in quota_markers + rate_markers):
+        if any(marker in lowered for marker in quota_markers):
+            return {"error_type": "provider_quota_exceeded", "reason": "provider quota exceeded", "retryable": True}
+        return {"error_type": "provider_rate_limited", "reason": "provider rate limited", "retryable": True}
     if status_code == 401 and "missing_internal_token" in lowered:
-        return (
+        return {"error_type": "provider_auth_error", "reason": (
             "production aiVoice /speak requires an internal token, "
             "which does not match the repo truth report"
-        )
+        ), "retryable": False}
     if status_code in {401, 403} or "invalid api key" in lowered or "unauthorized" in lowered:
-        return "invalid API key"
+        return {"error_type": "provider_auth_error", "reason": "invalid API key", "retryable": False}
     if status_code == 404:
-        return "incorrect endpoint path"
+        return {"error_type": "provider_configuration_error", "reason": "incorrect endpoint path", "retryable": False}
     if status_code in {400, 415, 422}:
-        return "incorrect request body format"
-    return "provider rejected request"
+        return {"error_type": "provider_payload_error", "reason": "incorrect request body format", "retryable": False}
+    return {"error_type": "provider_error", "reason": "provider rejected request", "retryable": True}
+
+
+def _tts_error_reason(status_code: int | None, body_snippet: str, err: Exception | None = None) -> str:
+    return classify_tts_provider_error(status_code, body_snippet, err)["reason"]
 
 
 def generate_audio_filename(ext="mp3"):
@@ -186,7 +199,10 @@ def request_aivoice_tts(
         payload["pitch"] = pitch
     provider_url = _aivoice_speak_url()
     headers = {"Content-Type": "application/json"}
-    auth_header_sent = False
+    api_key = (AIVOICE_API_KEY or "").strip()
+    if api_key:
+        headers["X-AIVOICE-KEY"] = api_key
+    auth_header_sent = bool(api_key)
 
     logger.info(
         "aiVoice TTS upstream request url=%s method=POST auth_header_sent=%s payload_keys=%s text_len=%s",
@@ -205,7 +221,8 @@ def request_aivoice_tts(
             stream=True,
         )
     except requests.RequestException as exc:
-        reason = _tts_error_reason(None, "", exc)
+        classification = classify_tts_provider_error(None, "", exc)
+        reason = classification["reason"]
         logger.error(
             "aiVoice TTS upstream network error url=%s method=POST auth_header_sent=%s reason=%s error=%s",
             provider_url,
@@ -220,6 +237,8 @@ def request_aivoice_tts(
                 "reason": reason,
                 "provider_url": provider_url,
                 "auth_header_sent": auth_header_sent,
+                "error_type": classification["error_type"],
+                "retryable": classification["retryable"],
                 "provider_status": None,
                 "provider_body_snippet": str(exc)[:200],
             },
@@ -234,7 +253,8 @@ def request_aivoice_tts(
 
     if response.status_code != 200:
         detail = response.text[:200]
-        reason = _tts_error_reason(response.status_code, detail)
+        classification = classify_tts_provider_error(response.status_code, detail)
+        reason = classification["reason"]
         logger.error(
             "aiVoice TTS upstream response url=%s method=POST auth_header_sent=%s status=%s content_type=%s reason=%s body=%s",
             provider_url,
@@ -251,6 +271,8 @@ def request_aivoice_tts(
                 "reason": reason,
                 "provider_url": provider_url,
                 "auth_header_sent": auth_header_sent,
+                "error_type": classification["error_type"],
+                "retryable": classification["retryable"],
                 "provider_status": response.status_code,
                 "provider_body_snippet": detail,
                 "request_payload_shape": sorted(payload.keys()),
