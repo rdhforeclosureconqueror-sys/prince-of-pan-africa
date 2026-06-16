@@ -15,7 +15,20 @@ from app.models import Permission, Role, User
 from app.services.admin_seed import ADMIN_EMAIL
 from app.session import SessionValidationError, get_session_secret
 
-TABLES_REQUIRED = ["users", "member_profiles", "activity_logs", "leadership_assessments"]
+TABLES_REQUIRED = [
+    "users",
+    "member_profiles",
+    "activity_logs",
+    "leadership_assessments",
+    "audiobooks",
+    "audiobook_chapters",
+    "audiobook_progress",
+    "audiobook_chapter_reflections",
+    "audio_assets",
+    "book_organizer_documents",
+    "book_organizer_blocks",
+    "book_organization_plans",
+]
 
 
 def _bool_env(name: str) -> bool:
@@ -28,6 +41,24 @@ def _status_from_checks(checks: list[dict[str, Any]]) -> str:
     if any(check.get("status") == "degraded" for check in checks):
         return "degraded"
     return "ok"
+
+
+def _path_check(path: str, expected: str) -> dict[str, Any]:
+    return {
+        "configured": bool(path.strip()),
+        "path": path,
+        "expected": expected,
+        "matches_expected": path.strip() == expected,
+    }
+
+
+def _mount_check(path: str) -> dict[str, Any]:
+    mount = Path(path)
+    return {
+        "path": path,
+        "exists": mount.exists(),
+        "is_dir": mount.is_dir(),
+    }
 
 
 def check_database() -> dict[str, Any]:
@@ -109,6 +140,43 @@ def build_readiness_verification() -> dict[str, Any]:
             "details": {
                 "required_present": required_presence,
                 "missing_required": missing_required,
+            },
+        }
+    )
+
+    db_type = db_check.get("db_type")
+    production_persistence_ok = bool(os.getenv("DATABASE_URL")) and db_type == "postgresql" and not db_check.get("unsafe_fallback", False)
+    checks.append(
+        {
+            "name": "production_persistence",
+            "status": "ok" if production_persistence_ok else "failed",
+            "details": {
+                "database_url_present": bool(os.getenv("DATABASE_URL")),
+                "db_type": "postgres" if db_type == "postgresql" else db_type,
+                "unsafe_fallback": db_check.get("unsafe_fallback", False),
+            },
+        }
+    )
+
+    render_disk = _mount_check("/var/data")
+    checks.append(
+        {
+            "name": "render_disk_mount",
+            "status": "ok" if render_disk["exists"] and render_disk["is_dir"] else "failed",
+            "details": render_disk,
+        }
+    )
+
+    audio_storage = _path_check(os.getenv("AUDIO_STORAGE_DIR", ""), "/var/data/static/audio")
+    cover_storage = _path_check(os.getenv("BOOK_COVER_STORAGE_DIR", ""), "/var/data/static/book-covers")
+    storage_ok = audio_storage["matches_expected"] and cover_storage["matches_expected"]
+    checks.append(
+        {
+            "name": "persistent_media_storage",
+            "status": "ok" if storage_ok else "failed",
+            "details": {
+                "AUDIO_STORAGE_DIR": audio_storage,
+                "BOOK_COVER_STORAGE_DIR": cover_storage,
             },
         }
     )

@@ -9,6 +9,8 @@ def _set_minimal_env(monkeypatch):
     monkeypatch.setenv("ENVIRONMENT", "production")
     monkeypatch.setenv("DATABASE_URL", "sqlite:///./test.db")
     monkeypatch.setenv("SESSION_SECRET", "x" * 40)
+    monkeypatch.setenv("AUDIO_STORAGE_DIR", "/var/data/static/audio")
+    monkeypatch.setenv("BOOK_COVER_STORAGE_DIR", "/var/data/static/book-covers")
 
 
 def test_readiness_healthy_returns_ok(monkeypatch):
@@ -21,18 +23,29 @@ def test_readiness_healthy_returns_ok(monkeypatch):
         verification_engine,
         "check_database",
         lambda: {
-            "db_type": "sqlite",
+            "db_type": "postgresql",
             "connected": True,
             "tables": {
                 "users": True,
                 "member_profiles": True,
                 "activity_logs": True,
                 "leadership_assessments": True,
+                "audiobooks": True,
+                "audiobook_chapters": True,
+                "audiobook_progress": True,
+                "audiobook_chapter_reflections": True,
+                "audio_assets": True,
+                "book_organizer_documents": True,
+                "book_organizer_blocks": True,
+                "book_organization_plans": True,
             },
             "seed_admin_exists": True,
+            "unsafe_fallback": False,
             "ok": True,
         },
     )
+    monkeypatch.setattr(verification_engine.Path, "exists", lambda self: True)
+    monkeypatch.setattr(verification_engine.Path, "is_dir", lambda self: True)
 
     readiness = verification_engine.build_readiness_verification()
     assert readiness["status"] == "ok"
@@ -91,3 +104,56 @@ def test_public_health_does_not_leak_sensitive_config(monkeypatch):
     assert "super-openai-key" not in serialized
     assert "SESSION_SECRET" not in serialized
     assert "OPENAI_API_KEY" not in serialized
+
+
+def test_readiness_reports_production_persistence_and_storage(monkeypatch):
+    _set_minimal_env(monkeypatch)
+    from verification import verification_engine
+
+    monkeypatch.setattr(
+        verification_engine,
+        "check_database",
+        lambda: {
+            "db_type": "postgresql",
+            "connected": True,
+            "tables": {table: True for table in verification_engine.TABLES_REQUIRED},
+            "seed_admin_exists": True,
+            "unsafe_fallback": False,
+        },
+    )
+    monkeypatch.setattr(verification_engine.Path, "exists", lambda self: True)
+    monkeypatch.setattr(verification_engine.Path, "is_dir", lambda self: True)
+
+    readiness = verification_engine.build_readiness_verification()
+
+    checks = {item["name"]: item for item in readiness["details"]}
+    assert checks["production_persistence"]["status"] == "ok"
+    assert checks["production_persistence"]["details"]["db_type"] == "postgres"
+    assert checks["render_disk_mount"]["status"] == "ok"
+    assert checks["persistent_media_storage"]["status"] == "ok"
+
+
+def test_readiness_fails_when_media_storage_is_not_persistent(monkeypatch):
+    _set_minimal_env(monkeypatch)
+    monkeypatch.setenv("AUDIO_STORAGE_DIR", "backend/app/static/audio")
+    from verification import verification_engine
+
+    monkeypatch.setattr(
+        verification_engine,
+        "check_database",
+        lambda: {
+            "db_type": "postgresql",
+            "connected": True,
+            "tables": {table: True for table in verification_engine.TABLES_REQUIRED},
+            "seed_admin_exists": True,
+            "unsafe_fallback": False,
+        },
+    )
+    monkeypatch.setattr(verification_engine.Path, "exists", lambda self: True)
+    monkeypatch.setattr(verification_engine.Path, "is_dir", lambda self: True)
+
+    readiness = verification_engine.build_readiness_verification()
+
+    storage = next(item for item in readiness["details"] if item["name"] == "persistent_media_storage")
+    assert storage["status"] == "failed"
+    assert storage["details"]["AUDIO_STORAGE_DIR"]["expected"] == "/var/data/static/audio"
