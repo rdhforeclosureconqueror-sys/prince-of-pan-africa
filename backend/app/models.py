@@ -311,3 +311,137 @@ def _enforce_immutable_book_organizer_blocks(session, flush_context, instances):
 
         if text_history.has_changes() or checksum_history.has_changes():
             raise ValueError("Book organizer block text and checksum are immutable once created.")
+
+class GuestSession(Base):
+    __tablename__ = "guest_sessions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    session_id: Mapped[str] = mapped_column(String(128), nullable=False, unique=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    merged_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    merged_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class ActivityType(Base):
+    __tablename__ = "activity_types"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(128), nullable=False, unique=True, index=True)
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    default_points: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    default_star: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    verification_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class Activity(Base):
+    __tablename__ = "activities"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    guest_session_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    activity_type: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    source_module: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    verification_status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending", index=True)
+    participation_points: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    star_award: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    metadata_: Mapped[dict] = mapped_column("metadata", JSON, nullable=False, default=dict)
+
+
+class ParticipationPoint(Base):
+    __tablename__ = "participation_points"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    activity_id: Mapped[int] = mapped_column(ForeignKey("activities.id"), nullable=False, index=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    guest_session_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    points: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    reason: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class StarTransaction(Base):
+    __tablename__ = "star_transactions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    activity_id: Mapped[int | None] = mapped_column(ForeignKey("activities.id"), nullable=True, index=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    guest_session_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    amount: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    transaction_type: Mapped[str] = mapped_column(String(32), nullable=False, default="earn")
+    reason: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+
+class Badge(Base):
+    __tablename__ = "badges"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    code: Mapped[str] = mapped_column(String(128), nullable=False, unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    criteria: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class Streak(Base):
+    __tablename__ = "streaks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    guest_session_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    streak_type: Mapped[str] = mapped_column(String(64), nullable=False, default="daily")
+    current_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    longest_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_activity_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class ActivityHistory(Base):
+    __tablename__ = "activity_history"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    activity_id: Mapped[int] = mapped_column(ForeignKey("activities.id"), nullable=False, index=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    guest_session_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    event_type: Mapped[str] = mapped_column(String(128), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class VerificationRecord(Base):
+    __tablename__ = "verification_records"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    activity_id: Mapped[int] = mapped_column(ForeignKey("activities.id"), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending", index=True)
+    verified_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class RewardEvent(Base):
+    __tablename__ = "reward_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    guest_session_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    reward_type: Mapped[str] = mapped_column(String(128), nullable=False)
+    star_cost: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="issued")
+    metadata_: Mapped[dict] = mapped_column("metadata", JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class ActivityAuditLog(Base):
+    __tablename__ = "activity_audit_log"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    activity_id: Mapped[int | None] = mapped_column(ForeignKey("activities.id"), nullable=True, index=True)
+    actor_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    action: Mapped[str] = mapped_column(String(128), nullable=False)
+    before: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    after: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)

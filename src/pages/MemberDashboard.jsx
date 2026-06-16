@@ -130,6 +130,11 @@ export default function MemberDashboard() {
     : "Free access · payment not confirmed";
   const historicalSpotlightTitle = dailySpotlight?.title || featuredTimeline?.title || "Historical spotlight is being prepared.";
   const historicalSpotlightContext = dailySpotlight?.historical_context || featuredTimeline?.summary || "The current source dataset has a short entry for this date. Treat this card as a launch point for deeper timeline study.";
+  const participation = overview?.participation || {};
+  const currentStar = participation?.star ?? summary?.star ?? 0;
+  const participationScore = participation?.participation_score ?? summary?.participation_score ?? 0;
+  const currentRank = participation?.current_rank ?? summary?.current_rank ?? "Registered User";
+  const activityCount = participation?.activity_count ?? summary?.activity_count ?? 0;
   const impactStats = [
     ["Businesses Supported This Month", summary?.businesses_supported_month ?? 0],
     ["Books Completed", summary?.books_completed ?? 0],
@@ -152,6 +157,12 @@ export default function MemberDashboard() {
           <span>{membership?.label || "Free Member"}</span>
           <span>{membershipStatusLabel}</span>
           <span>{formatDate(today)}</span>
+        </div>
+        <div className="participation-pulse" aria-label="Participation Engine summary">
+          <article><span>Current STAR</span><strong>{currentStar}</strong></article>
+          <article><span>Participation Score</span><strong>{participationScore}</strong></article>
+          <article><span>Community Rank</span><strong>{currentRank}</strong></article>
+          <article><span>Activities Recorded</span><strong>{activityCount}</strong></article>
         </div>
         <div className="daily-actions-panel" aria-label="Today’s Four Actions">
           <h2>Today’s Four Actions</h2>

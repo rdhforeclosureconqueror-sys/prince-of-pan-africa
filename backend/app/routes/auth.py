@@ -10,6 +10,7 @@ from app.authz import get_user_permissions, get_user_role_names
 from app.dependencies.auth import is_local_or_dev_environment
 from app.models import MemberProfile, User
 from app.security import hash_password, verify_password
+from app.services.participation import merge_guest_participation
 from app.session import (
     SESSION_COOKIE,
     SESSION_MAX_AGE_SECONDS,
@@ -175,7 +176,7 @@ def auth_debug_me(request: Request, db: Session = Depends(get_db)):
 
 
 @router.post("/join", status_code=status.HTTP_201_CREATED)
-def auth_join(payload: AuthPayload, response: Response, db: Session = Depends(get_db)):
+def auth_join(payload: AuthPayload, response: Response, request: Request, db: Session = Depends(get_db)):
     normalized_email = _normalize_email(payload.email)
     if "@" not in normalized_email:
         raise HTTPException(status_code=422, detail="Valid email is required")
@@ -201,6 +202,8 @@ def auth_join(payload: AuthPayload, response: Response, db: Session = Depends(ge
             },
         )
     )
+    guest_session_id = request.headers.get("X-Guest-Session-Id") or request.cookies.get("simba_guest_session")
+    merged_guest_activities = merge_guest_participation(db, guest_session_id=guest_session_id, user=user) if guest_session_id else 0
     db.commit()
 
     payload_user, profile, role_names, permissions, _, _ = _authorization_payload(db, user)
@@ -212,11 +215,12 @@ def auth_join(payload: AuthPayload, response: Response, db: Session = Depends(ge
         "company": (profile.attributes or {}).get("company") if profile else None,
         "member_profile_role": profile.role if profile else None,
         "rbac": {"roles": role_names, "permissions": permissions},
+        "merged_guest_activities": merged_guest_activities,
     }
 
 
 @router.post("/login")
-def auth_login(payload: AuthPayload, response: Response, db: Session = Depends(get_db)):
+def auth_login(payload: AuthPayload, response: Response, request: Request, db: Session = Depends(get_db)):
     normalized_email = _normalize_email(payload.email)
     user = _find_user_by_email(db, normalized_email)
     if not user:
@@ -229,7 +233,10 @@ def auth_login(payload: AuthPayload, response: Response, db: Session = Depends(g
     if should_upgrade_hash:
         user.password_hash = hash_password(payload.password)
         db.add(user)
-        db.commit()
+
+    guest_session_id = request.headers.get("X-Guest-Session-Id") or request.cookies.get("simba_guest_session")
+    merged_guest_activities = merge_guest_participation(db, guest_session_id=guest_session_id, user=user) if guest_session_id else 0
+    db.commit()
 
     payload_user, profile, role_names, permissions, _, _ = _authorization_payload(db, user)
     _set_session_cookie(response, user.id)
@@ -240,6 +247,7 @@ def auth_login(payload: AuthPayload, response: Response, db: Session = Depends(g
         "company": (profile.attributes or {}).get("company") if profile else None,
         "member_profile_role": profile.role if profile else None,
         "rbac": {"roles": role_names, "permissions": permissions},
+        "merged_guest_activities": merged_guest_activities,
     }
 
 
