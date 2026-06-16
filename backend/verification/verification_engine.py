@@ -15,7 +15,20 @@ from app.models import Permission, Role, User
 from app.services.admin_seed import ADMIN_EMAIL
 from app.session import SessionValidationError, get_session_secret
 
-TABLES_REQUIRED = ["users", "member_profiles", "activity_logs", "leadership_assessments"]
+TABLES_REQUIRED = [
+    "users",
+    "member_profiles",
+    "activity_logs",
+    "leadership_assessments",
+    "audiobooks",
+    "audiobook_chapters",
+    "audiobook_progress",
+    "audiobook_chapter_reflections",
+    "audio_assets",
+    "book_organizer_documents",
+    "book_organizer_blocks",
+    "book_organization_plans",
+]
 
 
 def _bool_env(name: str) -> bool:
@@ -37,7 +50,8 @@ def check_database() -> dict[str, Any]:
         "connected": False,
         "tables": {},
         "seed_admin_exists": False,
-        "persistence_mode": "postgres" if db_type == "postgresql" else db_type,
+        "persistence_mode": "postgres" if db_type == "postgres" else db_type,
+        "database_url_present": _bool_env("DATABASE_URL"),
         "unsafe_fallback": is_unsafe_sqlite_fallback(),
     }
 
@@ -56,9 +70,9 @@ def check_database() -> dict[str, Any]:
             )
 
         result["ok"] = result["connected"] and all(result["tables"].values())
-        if is_production_like_environment() and result["unsafe_fallback"]:
+        if is_production_like_environment() and (not result["database_url_present"] or db_type != "postgres"):
             result["ok"] = False
-            result["error"] = "Unsafe SQLite fallback detected for production-like environment."
+            result["error"] = "Production persistence requires DATABASE_URL backed by Postgres."
         return result
     except Exception as exc:
         result["error"] = str(exc)
@@ -77,6 +91,8 @@ def build_readiness_verification() -> dict[str, Any]:
             "details": {
                 "db_type": db_check.get("db_type"),
                 "connected": db_check.get("connected", False),
+                "database_url_present": db_check.get("database_url_present", _bool_env("DATABASE_URL")),
+                "persistence_mode": db_check.get("persistence_mode"),
                 "error": db_check.get("error"),
             },
         }
@@ -110,6 +126,55 @@ def build_readiness_verification() -> dict[str, Any]:
                 "required_present": required_presence,
                 "missing_required": missing_required,
             },
+        }
+    )
+
+
+    deployed = is_production_like_environment()
+    persistence_status = "ok"
+    persistence_errors: list[str] = []
+    if deployed and not _bool_env("DATABASE_URL"):
+        persistence_status = "failed"
+        persistence_errors.append("DATABASE_URL is missing in a deployed/production-like environment")
+    if deployed and db_check.get("db_type") != "postgres":
+        persistence_status = "failed"
+        persistence_errors.append("Deployed backend is not using Postgres")
+    checks.append(
+        {
+            "name": "production_persistence",
+            "status": persistence_status,
+            "details": {
+                "deployed_environment": deployed,
+                "db_type": db_check.get("db_type"),
+                "database_url_present": _bool_env("DATABASE_URL"),
+                "errors": persistence_errors,
+            },
+        }
+    )
+
+    audio_storage_dir = os.getenv("AUDIO_STORAGE_DIR", "").strip()
+    repo_root = Path(__file__).resolve().parents[2]
+    audio_status = "ok"
+    audio_error = None
+    if deployed and not audio_storage_dir:
+        audio_status = "failed"
+        audio_error = "AUDIO_STORAGE_DIR is required in deployed environments so generated audio is not written to ephemeral app storage."
+    elif deployed:
+        audio_path = Path(audio_storage_dir).expanduser()
+        try:
+            resolved_audio = audio_path.resolve(strict=False)
+            resolved_repo = repo_root.resolve(strict=False)
+            if resolved_audio == resolved_repo or resolved_repo in resolved_audio.parents:
+                audio_status = "failed"
+                audio_error = "AUDIO_STORAGE_DIR points inside the application checkout; use a Render persistent disk path such as /var/data/static/audio."
+        except Exception as exc:
+            audio_status = "failed"
+            audio_error = str(exc)
+    checks.append(
+        {
+            "name": "durable_audio_storage",
+            "status": audio_status,
+            "details": {"audio_storage_dir": audio_storage_dir, "error": audio_error},
         }
     )
 
