@@ -4,7 +4,8 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from app.dependencies.auth import require_permission
 from app.database import get_db
-from app.models import ActivityLog, LeadershipAssessment, MemberProfile, Subscription, User
+from app.models import Activity, ActivityLog, LeadershipAssessment, MemberProfile, Subscription, User
+from app.services.participation import participation_summary
 from app.services.billing import (
     ACTIVE_SUBSCRIPTION_STATUSES,
     BUILDER_TIER,
@@ -53,11 +54,13 @@ def get_member_overview(
         .count()
     )
 
-    activity_count = (
+    legacy_activity_count = (
         db.query(ActivityLog)
         .filter(ActivityLog.user_id == user.id)
         .count()
     )
+    participation = participation_summary(db, user_id=user.id)
+    activity_count = max(legacy_activity_count, participation["activity_count"])
 
     # Canonical summary block (additive; older fields are preserved below).
     summary_stats = {
@@ -67,6 +70,9 @@ def get_member_overview(
         "workouts_completed": 0,
         "shares": 0,
         "streak_days": 0,
+        "participation_score": participation["participation_score"],
+        "star": participation["star"],
+        "current_rank": participation["current_rank"],
     }
 
     return {
@@ -121,6 +127,7 @@ def get_member_overview(
                 },
             },
         },
+        "participation": participation,
         "summary_stats": summary_stats,
         # Backward-compatible top-level keys currently read by MemberDashboard.jsx.
         "reading_minutes": summary_stats["reading_minutes"],
@@ -279,27 +286,52 @@ def get_member_activity(
     db: Session = Depends(get_db),
 ):
 
-    entries = (
-        db.query(ActivityLog)
-        .filter(ActivityLog.user_id == current_user.id)
-        .order_by(ActivityLog.timestamp.desc())
+    participation_entries = (
+        db.query(Activity)
+        .filter(Activity.user_id == current_user.id)
+        .order_by(Activity.timestamp.desc(), Activity.id.desc())
         .limit(max(1, min(limit, 50)))
         .all()
     )
 
-    # Canonical item shape with compatibility aliases for existing frontend callers.
-    activity_items = [
-        {
-            "id": entry.id,
-            "action": entry.action,
-            "title": entry.action,
-            "type": entry.action,
-            "description": entry.action,
-            "detail": entry.action,
-            "timestamp": entry.timestamp.isoformat() if entry.timestamp else None,
-        }
-        for entry in entries
-    ]
+    if participation_entries:
+        activity_items = [
+            {
+                "id": entry.id,
+                "activity_id": entry.id,
+                "action": entry.activity_type,
+                "title": entry.activity_type.replace("_", " ").title(),
+                "type": entry.activity_type,
+                "description": f"{entry.participation_points} participation points · {entry.star_award} STAR",
+                "detail": f"{entry.source_module} · {entry.verification_status}",
+                "timestamp": entry.timestamp.isoformat() if entry.timestamp else None,
+                "participation_points": entry.participation_points,
+                "star_award": entry.star_award,
+                "verification_status": entry.verification_status,
+                "source_module": entry.source_module,
+            }
+            for entry in participation_entries
+        ]
+    else:
+        entries = (
+            db.query(ActivityLog)
+            .filter(ActivityLog.user_id == current_user.id)
+            .order_by(ActivityLog.timestamp.desc())
+            .limit(max(1, min(limit, 50)))
+            .all()
+        )
+        activity_items = [
+            {
+                "id": entry.id,
+                "action": entry.action,
+                "title": entry.action,
+                "type": entry.action,
+                "description": entry.action,
+                "detail": entry.action,
+                "timestamp": entry.timestamp.isoformat() if entry.timestamp else None,
+            }
+            for entry in entries
+        ]
 
     return {
         "ok": True,
