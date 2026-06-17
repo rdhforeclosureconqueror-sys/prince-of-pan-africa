@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { api } from "../api/api";
 import { API_BASE_URL } from "../config";
 import { ENABLE_TEXT_BOOK_ORGANIZER } from "../config";
+import PublicEngagementBar from "../components/PublicEngagementBar";
 import "../styles/library.css";
 
 const PHASES = [
@@ -34,10 +35,13 @@ const PHASES = [
 ];
 
 const ACCESS_LABELS = {
+  public: "Public",
   free: "Free",
+  subscription: "Subscription",
   member: "Community Member",
   subscriber: "Builder Member",
   builder_member: "Builder Member",
+  private: "Private",
   purchased: "Purchased",
 };
 
@@ -63,6 +67,14 @@ function shortDescription(item) {
   return item.description || "Saved for reading, listening, and resume progress.";
 }
 
+function readingTime(item) {
+  return `${Math.max(1, Math.ceil((item.total_characters || 0) / 9000))} min read`;
+}
+
+function listeningTime(item) {
+  return item.audio_chapter_count > 0 ? `${item.audio_chapter_count} audio section${item.audio_chapter_count === 1 ? "" : "s"}` : "Audio coming soon";
+}
+
 export default function LibraryDecolonize({ canAccessOrganizer = false, authChecked = false, user = null }) {
   const [items, setItems] = useState([]);
 
@@ -83,7 +95,7 @@ export default function LibraryDecolonize({ canAccessOrganizer = false, authChec
     <main className="library-shell">
       <div className="library-inner cosmic-readable-shell">
         <h1>Book + Audiobook Library</h1>
-        <p>Your saved manuscripts and audiobooks stay in the system for reading, listening, and resume progress.</p>
+        <p>Browse public books, preview audiobooks, and share the Simba wa Ujamaa experience with your community.</p>
 
         <div className="library-actions">
           <Link to="/study" className="library-pill library-pill--green">
@@ -104,7 +116,7 @@ export default function LibraryDecolonize({ canAccessOrganizer = false, authChec
 
         <section className="saved-library-grid">
           {!items.length ? (
-            <p className="saved-empty">No books saved yet. Start in Audiobook Studio to add your first title.</p>
+            <p className="saved-empty">No public books are available yet. Check back soon as the library grows.</p>
           ) : (
             items.map((item) => (
               <article key={item.id} className="saved-book-card saved-book-card--cover">
@@ -117,10 +129,20 @@ export default function LibraryDecolonize({ canAccessOrganizer = false, authChec
                   <p className="saved-author">{item.author}</p>
                   <p className="saved-description">{shortDescription(item)}</p>
                   <div className="saved-meta">
-                    <span>{item.status}</span>
-                    <span>{formatAccessLevel(item.access_level)}</span>
+                    <span>{readingTime(item)}</span>
+                    <span>{listeningTime(item)}</span>
                     <span>{item.audio_chapter_count}/{item.chapter_count} voiced</span>
                   </div>
+                  <span className={`library-visibility-badge library-visibility-badge--${item.access_level}`}>
+                    {formatAccessLevel(item.access_level)}
+                  </span>
+                  <PublicEngagementBar
+                    contentType="book"
+                    contentId={item.id}
+                    title={item.title}
+                    text={`Explore ${item.title} in the Simba wa Ujamaa public library.`}
+                    path={`/study?book=${item.id}`}
+                  />
                   <div className="saved-actions">
                     <Link to={`/study?book=${item.id}`} className="library-pill phase-link">
                       Read / Listen →
