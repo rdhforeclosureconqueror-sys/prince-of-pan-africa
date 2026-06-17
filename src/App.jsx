@@ -52,6 +52,33 @@ function DashboardRoute({ authChecked, user, rbac, isAdmin }) {
   return isAdmin ? <AdminOperationsDashboard /> : <MemberDashboard />;
 }
 
+function shareVisitorId() {
+  const key = "swu_visitor_id";
+  let id = window.localStorage?.getItem(key);
+  if (!id) {
+    id = `visitor-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    window.localStorage?.setItem(key, id);
+  }
+  return id;
+}
+
+function ShareClickTracker() {
+  const location = useLocation();
+
+  useEffect(() => {
+    const shareId = new URLSearchParams(location.search).get("swu_share");
+    if (!shareId) return;
+    api(`/audiobooks/shares/${shareId}/click`, {
+      method: "POST",
+      body: JSON.stringify({ visitor_id: shareVisitorId() }),
+    }).catch((err) => {
+      console.info("[share-tracking] click was not recorded", err);
+    });
+  }, [location.search]);
+
+  return null;
+}
+
 function OrganizerAccessNotice({ title, detail }) {
   return (
     <main className="library-shell">
@@ -121,6 +148,7 @@ function AppRoutes({ user, rbac, isAdmin, canAccessOrganizer, authChecked, refre
   return (
     <>
       <GlobalNav user={user} rbac={rbac} canAccessOrganizer={canAccessOrganizer} authChecked={authChecked} />
+      <ShareClickTracker />
       <Routes>
         <Route path="/" element={<Home user={user} isAdmin={isAdmin} canAccessOrganizer={canAccessOrganizer} authChecked={authChecked} onAuthChange={refreshAuth} />} />
         <Route path="/dashboard" element={<DashboardRoute authChecked={authChecked} user={user} rbac={rbac} isAdmin={isAdmin} />} />

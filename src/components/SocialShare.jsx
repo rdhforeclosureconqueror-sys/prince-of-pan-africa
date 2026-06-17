@@ -1,5 +1,18 @@
 import React, { useMemo } from "react";
 import { FaFacebook, FaTiktok, FaInstagram, FaLink, FaCopy } from "react-icons/fa";
+import { api } from "../api/api";
+
+const CANONICAL_ORIGIN = "https://SimbaWaUjamaa.com";
+
+function visitorId() {
+  const key = "swu_visitor_id";
+  let id = window.localStorage?.getItem(key);
+  if (!id) {
+    id = `visitor-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    window.localStorage?.setItem(key, id);
+  }
+  return id;
+}
 
 export default function SocialShare({ day, shareText = "", sharePack = "" }) {
   // ✅ Build a clean share link that preserves origin/path and sets ?day=
@@ -12,9 +25,9 @@ export default function SocialShare({ day, shareText = "", sharePack = "" }) {
         u.searchParams.set("day", String(day));
       }
 
-      return u.toString();
+      return `${CANONICAL_ORIGIN}${u.pathname}${u.search}${u.hash}`;
     } catch {
-      return window.location.href;
+      return `${CANONICAL_ORIGIN}/`;
     }
   }, [day]);
 
@@ -38,6 +51,30 @@ export default function SocialShare({ day, shareText = "", sharePack = "" }) {
     }
   };
 
+  const nativeShare = async () => {
+    let trackedUrl = shareUrl;
+    try {
+      const created = await api("/audiobooks/shares", {
+        method: "POST",
+        body: JSON.stringify({
+          content_type: "public_content",
+          content_id: typeof day === "number" ? `day-${day}` : window.location.pathname,
+          target_url: shareUrl,
+          visitor_id: visitorId(),
+        }),
+      });
+      trackedUrl = created.share_url || shareUrl;
+    } catch (err) {
+      console.info("[SocialShare] share tracking unavailable; using canonical link", err);
+    }
+
+    if (navigator.share) {
+      await navigator.share({ title: "Simba wa Ujamaa", text: shareText || "Explore Simba wa Ujamaa.", url: trackedUrl });
+      return;
+    }
+    await copyToClipboard(trackedUrl);
+  };
+
   const canCopyText = !!shareText?.trim();
   const canCopyPack = !!sharePack?.trim();
 
@@ -46,11 +83,11 @@ export default function SocialShare({ day, shareText = "", sharePack = "" }) {
       {/* ✅ Copy Link */}
       <button
         type="button"
-        onClick={() => copyToClipboard(shareUrl)}
+        onClick={nativeShare}
         className="px-3 py-2 rounded-lg border border-yellow-700 bg-[#111] hover:bg-[#1a1a1a] text-yellow-200 flex items-center gap-2"
         title="Copy link"
       >
-        <FaLink /> Copy Link
+        <FaLink /> Share
       </button>
 
       {/* ✅ Copy Answer */}

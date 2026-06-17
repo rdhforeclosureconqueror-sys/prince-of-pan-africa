@@ -11,6 +11,7 @@ from app.models import (
     Audiobook,
     AudiobookChapterReflection,
     AudiobookProgress,
+    ContentShare,
     LeadershipAssessment,
     MemberProfile,
     User,
@@ -115,8 +116,31 @@ def admin_profiles_compat(_: None = Depends(require_permission("admin:read_users
 
 
 @legacy_router.get("/shares")
-def admin_shares_compat(_: None = Depends(require_permission("admin:manage_users"))):
-    return {"ok": True, "shares": []}
+def admin_shares_compat(
+    _: None = Depends(require_permission("admin:manage_users")),
+    db: Session = Depends(get_db),
+):
+    rows = db.query(ContentShare).order_by(ContentShare.created_at.desc()).limit(100).all()
+    return {
+        "ok": True,
+        "shares": [
+            {
+                "share_id": row.share_id,
+                "member_id": row.user_id,
+                "visitor_id": row.visitor_id,
+                "content_type": row.content_type,
+                "content_id": row.content_id,
+                "share_platform": "native",
+                "share_url": f"{row.target_url}{'&' if '?' in row.target_url else '?'}swu_share={row.share_id}",
+                "click_count": row.click_count,
+                "visitor_count": row.visitor_count,
+                "registration_count": row.registration_count,
+                "membership_count": row.membership_count,
+                "created_at": row.created_at.isoformat() if row.created_at else None,
+            }
+            for row in rows
+        ],
+    }
 
 
 @legacy_router.get("/reviews")

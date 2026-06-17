@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useMvpActions } from "../hooks/useMvpActions";
 import { recordParticipationActivity } from "../api/participation";
+import PublicEngagementBar from "../components/PublicEngagementBar";
 
 export default function LanguagePage() {
   const { lastReward } = useMvpActions();
@@ -26,6 +27,13 @@ export default function LanguagePage() {
         <option value="yoruba">Yoruba</option>
       </select>
       <button onClick={logPractice}>🎤 Complete Lesson · Earn STAR</button>
+      <PublicEngagementBar
+        contentType="language"
+        contentId={`${language}-day-1`}
+        title={`${language} Day 1`}
+        text={`Explore ${language} Day 1 on Simba wa Ujamaa.`}
+        path={`/language?module=${language}`}
+      />
       {starNotice ? <p style={{ opacity: 0.9, marginTop: 10 }}>{starNotice}</p> : null}
 
       {lastReward && (

@@ -3,15 +3,19 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../api/api";
 import { recordParticipationActivity } from "../api/participation";
 import { API_BASE_URL } from "../config";
+import PublicEngagementBar from "../components/PublicEngagementBar";
 import "../styles/studyPage.css";
 
 const SPEED_OPTIONS = [0.75, 1, 1.25, 1.5, 2];
 const ACCESS_OPTIONS = ["free", "member", "subscriber", "purchased"];
 const ACCESS_LABELS = {
+  public: "Public",
   free: "Free",
+  subscription: "Subscription",
   member: "Community Member",
   subscriber: "Builder Member",
   builder_member: "Builder Member",
+  private: "Private",
   purchased: "Purchased",
 };
 
@@ -191,8 +195,12 @@ export default function StudyPage() {
       setCompletedChapters(response.progress?.completed_chapters || []);
       setActiveSentenceIndex(0);
 
-      const reflectionRes = await api(`/audiobooks/${id}/reflections`, { method: "GET", credentials: "include" });
-      setReflections(reflectionRes.items || []);
+      if (response.preview_only) {
+        setReflections([]);
+      } else {
+        const reflectionRes = await api(`/audiobooks/${id}/reflections`, { method: "GET", credentials: "include" });
+        setReflections(reflectionRes.items || []);
+      }
       setReflectionSummary("");
     } catch (err) {
       setError(err.message || "Failed to load audiobook.");
@@ -608,7 +616,7 @@ export default function StudyPage() {
   }
 
   async function persistProgress(positionOverride) {
-    if (!selectedBook) return;
+    if (!selectedBook || selectedBook.preview_only) return;
     const currentTime = Math.floor((positionOverride ?? audioRef.current?.currentTime) || 0);
     try {
       await recordParticipationActivity(activeChapter?.audio_url ? "audiobook_listen" : "chapter_read", activeChapter?.audio_url ? "audiobooks" : "books", { book_id: selectedBook.id, chapter_index: chapterNumber, title: activeChapter?.title });
@@ -650,6 +658,11 @@ export default function StudyPage() {
   }
 
   async function completeCurrentChapterAndPrompt() {
+    if (selectedBook?.preview_only) {
+      setStatus(selectedBook.preview_message || "Preview ends here. Continue exploring Simba wa Ujamaa.");
+      setIsPlaying(false);
+      return;
+    }
     const chapterNumber = activeChapterIndex + 1;
     const nextCompleted = Array.from(new Set([...completedChapters, chapterNumber])).sort((a, b) => a - b);
     setCompletedChapters(nextCompleted);
@@ -878,6 +891,14 @@ export default function StudyPage() {
                   {selectedBook.author} • {selectedBook.status} • access: {formatAccessLevel(selectedBook.access_level)} • {selectedBook.segmentation_strategy}
                 </p>
                 {selectedBook.description && <p className="reader-description">{selectedBook.description}</p>}
+                {selectedBook.preview_only && <p className="study-status">{selectedBook.preview_message || "Preview mode: enjoy the opening section, then keep exploring Simba wa Ujamaa."}</p>}
+                <PublicEngagementBar
+                  contentType="book"
+                  contentId={selectedBook.id}
+                  title={selectedBook.title}
+                  text={`Preview ${selectedBook.title} on Simba wa Ujamaa.`}
+                  path={`/study?book=${selectedBook.id}`}
+                />
                 {generationProgress && (
                   <p>
                     {statusLabelFromProgress(generationProgress)} — {generationProgress.completed_chapters}/{generationProgress.total_chapters} complete
@@ -888,12 +909,12 @@ export default function StudyPage() {
                 )}
               </div>
               <div className="reader-actions">
-                {selectedBook.audio_chapter_count < selectedBook.chapter_count && (
+                {!selectedBook.preview_only && selectedBook.audio_chapter_count < selectedBook.chapter_count && (
                   <button className="focus-toggle" onClick={generateAudioForSavedBook}>
                     {selectedBook.status === "needs_retry" || generationProgress?.retryable ? "Resume Generation / Retry Failed Chapters" : "Generate Missing Audio"}
                   </button>
                 )}
-                {!activeChapter?.audio_url && (
+                {!selectedBook.preview_only && !activeChapter?.audio_url && (
                   <button className="focus-toggle" onClick={() => generateActiveChapterAudio()}>
                     Generate Next Chapter
                   </button>
@@ -945,18 +966,18 @@ export default function StudyPage() {
 
             <div className="player-shell">
               <div className="player-controls-row">
-                {activeSavedAudio && <button onClick={useSavedAudio}>Use Saved Audio</button>}
+                {!selectedBook.preview_only && activeSavedAudio && <button onClick={useSavedAudio}>Use Saved Audio</button>}
                 {activeSavedAudio && <button onClick={playSavedAudio}>Play Saved Audio</button>}
-                {activeChapter?.audio_url && !activeSavedAudio && <button onClick={saveActiveAudio}>Save Audio</button>}
-                {activeSavedAudio && <button onClick={downloadSavedAudio}>Download Audio</button>}
-                <button onClick={() => generateActiveChapterAudio({ regenerate: true })}>Regenerate Audio</button>
+                {!selectedBook.preview_only && activeChapter?.audio_url && !activeSavedAudio && <button onClick={saveActiveAudio}>Save Audio</button>}
+                {!selectedBook.preview_only && activeSavedAudio && <button onClick={downloadSavedAudio}>Download Audio</button>}
+                {!selectedBook.preview_only && <button onClick={() => generateActiveChapterAudio({ regenerate: true })}>Regenerate Audio</button>}
               </div>
               {savedAudioNotice && activeSavedAudio && <p className="study-status">{savedAudioNotice}</p>}
               <div className="player-controls-row">
                 <button onClick={playPrev}>Prev</button>
                 <button onClick={togglePlayPause}>{isPlaying ? "Pause" : "Play"}</button>
-                <button onClick={playNext}>Next</button>
-                <button onClick={completeCurrentChapterAndPrompt}>Complete Chapter</button>
+                {!selectedBook.preview_only && <button onClick={playNext}>Next</button>}
+                <button onClick={completeCurrentChapterAndPrompt}>{selectedBook.preview_only ? "Finish Preview" : "Complete Chapter"}</button>
                 <label>
                   Speed
                   <select value={playbackRate} onChange={(e) => setPlaybackRate(Number(e.target.value))}>
@@ -997,7 +1018,18 @@ export default function StudyPage() {
               {!activeChapter?.audio_url && <p className="study-status">Chapter audio is not saved yet. Generate this chapter or continue reading without audio.</p>}
             </div>
 
-            {showReflectionPrompt && (
+            {selectedBook.preview_only && (
+              <section className="reflection-shell">
+                <h3>Preview complete</h3>
+                <p>{selectedBook.preview_message || "Preview ends here. Continue exploring Simba wa Ujamaa."}</p>
+                <div className="reflection-actions">
+                  <button onClick={() => navigate("/library")}>Browse Library</button>
+                  <button onClick={() => navigate("/portal/decolonize")}>Discover Decolonization</button>
+                </div>
+              </section>
+            )}
+
+            {!selectedBook.preview_only && showReflectionPrompt && (
               <section className="reflection-shell">
                 <h3>Chapter Reflection</h3>
                 <p>{reflectionPrompt}</p>
@@ -1014,7 +1046,7 @@ export default function StudyPage() {
               </section>
             )}
 
-            <section className="reflection-history">
+            {!selectedBook.preview_only && <section className="reflection-history">
               <div className="reflection-history-header">
                 <h3>Chapter Reflections</h3>
                 <button onClick={generateReflectionSummary}>Generate Combined Summary</button>
@@ -1032,7 +1064,7 @@ export default function StudyPage() {
                 </ul>
               )}
               {reflectionSummary && <pre className="reflection-summary">{reflectionSummary}</pre>}
-            </section>
+            </section>}
           </section>
         )}
       </div>

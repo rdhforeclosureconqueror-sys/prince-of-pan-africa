@@ -147,3 +147,60 @@
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
 }
+
+.library-visibility-badge {
+  align-self: flex-start;
+  border: 1px solid rgba(245, 230, 179, 0.45);
+  border-radius: 999px;
+  color: #f5e6b3;
+  display: inline-flex;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  margin-top: 0.75rem;
+  padding: 0.3rem 0.65rem;
+  text-transform: uppercase;
+}
+
+.library-visibility-badge--public,
+.library-visibility-badge--free {
+  background: rgba(16, 185, 129, 0.18);
+  border-color: rgba(16, 185, 129, 0.55);
+  color: #bbf7d0;
+}
+
+.library-visibility-badge--subscription,
+.library-visibility-badge--member,
+.library-visibility-badge--subscriber {
+  background: rgba(245, 158, 11, 0.18);
+  border-color: rgba(245, 158, 11, 0.55);
+  color: #fde68a;
+}
+
+.public-engagement-bar {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.9rem;
+}
+
+.public-engagement-bar button {
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(245, 230, 179, 0.34);
+  border-radius: 999px;
+  color: #f8e7b7;
+  cursor: pointer;
+  font-size: 0.84rem;
+  padding: 0.42rem 0.72rem;
+}
+
+.public-engagement-bar button:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+
+.public-engagement-bar span {
+  color: #bbf7d0;
+  font-size: 0.82rem;
+}

@@ -243,6 +243,24 @@ class AudiobookChapterReflection(Base):
     user: Mapped[User] = relationship(back_populates="chapter_reflections")
 
 
+class ContentShare(Base):
+    __tablename__ = "content_shares"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    share_id: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    visitor_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    content_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    content_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    target_url: Mapped[str] = mapped_column(Text, nullable=False)
+    click_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    visitor_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    registration_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    membership_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, onupdate=datetime.utcnow)
+
+
 class BookOrganizerDocument(Base):
     __tablename__ = "book_organizer_documents"
 

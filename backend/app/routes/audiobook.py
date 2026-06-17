@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 
 from app.database import SessionLocal, get_db
 from app.dependencies.auth import require_permission
-from app.models import AudioAsset, Audiobook, AudiobookChapter, AudiobookChapterReflection, AudiobookProgress, BookOrganizationPlan, BookOrganizerBlock, BookOrganizerDocument, User, compute_text_checksum
+from app.models import AudioAsset, Audiobook, AudiobookChapter, AudiobookChapterReflection, AudiobookProgress, BookOrganizationPlan, BookOrganizerBlock, BookOrganizerDocument, ContentShare, User, compute_text_checksum
 from app.config import settings
 from app.session import SESSION_COOKIE, parse_session_cookie_value, should_use_secure_cookie
 from app.routes.chat import TTS_PROVIDER_LIMIT_MESSAGE, classify_tts_provider_error, generate_tts_audio_url, infer_audio_format_from_url, normalize_tts_text
@@ -35,7 +35,7 @@ MAX_SEGMENT_PASS_CHARS = 42_000
 MAX_TOTAL_UPLOAD_BYTES = 1_600_000
 MAX_CONCURRENT_GENERATIONS = 2
 MAX_GENERATION_JOB_SECONDS = 900
-ALLOWED_ACCESS_LEVELS = {"free", "member", "subscriber", "purchased"}
+ALLOWED_ACCESS_LEVELS = {"public", "free", "subscription", "member", "subscriber", "private", "purchased"}
 
 DEFAULT_COVER_IMAGE_PATH = "/book-covers/library-placeholder.svg"
 MAX_COVER_UPLOAD_BYTES = 5 * 1024 * 1024
@@ -130,6 +130,13 @@ class ReflectionRequest(BaseModel):
 
 class ReflectionSummaryRequest(BaseModel):
     include_skipped: bool = False
+
+
+class ShareCreateRequest(BaseModel):
+    content_type: str = Field(min_length=1, max_length=64)
+    content_id: str = Field(min_length=1, max_length=128)
+    target_url: str = Field(min_length=1, max_length=1000)
+    visitor_id: str | None = Field(default=None, max_length=128)
 
 class OrganizerTextIngestRequest(BaseModel):
     title: str = Field(default="Untitled", min_length=1, max_length=255)
@@ -246,6 +253,18 @@ def _normalize_access_level(value: str) -> str:
     if normalized not in ALLOWED_ACCESS_LEVELS:
         raise HTTPException(status_code=422, detail=f"Invalid access_level. Expected one of: {sorted(ALLOWED_ACCESS_LEVELS)}")
     return normalized
+
+
+def _is_public_access(access_level: str) -> bool:
+    return (access_level or "").strip().lower() in {"public", "free"}
+
+
+def _is_subscription_preview_access(access_level: str) -> bool:
+    return (access_level or "").strip().lower() in {"subscription", "member", "subscriber"}
+
+
+def _publicly_listable_filter():
+    return Audiobook.access_level.in_(["public", "free", "subscription", "member", "subscriber"])
 
 
 def _resolve_session_user(request: Request, db: Session) -> User | None:
@@ -777,8 +796,10 @@ def _serialize_audio_asset(asset: AudioAsset | None, book: Audiobook | None = No
         "downloadUrl": f"/api/audio/download/{asset.id}",
     }
 
-def _serialize_audiobook(book: Audiobook, include_text: bool = False) -> dict:
+def _serialize_audiobook(book: Audiobook, include_text: bool = False, preview_only: bool = False) -> dict:
     ordered_chapters = sorted(book.chapters, key=lambda chapter: chapter.chapter_index)
+    if preview_only:
+        ordered_chapters = ordered_chapters[:1]
     completed_audio = sum(1 for chapter in ordered_chapters if chapter.audio_url)
     progress = _build_generation_progress(book)
     return {
@@ -836,6 +857,7 @@ def _serialize_audiobook(book: Audiobook, include_text: bool = False) -> dict:
                     )
                 ),
                 **({"text": chapter.text} if include_text else {}),
+                "is_preview": preview_only,
             }
             for chapter in ordered_chapters
         ],
@@ -2459,22 +2481,72 @@ def export_organization_print_pdf(
 
 @router.get("")
 def list_audiobooks(request: Request, response: Response, db: Session = Depends(get_db)):
-    user, used_guest = _resolve_audiobook_user(request, db)
-    response.headers["x-audiobook-auth-mode"] = _auth_mode(user, used_guest)
-    books = db.query(Audiobook).filter(Audiobook.user_id == user.id).order_by(Audiobook.created_at.desc()).all()
+    user = _resolve_session_user(request, db)
+    if user:
+        response.headers["x-audiobook-auth-mode"] = "authenticated"
+        books = (
+            db.query(Audiobook)
+            .filter((_publicly_listable_filter()) | (Audiobook.user_id == user.id))
+            .order_by(Audiobook.created_at.desc())
+            .all()
+        )
+    else:
+        response.headers["x-audiobook-auth-mode"] = "public"
+        books = db.query(Audiobook).filter(_publicly_listable_filter()).order_by(Audiobook.created_at.desc()).all()
     return {"items": [_serialize_audiobook(book) for book in books], "auth_mode": response.headers["x-audiobook-auth-mode"]}
+
+
+@router.post("/shares")
+def create_content_share(payload: ShareCreateRequest, request: Request, db: Session = Depends(get_db)):
+    user = _resolve_session_user(request, db)
+    share_id = uuid4().hex
+    target = payload.target_url
+    separator = "&" if "?" in target else "?"
+    share_url = f"{target}{separator}swu_share={share_id}"
+    record = ContentShare(
+        share_id=share_id,
+        user_id=user.id if user else None,
+        visitor_id=payload.visitor_id,
+        content_type=payload.content_type,
+        content_id=payload.content_id,
+        target_url=target,
+    )
+    db.add(record)
+    db.commit()
+    return {"ok": True, "share_id": share_id, "share_url": share_url}
+
+
+@router.post("/shares/{share_id}/click")
+def record_content_share_click(share_id: str, payload: dict | None = None, db: Session = Depends(get_db)):
+    record = db.query(ContentShare).filter(ContentShare.share_id == share_id).first()
+    if not record:
+        return {"ok": False, "tracked": False}
+    record.click_count += 1
+    if payload and payload.get("visitor_id"):
+        record.visitor_count += 1
+    db.commit()
+    return {"ok": True, "tracked": True}
 
 
 @router.get("/{audiobook_id}")
 def get_audiobook(audiobook_id: int, request: Request, db: Session = Depends(get_db)):
-    user, _ = _resolve_audiobook_user(request, db)
-    book = db.query(Audiobook).filter(Audiobook.id == audiobook_id, Audiobook.user_id == user.id).first()
+    user = _resolve_session_user(request, db)
+    book = db.query(Audiobook).filter(Audiobook.id == audiobook_id).first()
     if not book:
         raise HTTPException(status_code=404, detail="Audiobook not found.")
+    is_owner = bool(user and book.user_id == user.id)
+    is_previewable = _is_public_access(book.access_level) or _is_subscription_preview_access(book.access_level)
+    if not is_owner and not is_previewable:
+        raise HTTPException(status_code=404, detail="Audiobook not found.")
 
-    progress = db.query(AudiobookProgress).filter(AudiobookProgress.audiobook_id == audiobook_id, AudiobookProgress.user_id == user.id).first()
+    progress = None
+    if user:
+        progress = db.query(AudiobookProgress).filter(AudiobookProgress.audiobook_id == audiobook_id, AudiobookProgress.user_id == user.id).first()
+    preview_only = not is_owner
     return {
-        **_serialize_audiobook(book, include_text=True),
+        **_serialize_audiobook(book, include_text=True, preview_only=preview_only),
+        "preview_only": preview_only,
+        "preview_message": "Preview ends here. Continue exploring Simba wa Ujamaa." if preview_only else "",
         "progress": {
             "chapter_index": progress.chapter_index if progress else 0,
             "position_seconds": progress.position_seconds if progress else 0,
