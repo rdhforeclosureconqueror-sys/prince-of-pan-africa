@@ -93,3 +93,32 @@ def test_star_experience_helpers_use_engine_activity(db_session):
     assert any(item["activity_type"] == "chapter_read" for item in available_opportunities())
     assert available_rewards(summary["star"])[0]["star_needed"] == 8
     assert community_leaderboards(db_session)["top_readers"][0]["star"] == 10
+
+
+def test_duplicate_activity_does_not_create_extra_star_transaction(db_session):
+    user = User(email="dupe@example.com", password_hash=hash_password("password123"), role="community_member")
+    db_session.add(user)
+    db_session.flush()
+
+    first = submit_activity(
+        db_session,
+        user=user,
+        guest_session_id=None,
+        activity_type_name="swahili_lesson_completed",
+        source_module="swahili",
+        metadata={"completion_key": "swahili-lesson-1", "day": 1},
+    )
+    duplicate = submit_activity(
+        db_session,
+        user=user,
+        guest_session_id=None,
+        activity_type_name="swahili_lesson_completed",
+        source_module="swahili",
+        metadata={"completion_key": "swahili-lesson-1", "day": 1},
+    )
+    db_session.commit()
+
+    assert duplicate.id == first.id
+    assert db_session.query(Activity).filter_by(user_id=user.id, activity_type="swahili_lesson_completed").count() == 1
+    assert db_session.query(StarTransaction).filter_by(user_id=user.id, reason="swahili_lesson_completed").count() == 1
+    assert participation_summary(db_session, user_id=user.id)["star"] == 7

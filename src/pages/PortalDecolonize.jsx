@@ -207,7 +207,7 @@ export default function PortalDecolonize() {
   async function completeDecolonizationLesson() {
     try {
       const response = await recordParticipationActivity("decolonization_lesson_completed", "decolonization", { portal_id: PORTAL_ID, day });
-      setStarNotice(`+${response?.activity?.star_award || 0} STAR Community Credits recorded.`);
+      setStarNotice(response?.duplicate ? response?.message : `⭐ +${response?.awarded_star ?? response?.activity?.star_award ?? 0} STAR Community Credits — progress saved. Current STAR: ${response?.participation?.star ?? "—"}. Rank: ${response?.participation?.current_rank ?? "Member"}.`);
     } catch {
       setStarNotice("Sign in to save STAR for this lesson.");
     }

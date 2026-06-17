@@ -70,7 +70,7 @@ export default function BrainTraining() {
   async function completeBrainGameSession() {
     try {
       const response = await recordParticipationActivity("brain_game_played", "brain_games", { game: activeTab, stats: activeStats });
-      setRewardNotice(`+${response?.activity?.star_award || 0} STAR recorded by the Participation Engine.`);
+      setRewardNotice(response?.duplicate ? response?.message : `⭐ +${response?.awarded_star ?? response?.activity?.star_award ?? 0} STAR recorded. Current STAR: ${response?.participation?.star ?? "—"}. Rank: ${response?.participation?.current_rank ?? "Member"}.`);
     } catch {
       setRewardNotice("Sign in to save STAR for this brain game session.");
     }
