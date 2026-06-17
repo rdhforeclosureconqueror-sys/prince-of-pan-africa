@@ -538,6 +538,41 @@
   const DATA_URL = "swahili_30days.json";
   const TTS_ENDPOINT = "/api/skill-world/audio";
   const LANGUAGE_CODE = "swahili";
+  const API_BASE_URL = location.hostname === "localhost" ? "http://localhost:3000" : "https://api.simbawaujamaa.com";
+  const GUEST_SESSION_KEY = "simba_guest_session";
+
+  function getGuestSessionId(){
+    const existing = localStorage.getItem(GUEST_SESSION_KEY);
+    if(existing) return existing;
+    const generated = `guest_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    localStorage.setItem(GUEST_SESSION_KEY, generated);
+    return generated;
+  }
+
+  async function recordStarActivity(activityType, metadata){
+    const guestSessionId = getGuestSessionId();
+    console.info("[participation] activity received", { activityType, language: LANGUAGE_CODE, guestSessionId, metadata });
+    try{
+      const res = await fetch(`${API_BASE_URL}/participation/activity`, {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json", "X-Guest-Session-Id": guestSessionId },
+        body: JSON.stringify({ activity_type: activityType, source_module: LANGUAGE_CODE, guest_session_id: guestSessionId, metadata }),
+      });
+      const data = await res.json();
+      if(!res.ok) throw new Error(data?.detail || "Participation Engine did not save this activity.");
+      const message = data.duplicate
+        ? data.message
+        : `⭐ +${data.awarded_star ?? data.activity?.star_award ?? 0} STAR Community Credits. Swahili Lesson Completed! Your progress has been saved. Current STAR: ${data.participation?.star ?? "—"}. Rank: ${data.participation?.current_rank ?? "Member"}.`;
+      setStatus(message, "ready");
+      window.dispatchEvent(new CustomEvent("simba:participation-updated", { detail: data }));
+      console.info("[participation] notification sent + dashboard refresh", data);
+      return data;
+    }catch(err){
+      console.error("[participation] failed", err);
+      setStatus(`STAR could not be saved: ${err.message}`, "ready");
+      return null;
+    }
+  }
   const DEFAULT_TTS_SPEED = 1.0;
   const DEFAULT_TTS_PITCH = 0.0;
 
@@ -562,6 +597,7 @@
 
   function triggerLessonUnlock(){
     swahiliProgress.matchComplete = true;
+    if(PACK?.days?.[idx]) recordStarActivity("language_match_completed", { language: LANGUAGE_CODE, day: PACK.days[idx].day, completion_key: `${LANGUAGE_CODE}-match-${PACK.days[idx].day}` });
     renderUnlockProgress();
     setStatus("✅ Match complete. Lesson progression unlocked.", "ready");
   }
@@ -818,6 +854,7 @@
 
   async function speakAll(){
     const d = PACK.days[idx];
+    await recordStarActivity("swahili_lesson_completed", { language: LANGUAGE_CODE, day: d.day, completion_key: `${LANGUAGE_CODE}-lesson-${d.day}` });
     await speak(buildVisibleLessonText(d), { cacheKey: `${LANGUAGE_CODE}-day-${d.day}-lesson` });
   }
 

@@ -74,6 +74,22 @@ export default function MemberDashboard() {
 
   useEffect(() => {
     let mounted = true;
+    const refreshStarExperience = async () => {
+      try {
+        const starRes = await getStarExperience();
+        if (mounted) setStarExperience(starRes || null);
+      } catch (err) {
+        console.warn("[participation] dashboard refresh failed", err);
+      }
+    };
+    const onParticipationUpdated = (event) => {
+      console.info("[participation] dashboard refresh", event.detail);
+      if (event.detail) {
+        setStarExperience((previous) => ({ ...(previous || {}), participation: event.detail.participation, history: [event.detail.activity, ...((previous?.history || []).filter((item) => item.id !== event.detail.activity?.id))] }));
+      }
+      refreshStarExperience();
+    };
+    window.addEventListener("simba:participation-updated", onParticipationUpdated);
     (async () => {
       try {
         const [overviewRes, activityRes, starRes] = await Promise.all([
@@ -102,6 +118,7 @@ export default function MemberDashboard() {
 
     return () => {
       mounted = false;
+      window.removeEventListener("simba:participation-updated", onParticipationUpdated);
     };
   }, []);
 

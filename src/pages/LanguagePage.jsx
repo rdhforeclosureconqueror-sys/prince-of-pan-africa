@@ -10,7 +10,7 @@ export default function LanguagePage() {
     const activityType = language === "yoruba" ? "yoruba_lesson_completed" : "swahili_lesson_completed";
     try {
       const response = await recordParticipationActivity(activityType, language, { language });
-      setStarNotice(`+${response?.activity?.star_award || 0} STAR Community Credits recorded.`);
+      setStarNotice(response?.duplicate ? response?.message : `⭐ +${response?.awarded_star ?? response?.activity?.star_award ?? 0} STAR Community Credits — progress saved. Current STAR: ${response?.participation?.star ?? "—"}. Rank: ${response?.participation?.current_rank ?? "Member"}.`);
     } catch {
       setStarNotice("Sign in to save STAR for language practice.");
     }

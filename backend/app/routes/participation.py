@@ -12,6 +12,7 @@ from app.services.participation import (
     available_opportunities,
     available_rewards,
     community_leaderboards,
+    find_duplicate_activity,
     participation_summary,
     submit_activity,
 )
@@ -51,6 +52,14 @@ def create_participation_activity(
     current_user=Depends(get_current_user),
 ):
     guest_session_id = payload.guest_session_id or x_guest_session_id or request.cookies.get("simba_guest_session")
+    duplicate = find_duplicate_activity(
+        db,
+        user=current_user,
+        guest_session_id=guest_session_id,
+        activity_type_name=payload.activity_type,
+        source_module=payload.source_module,
+        metadata=payload.metadata,
+    ) if (current_user or guest_session_id) else None
     activity = submit_activity(
         db,
         user=current_user,
@@ -59,9 +68,12 @@ def create_participation_activity(
         source_module=payload.source_module,
         metadata=payload.metadata,
     )
+    was_duplicate = duplicate is not None or activity.id == getattr(duplicate, "id", None)
     summary = participation_summary(db, user_id=current_user.id if current_user else None, guest_session_id=activity.guest_session_id)
     db.commit()
-    return {"ok": True, "activity": _serialize_activity(activity), "participation": summary}
+    awarded_star = 0 if was_duplicate else activity.star_award
+    message = "You already earned STAR for this activity." if was_duplicate else "STAR Community Credits awarded. Your progress has been saved."
+    return {"ok": True, "duplicate": was_duplicate, "awarded_star": awarded_star, "message": message, "activity": _serialize_activity(activity), "participation": summary}
 
 
 @router.get("/summary")

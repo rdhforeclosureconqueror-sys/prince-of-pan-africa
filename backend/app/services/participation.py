@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+import logging
 from uuid import uuid4
 
 from sqlalchemy import func
@@ -22,6 +23,7 @@ DEFAULT_ACTIVITY_TYPES = {
     "book_read": {"points": 10, "star": 10},
     "audiobook_listen": {"points": 8, "star": 8},
     "language_lesson": {"points": 7, "star": 7},
+    "language_match_completed": {"points": 5, "star": 5},
     "swahili_lesson_completed": {"points": 7, "star": 7},
     "yoruba_lesson_completed": {"points": 7, "star": 7},
     "quiz_completed": {"points": 5, "star": 5},
@@ -59,6 +61,8 @@ STAR_OPPORTUNITIES = [
     {"activity_type": "member_referred", "source_module": "referrals", "title": "Refer a member", "star": 20, "href": "/membership"},
 ]
 
+logger = logging.getLogger("simba.participation")
+
 STAR_REWARDS = [
     {"title": "Recognition Badge", "star_cost": 25, "reward_type": "badge"},
     {"title": "Bonus Educational Resource", "star_cost": 50, "reward_type": "resource"},
@@ -68,6 +72,49 @@ STAR_REWARDS = [
     {"title": "Early-Access Materials", "star_cost": 250, "reward_type": "early_access"},
 ]
 
+
+
+def _identity_filter(user: User | None, guest_session_id: str | None):
+    if user:
+        return Activity.user_id == user.id
+    return Activity.guest_session_id == guest_session_id
+
+
+def _duplicate_scope(metadata: dict | None) -> str:
+    metadata = metadata or {}
+    explicit = metadata.get("duplicate_key") or metadata.get("completion_key")
+    if explicit:
+        return str(explicit)
+
+    today = datetime.utcnow().date().isoformat()
+    for key in ("day", "lesson_day", "date", "chapter_index", "book_id", "game", "fact_id", "word", "task_id", "referral_email", "url"):
+        if metadata.get(key) is not None:
+            return f"{key}:{metadata.get(key)}"
+    return f"daily:{today}"
+
+
+def find_duplicate_activity(
+    db: Session,
+    *,
+    user: User | None,
+    guest_session_id: str | None,
+    activity_type_name: str,
+    source_module: str,
+    metadata: dict | None = None,
+) -> Activity | None:
+    normalized_type = (activity_type_name or "general_participation").strip().lower().replace(" ", "_")
+    normalized_source = (source_module or "community").strip().lower()
+    scope = _duplicate_scope(metadata)
+    query = db.query(Activity).filter(
+        _identity_filter(user, guest_session_id),
+        Activity.activity_type == normalized_type,
+        Activity.source_module == normalized_source,
+    )
+    candidates = query.order_by(Activity.timestamp.desc(), Activity.id.desc()).limit(100).all()
+    for activity in candidates:
+        if _duplicate_scope(activity.metadata_) == scope:
+            return activity
+    return None
 
 def rank_progress(star: int, user_id: int | None = None) -> dict:
     if user_id is None:
@@ -145,6 +192,12 @@ def submit_activity(
     else:
         guest = get_or_create_guest_session(db, guest_session_id) if guest_session_id else None
 
+    logger.info("Participation activity received", extra={"activity_type": activity_type_name, "source_module": source_module, "user_id": user.id if user else None, "guest_session_id": guest.session_id if guest else None})
+    duplicate = find_duplicate_activity(db, user=user, guest_session_id=guest.session_id if guest else None, activity_type_name=activity_type_name, source_module=source_module, metadata=metadata)
+    if duplicate:
+        logger.info("Participation duplicate detected", extra={"activity_id": duplicate.id, "activity_type": duplicate.activity_type, "user_id": duplicate.user_id, "guest_session_id": duplicate.guest_session_id})
+        return duplicate
+
     activity_type = get_activity_type(db, activity_type_name)
     verification_status = "pending" if activity_type.verification_required else "verified"
     points = activity_type.default_points
@@ -168,7 +221,8 @@ def submit_activity(
     if star:
         db.add(StarTransaction(activity_id=activity.id, user_id=activity.user_id, guest_session_id=activity.guest_session_id, amount=star, transaction_type="earn", reason=activity.activity_type))
     db.add(ActivityHistory(activity_id=activity.id, user_id=activity.user_id, guest_session_id=activity.guest_session_id, event_type="activity_submitted", description=f"{activity.activity_type} submitted through {activity.source_module}."))
-    db.add(ActivityAuditLog(activity_id=activity.id, actor_user_id=activity.user_id, action="participation_engine_award", before={}, after={"points": points, "star": star, "verification_status": verification_status}))
+    db.add(ActivityAuditLog(activity_id=activity.id, actor_user_id=activity.user_id, action="participation_engine_award", before={}, after={"points": points, "star": star, "verification_status": verification_status, "notification": "queued"}))
+    logger.info("Participation STAR awarded", extra={"activity_id": activity.id, "activity_type": activity.activity_type, "user_id": activity.user_id, "guest_session_id": activity.guest_session_id, "star_awarded": star})
     return activity
 
 
