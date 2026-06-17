@@ -463,3 +463,17 @@ class ActivityAuditLog(Base):
     before: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     after: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class CommunityReputation(Base):
+    __tablename__ = "community_reputation"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, unique=True, index=True)
+    verified_contributions: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    verifications_completed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    verification_accuracy: Mapped[int] = mapped_column(Integer, nullable=False, default=100)
+    trust_score: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    leadership_level: Mapped[str] = mapped_column(String(64), nullable=False, default="Emerging Steward")
+    consistency_streak: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
