@@ -3,6 +3,7 @@ import { mountRhythmGame } from "../games/rhythmGame";
 import { mountSightGame } from "../games/sightGame";
 import { mountPuzzleGame } from "../games/puzzleGame";
 import "../styles/brainTraining.css";
+import { recordParticipationActivity } from "../api/participation";
 
 const GAME_TABS = [
   { id: "rhythm", label: "Song Keys", mount: mountRhythmGame },
@@ -22,6 +23,7 @@ function readStats(root) {
 export default function BrainTraining() {
   const [activeTab, setActiveTab] = useState("rhythm");
   const [mountVersion, setMountVersion] = useState(0);
+  const [rewardNotice, setRewardNotice] = useState("");
   const [statsByGame, setStatsByGame] = useState({
     rhythm: { level: "1", stars: "0", accuracy: "0%" },
     sight: { level: "1", stars: "0", accuracy: "0%" },
@@ -65,6 +67,15 @@ export default function BrainTraining() {
   const activeStats = useMemo(() => statsByGame[activeTab] ?? { level: "-", stars: "0", accuracy: "0%" }, [statsByGame, activeTab]);
   const activeGameLabel = GAME_TABS.find((tab) => tab.id === activeTab)?.label ?? "-";
 
+  async function completeBrainGameSession() {
+    try {
+      const response = await recordParticipationActivity("brain_game_played", "brain_games", { game: activeTab, stats: activeStats });
+      setRewardNotice(`+${response?.activity?.star_award || 0} STAR recorded by the Participation Engine.`);
+    } catch {
+      setRewardNotice("Sign in to save STAR for this brain game session.");
+    }
+  }
+
   return (
     <main className="brain-training-shell">
       <section className="brain-training-panel">
@@ -90,6 +101,8 @@ export default function BrainTraining() {
               </ul>
             </section>
 
+            <button type="button" className="brain-training-reset-btn" onClick={completeBrainGameSession}>Complete Session · Earn STAR</button>
+            {rewardNotice ? <p>{rewardNotice}</p> : null}
             <button type="button" className="brain-training-reset-btn" onClick={() => setMountVersion((prev) => prev + 1)}>
               Reset all games
             </button>

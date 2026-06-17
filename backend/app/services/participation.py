@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from uuid import uuid4
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models import (
@@ -21,6 +22,12 @@ DEFAULT_ACTIVITY_TYPES = {
     "book_read": {"points": 10, "star": 10},
     "audiobook_listen": {"points": 8, "star": 8},
     "language_lesson": {"points": 7, "star": 7},
+    "swahili_lesson_completed": {"points": 7, "star": 7},
+    "yoruba_lesson_completed": {"points": 7, "star": 7},
+    "quiz_completed": {"points": 5, "star": 5},
+    "chapter_read": {"points": 10, "star": 10},
+    "decolonization_lesson_completed": {"points": 9, "star": 9},
+    "member_referred": {"points": 20, "star": 20},
     "brain_game_played": {"points": 6, "star": 6},
     "content_shared": {"points": 4, "star": 4},
     "daily_history_read": {"points": 3, "star": 3},
@@ -31,6 +38,67 @@ DEFAULT_ACTIVITY_TYPES = {
     "community_onboarding_completed": {"points": 20, "star": 20},
     "builder_onboarding_completed": {"points": 20, "star": 20},
 }
+
+RANK_THRESHOLDS = [
+    (0, "Registered User"),
+    (25, "Community Member"),
+    (100, "Contributor"),
+    (250, "Steward"),
+    (500, "Community Leader"),
+]
+
+STAR_OPPORTUNITIES = [
+    {"activity_type": "chapter_read", "source_module": "books", "title": "Read a chapter", "star": 10, "href": "/library"},
+    {"activity_type": "audiobook_listen", "source_module": "audiobooks", "title": "Listen to an audiobook", "star": 8, "href": "/study"},
+    {"activity_type": "swahili_lesson_completed", "source_module": "swahili", "title": "Complete a Swahili lesson", "star": 7, "href": "/languages"},
+    {"activity_type": "yoruba_lesson_completed", "source_module": "yoruba", "title": "Complete a Yoruba lesson", "star": 7, "href": "/languages"},
+    {"activity_type": "brain_game_played", "source_module": "brain_games", "title": "Finish a brain game", "star": 6, "href": "/brain-training"},
+    {"activity_type": "quiz_completed", "source_module": "learning", "title": "Complete a quiz", "star": 5, "href": "/portal/decolonize"},
+    {"activity_type": "content_shared", "source_module": "community", "title": "Share community content", "star": 4, "href": "#community-feed"},
+    {"activity_type": "event_attended", "source_module": "events", "title": "Attend an event", "star": 12, "href": "/calendar"},
+    {"activity_type": "member_referred", "source_module": "referrals", "title": "Refer a member", "star": 20, "href": "/membership"},
+]
+
+STAR_REWARDS = [
+    {"title": "Recognition Badge", "star_cost": 25, "reward_type": "badge"},
+    {"title": "Bonus Educational Resource", "star_cost": 50, "reward_type": "resource"},
+    {"title": "Language Practice Pack", "star_cost": 75, "reward_type": "language_content"},
+    {"title": "Audiobook Access Token", "star_cost": 100, "reward_type": "audiobook_access"},
+    {"title": "Community Raffle Entry", "star_cost": 150, "reward_type": "raffle"},
+    {"title": "Early-Access Materials", "star_cost": 250, "reward_type": "early_access"},
+]
+
+
+def rank_progress(star: int, user_id: int | None = None) -> dict:
+    if user_id is None:
+        return {"current_rank": "Guest", "next_rank": "Registered User", "current_threshold": 0, "next_threshold": 0, "percent": 0}
+    current = RANK_THRESHOLDS[0]
+    next_rank = None
+    for idx, threshold in enumerate(RANK_THRESHOLDS):
+        if star >= threshold[0]:
+            current = threshold
+            next_rank = RANK_THRESHOLDS[idx + 1] if idx + 1 < len(RANK_THRESHOLDS) else None
+    if not next_rank:
+        return {"current_rank": current[1], "next_rank": "Max Rank", "current_threshold": current[0], "next_threshold": current[0], "percent": 100, "star_to_next_rank": 0}
+    span = max(next_rank[0] - current[0], 1)
+    percent = min(100, round(((star - current[0]) / span) * 100))
+    return {"current_rank": current[1], "next_rank": next_rank[1], "current_threshold": current[0], "next_threshold": next_rank[0], "percent": percent, "star_to_next_rank": max(next_rank[0] - star, 0)}
+
+
+def current_streak(activities: list[Activity]) -> int:
+    dates = sorted({item.timestamp.date() for item in activities if item.timestamp}, reverse=True)
+    if not dates:
+        return 0
+    today = datetime.utcnow().date()
+    if dates[0] not in {today, today - timedelta(days=1)}:
+        return 0
+    streak = 0
+    expected = dates[0]
+    for day in dates:
+        if day == expected:
+            streak += 1
+            expected = expected - timedelta(days=1)
+    return streak
 
 
 def get_or_create_guest_session(db: Session, guest_session_id: str | None = None) -> GuestSession:
@@ -116,10 +184,8 @@ def participation_summary(db: Session, user_id: int | None = None, guest_session
     activities = query.all()
     score = sum(item.participation_points or 0 for item in activities)
     star = sum(item.star_award or 0 for item in activities)
-    rank = "Guest"
-    if user_id is not None:
-        rank = "Community Leader" if star >= 500 else "Steward" if star >= 250 else "Contributor" if star >= 100 else "Community Member" if star >= 25 else "Registered User"
-    return {"activity_count": len(activities), "participation_score": score, "star": star, "current_rank": rank}
+    progress = rank_progress(star, user_id)
+    return {"activity_count": len(activities), "activities_completed": len(activities), "participation_score": score, "star": star, "current_rank": progress["current_rank"], "current_streak": current_streak(activities), "rank_progress": progress}
 
 
 def merge_guest_participation(db: Session, *, guest_session_id: str, user: User) -> int:
@@ -135,3 +201,41 @@ def merge_guest_participation(db: Session, *, guest_session_id: str, user: User)
     guest.merged_user_id = user.id
     guest.merged_at = datetime.utcnow()
     return len(activities)
+
+
+def activity_history(db: Session, user_id: int | None = None, guest_session_id: str | None = None, limit: int = 25) -> list[Activity]:
+    query = db.query(Activity)
+    if user_id is not None:
+        query = query.filter(Activity.user_id == user_id)
+    elif guest_session_id:
+        query = query.filter(Activity.guest_session_id == guest_session_id)
+    else:
+        return []
+    return query.order_by(Activity.timestamp.desc(), Activity.id.desc()).limit(max(1, min(limit, 100))).all()
+
+
+def available_opportunities() -> list[dict]:
+    return STAR_OPPORTUNITIES
+
+
+def available_rewards(star: int) -> list[dict]:
+    return [{**reward, "unlocked": star >= reward["star_cost"], "star_needed": max(reward["star_cost"] - star, 0)} for reward in STAR_REWARDS]
+
+
+def community_leaderboards(db: Session) -> dict:
+    since = datetime.utcnow() - timedelta(days=7)
+
+    def rows(filters=()):
+        query = (db.query(Activity.user_id, func.coalesce(func.sum(Activity.star_award), 0).label("star"), func.count(Activity.id).label("activities"))
+            .filter(Activity.user_id.isnot(None), Activity.timestamp >= since, Activity.verification_status == "verified"))
+        for condition in filters:
+            query = query.filter(condition)
+        return [{"user_id": user_id, "star": int(star or 0), "activities": int(count or 0)} for user_id, star, count in query.group_by(Activity.user_id).order_by(func.sum(Activity.star_award).desc()).limit(10).all()]
+
+    return {
+        "weekly_star_leaders": rows(),
+        "top_readers": rows((Activity.source_module.in_(["books", "audiobooks"]),)),
+        "top_learners": rows((Activity.source_module.in_(["swahili", "yoruba", "learning", "decolonization"]),)),
+        "top_volunteers": rows((Activity.activity_type.in_(["volunteer_task_completed", "community_help", "event_attended"]),)),
+        "top_referrers": rows((Activity.activity_type == "member_referred",)),
+    }

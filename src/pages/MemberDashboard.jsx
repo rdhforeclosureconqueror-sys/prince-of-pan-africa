@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api/api";
+import { getStarExperience } from "../api/participation";
 import { getDailyHistoricalSpotlight } from "../data/dailyHistoricalSpotlights";
 import { TIMELINE_A_AFRICA_ORIGINS } from "../data/timelineA_africaOrigins";
 import swahiliLessons from "../../public/languages/swahili_30days.json";
@@ -67,6 +68,7 @@ function formatDate(date) {
 export default function MemberDashboard() {
   const [overview, setOverview] = useState(null);
   const [activity, setActivity] = useState([]);
+  const [starExperience, setStarExperience] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -74,14 +76,16 @@ export default function MemberDashboard() {
     let mounted = true;
     (async () => {
       try {
-        const [overviewRes, activityRes] = await Promise.all([
+        const [overviewRes, activityRes, starRes] = await Promise.all([
           api("/member/overview", { method: "GET" }),
           api("/member/activity", { method: "GET" }),
+          getStarExperience(),
         ]);
 
         if (!mounted) return;
         setOverview(overviewRes || null);
         setActivity(activityRes?.activity || activityRes?.items || []);
+        setStarExperience(starRes || null);
       } catch (err) {
         if (!mounted) return;
         if (err.status === 401) {
@@ -130,11 +134,17 @@ export default function MemberDashboard() {
     : "Free access · payment not confirmed";
   const historicalSpotlightTitle = dailySpotlight?.title || featuredTimeline?.title || "Historical spotlight is being prepared.";
   const historicalSpotlightContext = dailySpotlight?.historical_context || featuredTimeline?.summary || "The current source dataset has a short entry for this date. Treat this card as a launch point for deeper timeline study.";
-  const participation = overview?.participation || {};
+  const participation = starExperience?.participation || overview?.participation || {};
   const currentStar = participation?.star ?? summary?.star ?? 0;
   const participationScore = participation?.participation_score ?? summary?.participation_score ?? 0;
   const currentRank = participation?.current_rank ?? summary?.current_rank ?? "Registered User";
-  const activityCount = participation?.activity_count ?? summary?.activity_count ?? 0;
+  const activityCount = participation?.activities_completed ?? participation?.activity_count ?? summary?.activity_count ?? 0;
+  const currentStreak = participation?.current_streak ?? summary?.streak_days ?? 0;
+  const rankProgress = participation?.rank_progress || {};
+  const starOpportunities = starExperience?.opportunities || [];
+  const starHistory = starExperience?.history || activity || [];
+  const starRewards = starExperience?.rewards || [];
+  const leaderboards = starExperience?.leaderboards || {};
   const impactStats = [
     ["Businesses Supported This Month", summary?.businesses_supported_month ?? 0],
     ["Books Completed", summary?.books_completed ?? 0],
@@ -164,6 +174,19 @@ export default function MemberDashboard() {
           <article><span>Community Rank</span><strong>{currentRank}</strong></article>
           <article><span>Activities Recorded</span><strong>{activityCount}</strong></article>
         </div>
+        <section className="star-credits-card" aria-label="STAR Community Credits">
+          <div>
+            <p className="member-kicker">STAR Community Credits</p>
+            <h2>{currentStar} STAR</h2>
+            <p>{currentRank} · {currentStreak} day streak · {activityCount} activities completed</p>
+          </div>
+          <div className="star-rank-progress">
+            <span>Progress to {rankProgress.next_rank || "next rank"}</span>
+            <strong>{rankProgress.percent ?? 0}%</strong>
+            <div className="star-progress-track"><i style={{ width: `${rankProgress.percent ?? 0}%` }} /></div>
+            <small>{rankProgress.star_to_next_rank ?? 0} STAR to next rank</small>
+          </div>
+        </section>
         <div className="daily-actions-panel" aria-label="Today’s Four Actions">
           <h2>Today’s Four Actions</h2>
           <label><input type="checkbox" readOnly /> Learn Today’s Swahili Word</label>
@@ -175,6 +198,31 @@ export default function MemberDashboard() {
       </header>
 
       <main className="member-hub-grid command-grid">
+
+        <section className="cosmic-section member-hub-card member-hub-card--wide star-opportunities-card">
+          <p className="section-kicker">STAR Engine</p>
+          <h2>Today’s STAR Opportunities</h2>
+          <div className="star-opportunity-grid">{starOpportunities.map((item) => <a key={item.activity_type} href={item.href} className="star-opportunity"><span>{item.title}</span><strong>+{item.star} STAR</strong></a>)}</div>
+        </section>
+
+        <section className="cosmic-section member-hub-card star-history-card">
+          <p className="section-kicker">Verified Timeline</p>
+          <h2>Activity History</h2>
+          {starHistory.length === 0 ? <p>No STAR activity yet. Complete an opportunity to begin.</p> : <ul className="star-timeline">{starHistory.slice(0, 8).map((item) => <li key={item.activity_id || item.id}><strong>{(item.activity_type || item.title || "Activity").replaceAll("_", " ")}</strong><span>{item.timestamp ? new Date(item.timestamp).toLocaleDateString() : "Today"} · +{item.star_award || 0} STAR · {item.verification_status || "recorded"}</span></li>)}</ul>}
+        </section>
+
+        <section className="cosmic-section member-hub-card star-rewards-card">
+          <p className="section-kicker">Community Benefits</p>
+          <h2>STAR Rewards</h2>
+          <ul className="star-reward-list">{starRewards.map((reward) => <li key={reward.title} className={reward.unlocked ? "is-unlocked" : ""}><span>{reward.title}</span><strong>{reward.unlocked ? "Unlocked" : `${reward.star_needed} STAR needed`}</strong></li>)}</ul>
+        </section>
+
+        <section className="cosmic-section member-hub-card star-leaderboard-card">
+          <p className="section-kicker">Celebration Board</p>
+          <h2>Community Leaderboards</h2>
+          <div className="star-leaderboard-grid">{Object.entries(leaderboards).map(([name, rows]) => <article key={name}><h3>{name.replaceAll("_", " ")}</h3>{rows?.length ? rows.slice(0, 3).map((row, idx) => <p key={`${name}-${row.user_id}`}>#{idx + 1} Member {row.user_id}: {row.star} STAR</p>) : <p>Be the first this week.</p>}</article>)}</div>
+        </section>
+
         <section className="cosmic-section member-hub-card swahili-command-card">
           <p className="section-kicker">Section 2</p>
           <h2>Swahili Word of the Day</h2>

@@ -5,6 +5,7 @@ import SocialShare from "../components/SocialShare";
 import VoiceControls from "../components/VoiceControls";
 import { DECLO30 } from "../data/portals/decolo30";
 import { sendChatMessage, sendVoiceMessage } from "../api/mufasaClient";
+import { recordParticipationActivity } from "../api/participation";
 
 const PORTAL_ID = "DECLO30";
 
@@ -27,6 +28,7 @@ export default function PortalDecolonize() {
   );
 
   const [day, setDay] = useState(initialDay);
+  const [starNotice, setStarNotice] = useState("");
 
   useEffect(() => {
     setDay(initialDay);
@@ -202,6 +204,15 @@ export default function PortalDecolonize() {
     copyText(latestAssistantText);
   };
 
+  async function completeDecolonizationLesson() {
+    try {
+      const response = await recordParticipationActivity("decolonization_lesson_completed", "decolonization", { portal_id: PORTAL_ID, day });
+      setStarNotice(`+${response?.activity?.star_award || 0} STAR Community Credits recorded.`);
+    } catch {
+      setStarNotice("Sign in to save STAR for this lesson.");
+    }
+  }
+
   const copyQA = () => {
     const lastQ = [...thread].reverse().find((m) => m.role === "user")?.text || "";
     const lastA = latestAssistantText || "";
@@ -308,6 +319,8 @@ export default function PortalDecolonize() {
           {/* IMPORTANT: Your VoiceControls expects latestMessage, not text */}
           <VoiceControls latestMessage={formattedLessonForVoice} />
           <SocialShare />
+          <button onClick={completeDecolonizationLesson} className="mt-4 px-4 py-2 rounded-lg border border-yellow-700 bg-[#111] hover:bg-[#1a1a1a]">Complete Lesson · Earn STAR</button>
+          {starNotice ? <p className="mt-2 text-yellow-300">{starNotice}</p> : null}
         </div>
 
         {/* ✅ Q&A UPGRADE */}

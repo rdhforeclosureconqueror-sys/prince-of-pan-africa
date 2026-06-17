@@ -8,7 +8,14 @@ from sqlalchemy.orm import sessionmaker
 from app.database import Base
 from app.models import Activity, GuestSession, ParticipationPoint, StarTransaction, User
 from app.security import hash_password
-from app.services.participation import merge_guest_participation, participation_summary, submit_activity
+from app.services.participation import (
+    available_opportunities,
+    available_rewards,
+    community_leaderboards,
+    merge_guest_participation,
+    participation_summary,
+    submit_activity,
+)
 
 
 @pytest.fixture()
@@ -67,3 +74,22 @@ def test_guest_progress_merges_to_new_member(db_session):
     assert summary["activity_count"] == 1
     assert summary["star"] == 3
     assert summary["current_rank"] == "Registered User"
+
+
+def test_star_experience_helpers_use_engine_activity(db_session):
+    user = User(email="star@example.com", password_hash=hash_password("password123"), role="community_member")
+    db_session.add(user)
+    db_session.flush()
+
+    submit_activity(db_session, user=user, guest_session_id=None, activity_type_name="chapter_read", source_module="books")
+    submit_activity(db_session, user=user, guest_session_id=None, activity_type_name="swahili_lesson_completed", source_module="swahili")
+    db_session.commit()
+
+    summary = participation_summary(db_session, user_id=user.id)
+    assert summary["star"] == 17
+    assert summary["activities_completed"] == 2
+    assert summary["rank_progress"]["next_rank"] == "Community Member"
+    assert summary["current_streak"] == 1
+    assert any(item["activity_type"] == "chapter_read" for item in available_opportunities())
+    assert available_rewards(summary["star"])[0]["star_needed"] == 8
+    assert community_leaderboards(db_session)["top_readers"][0]["star"] == 10

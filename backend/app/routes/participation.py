@@ -7,7 +7,14 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.dependencies.auth import get_current_user
 from app.models import Activity
-from app.services.participation import participation_summary, submit_activity
+from app.services.participation import (
+    activity_history,
+    available_opportunities,
+    available_rewards,
+    community_leaderboards,
+    participation_summary,
+    submit_activity,
+)
 
 router = APIRouter(prefix="/participation", tags=["Participation"])
 
@@ -67,3 +74,59 @@ def get_participation_summary(
     guest_session_id = x_guest_session_id or request.cookies.get("simba_guest_session")
     summary = participation_summary(db, user_id=current_user.id if current_user else None, guest_session_id=guest_session_id)
     return {"ok": True, "participation": summary}
+
+
+@router.get("/experience")
+def get_star_experience(
+    request: Request,
+    x_guest_session_id: str | None = Header(default=None, alias="X-Guest-Session-Id"),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    guest_session_id = x_guest_session_id or request.cookies.get("simba_guest_session")
+    user_id = current_user.id if current_user else None
+    summary = participation_summary(db, user_id=user_id, guest_session_id=guest_session_id)
+    history = [_serialize_activity(item) for item in activity_history(db, user_id=user_id, guest_session_id=guest_session_id, limit=25)]
+    return {
+        "ok": True,
+        "participation": summary,
+        "opportunities": available_opportunities(),
+        "history": history,
+        "rewards": available_rewards(summary["star"]),
+        "leaderboards": community_leaderboards(db),
+    }
+
+
+@router.get("/opportunities")
+def get_star_opportunities():
+    return {"ok": True, "opportunities": available_opportunities()}
+
+
+@router.get("/history")
+def get_activity_history(
+    request: Request,
+    x_guest_session_id: str | None = Header(default=None, alias="X-Guest-Session-Id"),
+    limit: int = 25,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    guest_session_id = x_guest_session_id or request.cookies.get("simba_guest_session")
+    user_id = current_user.id if current_user else None
+    return {"ok": True, "history": [_serialize_activity(item) for item in activity_history(db, user_id=user_id, guest_session_id=guest_session_id, limit=limit)]}
+
+
+@router.get("/rewards")
+def get_star_rewards(
+    request: Request,
+    x_guest_session_id: str | None = Header(default=None, alias="X-Guest-Session-Id"),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    guest_session_id = x_guest_session_id or request.cookies.get("simba_guest_session")
+    summary = participation_summary(db, user_id=current_user.id if current_user else None, guest_session_id=guest_session_id)
+    return {"ok": True, "rewards": available_rewards(summary["star"])}
+
+
+@router.get("/leaderboards")
+def get_community_leaderboards(db: Session = Depends(get_db)):
+    return {"ok": True, "leaderboards": community_leaderboards(db)}

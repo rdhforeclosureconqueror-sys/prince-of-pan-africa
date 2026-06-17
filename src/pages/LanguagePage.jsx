@@ -1,24 +1,32 @@
-import React from "react";
+import React, { useState } from "react";
 import { useMvpActions } from "../hooks/useMvpActions";
+import { recordParticipationActivity } from "../api/participation";
 
 export default function LanguagePage() {
   const { lastReward } = useMvpActions();
+  const [language, setLanguage] = useState("swahili");
+  const [starNotice, setStarNotice] = useState("");
+  async function logPractice() {
+    const activityType = language === "yoruba" ? "yoruba_lesson_completed" : "swahili_lesson_completed";
+    try {
+      const response = await recordParticipationActivity(activityType, language, { language });
+      setStarNotice(`+${response?.activity?.star_award || 0} STAR Community Credits recorded.`);
+    } catch {
+      setStarNotice("Sign in to save STAR for language practice.");
+    }
+  }
 
   return (
     <div className="mvp-page">
       <h1>🗣️ Language Practice</h1>
       <p>Select Language</p>
-      <select defaultValue="swahili">
+      <select value={language} onChange={(event) => setLanguage(event.target.value)}>
         <option value="swahili">Swahili</option>
         <option value="zulu">Zulu</option>
         <option value="yoruba">Yoruba</option>
       </select>
-      <button disabled title="Pilot mode: endpoint not enabled yet">
-        🎤 Log Practice
-      </button>
-      <p style={{ opacity: 0.8, marginTop: 10 }}>
-        Language practice logging is temporarily disabled in pilot mode.
-      </p>
+      <button onClick={logPractice}>🎤 Complete Lesson · Earn STAR</button>
+      {starNotice ? <p style={{ opacity: 0.9, marginTop: 10 }}>{starNotice}</p> : null}
 
       {lastReward && (
         <div className="reward-toast">

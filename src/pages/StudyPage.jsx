@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../api/api";
+import { recordParticipationActivity } from "../api/participation";
 import { API_BASE_URL } from "../config";
 import "../styles/studyPage.css";
 
@@ -609,6 +610,12 @@ export default function StudyPage() {
   async function persistProgress(positionOverride) {
     if (!selectedBook) return;
     const currentTime = Math.floor((positionOverride ?? audioRef.current?.currentTime) || 0);
+    try {
+      await recordParticipationActivity(activeChapter?.audio_url ? "audiobook_listen" : "chapter_read", activeChapter?.audio_url ? "audiobooks" : "books", { book_id: selectedBook.id, chapter_index: chapterNumber, title: activeChapter?.title });
+    } catch (err) {
+      console.info("[StudyPage] STAR activity was not recorded for this chapter yet.", err);
+    }
+
     await api(`/audiobooks/${selectedBook.id}/progress`, {
       method: "POST",
       credentials: "include",
@@ -651,6 +658,12 @@ export default function StudyPage() {
     setReflectionPrompt(basePrompt);
     setReflectionNote(chapterReflectionByIndex(chapterNumber)?.notes || "");
     setShowReflectionPrompt(true);
+
+    try {
+      await recordParticipationActivity(activeChapter?.audio_url ? "audiobook_listen" : "chapter_read", activeChapter?.audio_url ? "audiobooks" : "books", { book_id: selectedBook.id, chapter_index: chapterNumber, title: activeChapter?.title });
+    } catch (err) {
+      console.info("[StudyPage] STAR activity was not recorded for this chapter yet.", err);
+    }
 
     await api(`/audiobooks/${selectedBook.id}/progress`, {
       method: "POST",
