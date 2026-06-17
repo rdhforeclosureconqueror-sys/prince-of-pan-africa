@@ -12,6 +12,7 @@ from app.models import (
     ActivityAuditLog,
     ActivityHistory,
     ActivityType,
+    CommunityReputation,
     GuestSession,
     ParticipationPoint,
     StarTransaction,
@@ -39,7 +40,20 @@ DEFAULT_ACTIVITY_TYPES = {
     "community_help": {"points": 12, "star": 12},
     "community_onboarding_completed": {"points": 20, "star": 20},
     "builder_onboarding_completed": {"points": 20, "star": 20},
+    "share_verified": {"points": 12, "star": 12},
+    "community_verification": {"points": 3, "star": 3},
 }
+
+LABOR_CATEGORIES = {
+    "learning": "Learning Labor",
+    "community": "Community Labor",
+    "growth": "Growth Labor",
+    "builder": "Builder Labor",
+}
+
+VERIFICATIONS_REQUIRED = 3
+FIRST_VERIFIER_STAR = 3
+FOLLOWUP_VERIFIER_STAR = 1
 
 RANK_THRESHOLDS = [
     (0, "Registered User"),
@@ -224,6 +238,169 @@ def submit_activity(
     db.add(ActivityAuditLog(activity_id=activity.id, actor_user_id=activity.user_id, action="participation_engine_award", before={}, after={"points": points, "star": star, "verification_status": verification_status, "notification": "queued"}))
     logger.info("Participation STAR awarded", extra={"activity_id": activity.id, "activity_type": activity.activity_type, "user_id": activity.user_id, "guest_session_id": activity.guest_session_id, "star_awarded": star})
     return activity
+
+
+def _labor_category(value: str | None) -> str:
+    normalized = (value or "").strip().lower().replace("_labor", "")
+    return normalized if normalized in LABOR_CATEGORIES else "community"
+
+
+def get_or_create_reputation(db: Session, user_id: int) -> CommunityReputation:
+    reputation = db.query(CommunityReputation).filter(CommunityReputation.user_id == user_id).first()
+    if not reputation:
+        reputation = CommunityReputation(user_id=user_id)
+        db.add(reputation)
+        db.flush()
+    return reputation
+
+
+def _refresh_leadership_level(reputation: CommunityReputation) -> None:
+    if reputation.trust_score >= 250:
+        reputation.leadership_level = "Trusted Steward"
+    elif reputation.trust_score >= 100:
+        reputation.leadership_level = "Community Verifier"
+    elif reputation.trust_score >= 25:
+        reputation.leadership_level = "Reliable Helper"
+    else:
+        reputation.leadership_level = "Emerging Steward"
+    reputation.updated_at = datetime.utcnow()
+
+
+def create_labor_verification_request(
+    db: Session,
+    *,
+    user: User,
+    labor_category: str,
+    activity_type_name: str,
+    source_module: str,
+    proof_url: str | None = None,
+    metadata: dict | None = None,
+) -> Activity:
+    category = _labor_category(labor_category)
+    activity_type = get_activity_type(db, activity_type_name)
+    activity_type.verification_required = True
+    metadata_payload = {
+        **(metadata or {}),
+        "labor_category": category,
+        "labor_category_label": LABOR_CATEGORIES[category],
+        "proof_url": proof_url,
+        "community_verification": {
+            "status": "pending",
+            "required": VERIFICATIONS_REQUIRED,
+            "successful": 0,
+            "discord_thread_status": "pending_bot_thread",
+        },
+    }
+    activity = Activity(
+        user_id=user.id,
+        activity_type=activity_type.name,
+        source_module=(source_module or "community").strip().lower(),
+        verification_status="pending",
+        participation_points=activity_type.default_points,
+        star_award=0,
+        metadata_=metadata_payload,
+    )
+    db.add(activity)
+    db.flush()
+    db.add(VerificationRecord(activity_id=activity.id, status="pending", notes="Community verification requested."))
+    db.add(ActivityHistory(activity_id=activity.id, user_id=user.id, event_type="verification_requested", description=f"{LABOR_CATEGORIES[category]} submitted for community verification."))
+    db.add(ActivityAuditLog(activity_id=activity.id, actor_user_id=user.id, action="community_verification_requested", before={}, after=metadata_payload))
+    return activity
+
+
+def successful_verification_count(db: Session, activity_id: int) -> int:
+    return (
+        db.query(VerificationRecord)
+        .filter(
+            VerificationRecord.activity_id == activity_id,
+            VerificationRecord.status == "community_confirmed",
+            VerificationRecord.verified_by_user_id.isnot(None),
+        )
+        .count()
+    )
+
+
+def verify_labor_contribution(
+    db: Session,
+    *,
+    activity_id: int,
+    verifier: User,
+    proof_url: str | None = None,
+    notes: str = "",
+) -> tuple[Activity, VerificationRecord, bool, int]:
+    activity = db.query(Activity).filter(Activity.id == activity_id).first()
+    if not activity:
+        raise ValueError("Contribution not found")
+    if activity.user_id == verifier.id:
+        raise ValueError("Members cannot verify their own contribution")
+    if activity.verification_status == "verified":
+        raise ValueError("Contribution is already verified")
+
+    existing = (
+        db.query(VerificationRecord)
+        .filter(
+            VerificationRecord.activity_id == activity.id,
+            VerificationRecord.verified_by_user_id == verifier.id,
+            VerificationRecord.status == "community_confirmed",
+        )
+        .first()
+    )
+    if existing:
+        raise ValueError("Verifier already confirmed this contribution")
+
+    before_count = successful_verification_count(db, activity.id)
+    if before_count >= VERIFICATIONS_REQUIRED:
+        raise ValueError("Contribution already has enough verifications")
+
+    star_award = FIRST_VERIFIER_STAR if before_count == 0 else FOLLOWUP_VERIFIER_STAR
+    verification = VerificationRecord(
+        activity_id=activity.id,
+        status="community_confirmed",
+        verified_by_user_id=verifier.id,
+        notes=notes or proof_url or "Community verifier confirmed proof.",
+    )
+    db.add(verification)
+    verifier_activity = submit_activity(
+        db,
+        user=verifier,
+        guest_session_id=None,
+        activity_type_name="community_verification",
+        source_module="community_verification",
+        metadata={"verified_activity_id": activity.id, "verifier_slot": before_count + 1, "proof_url": proof_url},
+    )
+    verifier_activity.participation_points = star_award
+    verifier_activity.star_award = star_award
+    db.query(ParticipationPoint).filter(ParticipationPoint.activity_id == verifier_activity.id).update({"points": star_award}, synchronize_session=False)
+    db.query(StarTransaction).filter(StarTransaction.activity_id == verifier_activity.id).update({"amount": star_award}, synchronize_session=False)
+    verifier_reputation = get_or_create_reputation(db, verifier.id)
+    verifier_reputation.verifications_completed += 1
+    verifier_reputation.trust_score += star_award
+    verifier_reputation.consistency_streak += 1
+    _refresh_leadership_level(verifier_reputation)
+
+    after_count = before_count + 1
+    completed = after_count >= VERIFICATIONS_REQUIRED
+    metadata = dict(activity.metadata_ or {})
+    verification_meta = dict(metadata.get("community_verification") or {})
+    verification_meta.update({"status": "verified" if completed else "pending", "successful": after_count, "required": VERIFICATIONS_REQUIRED})
+    metadata["community_verification"] = verification_meta
+    activity.metadata_ = metadata
+
+    if completed:
+        activity_type = get_activity_type(db, activity.activity_type)
+        activity.verification_status = "verified"
+        activity.star_award = activity_type.default_star
+        db.add(ParticipationPoint(activity_id=activity.id, user_id=activity.user_id, points=activity.participation_points, reason=activity.activity_type))
+        db.add(StarTransaction(activity_id=activity.id, user_id=activity.user_id, amount=activity.star_award, transaction_type="earn", reason=activity.activity_type))
+        db.add(ActivityHistory(activity_id=activity.id, user_id=activity.user_id, event_type="community_verified", description="Community verification completed with three confirmations."))
+        contributor_reputation = get_or_create_reputation(db, activity.user_id)
+        contributor_reputation.verified_contributions += 1
+        contributor_reputation.trust_score += activity.star_award
+        contributor_reputation.consistency_streak += 1
+        _refresh_leadership_level(contributor_reputation)
+
+    db.add(ActivityAuditLog(activity_id=activity.id, actor_user_id=verifier.id, action="community_verification_confirmed", before={"successful": before_count}, after={"successful": after_count, "completed": completed, "verifier_star": star_award}))
+    return activity, verification, completed, star_award
 
 
 def participation_summary(db: Session, user_id: int | None = None, guest_session_id: str | None = None) -> dict:
