@@ -305,4 +305,6 @@ async def start_discord_daily_fact_loop():
 
     if discord_bridge.configured and discord_bridge.channel_id("black_economics"):
         asyncio.create_task(run_daily_black_economics_loop())
+    if discord_bridge.configured:
+        asyncio.create_task(discord_bridge.run_gateway_listener())
 

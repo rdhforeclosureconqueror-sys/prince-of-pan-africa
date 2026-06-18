@@ -6,9 +6,15 @@ import json
 import logging
 import os
 import random
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+try:
+    import websockets
+except ModuleNotFoundError:  # pragma: no cover
+    websockets = None
 
 try:
     import httpx
@@ -51,10 +57,12 @@ REGIONAL_CHANNELS.pop("", None)
 
 REGIONAL_PROMPTS = {
     "north": "Northern Black communities built churches, schools, mutual-aid networks, newspapers, and business corridors even under pressure. Which institution should your city rebuild first?",
-    "south": "The South has been home to powerful Black towns, land cooperatives, freedom schools, and business districts. Which local Black institution would most strengthen your community today?",
+    "south": "New Orleans and the wider South hold deep Black cultural and economic history, from mutual-aid societies to Black business networks, land cooperatives, freedom schools, and community institutions. Which Black community institution in your city do you think should be rebuilt first?",
     "east": "Eastern Black communities organized docks, churches, publishers, schools, and neighborhood economies into durable freedom networks. What would you want young people in your area to learn from that legacy?",
     "west": "Western Black communities built newspapers, churches, civic clubs, and business districts while creating new migration-era freedom spaces. What kind of cooperative business would serve your region now?",
 }
+
+REGIONAL_TRIGGER_TERMS = ("i’m from", "i'm from", "i am from", "from", "test", "new orleans", "atlanta", "houston", "memphis", "detroit", "chicago", "philadelphia", "baltimore", "oakland", "los angeles")
 
 BLACK_ECONOMICS_FACTS_FILE = "black_economics_365_facts.json"
 BLACK_ECONOMICS_SOURCES_FILE = "black_economics_sources.json"
@@ -143,6 +151,8 @@ class DiscordBridge:
     def __init__(self) -> None:
         self.token = os.getenv("DISCORD_BOT_TOKEN", "").strip()
         self.guild_id = os.getenv("DISCORD_GUILD_ID", "").strip()
+        self._gateway_running = False
+        self._last_regional_reply: dict[str, float] = {}
 
     @property
     def configured(self) -> bool:
@@ -152,10 +162,28 @@ class DiscordBridge:
         value = os.getenv(CHANNEL_ENV[key], "").strip()
         return value or None
 
-    async def post_channel(self, key: str, content: str, *, allowed_mentions: dict | None = None) -> bool:
+    def safe_channel_label(self, key: str) -> str:
+        channel_id = self.channel_id(key)
+        return f"{key} ({channel_id[-4:]})" if channel_id else key
+
+    async def log_action(self, *, action: str, target_channel: str, success: bool, status: str, error: str | None = None) -> bool:
+        timestamp = datetime.now(timezone.utc).isoformat()
+        safe_error = (error or "").replace(self.token, "[redacted]") if self.token else (error or "")
+        logger.info("Discord action=%s target_channel=%s success=%s status=%s timestamp=%s error=%s", action, target_channel, success, status, timestamp, safe_error)
+        if action == "bot_log_post":
+            return True
+        if not self.configured or not self.channel_id("bot_log"):
+            return False
+        content = f"🛡️ **Simba Bot action**\naction: `{action}`\ntarget: `{target_channel}`\nsuccess: `{success}`\nstatus: `{status}`\ntime: `{timestamp}`"
+        if safe_error:
+            content += f"\nerror: `{safe_error[:300]}`"
+        return await self.post_channel("bot_log", content, action="bot_log_post")
+
+    async def post_channel(self, key: str, content: str, *, allowed_mentions: dict | None = None, action: str = "post_channel") -> bool:
         channel_id = self.channel_id(key)
         if not self.configured or not channel_id:
             logger.info("Discord post skipped; bot token or channel %s is not configured", key)
+            await self.log_action(action=action, target_channel=self.safe_channel_label(key), success=False, status="not_configured")
             return False
         if httpx is None:
             logger.warning("Discord post failed for channel %s: httpx unavailable", key)
@@ -168,10 +196,11 @@ class DiscordBridge:
                     json={"content": content[:1900], "allowed_mentions": allowed_mentions or {"parse": []}},
                 )
                 response.raise_for_status()
+            await self.log_action(action=action, target_channel=self.safe_channel_label(key), success=True, status=str(response.status_code))
             return True
         except Exception as exc:
             logger.warning("Discord post failed for channel %s: %s", key, exc.__class__.__name__)
-            await self.log_error(f"Discord post failed for `{key}`: {exc.__class__.__name__}")
+            await self.log_action(action=action, target_channel=self.safe_channel_label(key), success=False, status="exception", error=exc.__class__.__name__)
             return False
 
     async def log_error(self, message: str) -> bool:
@@ -222,12 +251,76 @@ class DiscordBridge:
         fact = select_random_fact() if random_fact else select_daily_fact()
         return await self.post_channel("black_economics", format_black_economics_post(fact, include_sources=include_sources))
 
+    def build_regional_prompt(self, region: str) -> str:
+        return f"🦁 **Welcome to the {region.title()} Region — Black Mega Cities Reflection**\n\n{REGIONAL_PROMPTS[region]}\n\n📚 Explore more: {LIBRARY_URL}"
+
     async def maybe_post_regional_prompt(self, channel_id: str, *, probability: float = 0.2) -> bool:
         region = REGIONAL_CHANNELS.get(str(channel_id))
         if not region or random.random() > probability:
             return False
-        prompt = f"🦁 **Black Mega Cities Reflection — {region.title()}**\n\n{REGIONAL_PROMPTS[region]}\n\n📚 Explore more: {LIBRARY_URL}"
-        return await self.post_channel(region, prompt)
+        return await self.post_channel(region, self.build_regional_prompt(region), action=f"regional_trigger_{region}")
+
+    def gateway_status(self) -> dict[str, Any]:
+        return {
+            "enabled": os.getenv("DISCORD_GATEWAY_LISTENER_ENABLED", "true").lower() not in {"0", "false", "no"},
+            "running": self._gateway_running,
+            "websockets_available": websockets is not None,
+        }
+
+    def should_respond_to_regional_message(self, payload: dict[str, Any]) -> tuple[bool, str | None]:
+        if payload.get("author", {}).get("bot"):
+            return False, None
+        channel_id = str(payload.get("channel_id", ""))
+        region = REGIONAL_CHANNELS.get(channel_id)
+        content = str(payload.get("content", "")).lower()
+        if not region or not any(term in content for term in REGIONAL_TRIGGER_TERMS):
+            return False, region
+        now = time.monotonic()
+        if now - self._last_regional_reply.get(channel_id, 0) < int(os.getenv("DISCORD_REGIONAL_TRIGGER_COOLDOWN_SECONDS", "60")):
+            return False, region
+        self._last_regional_reply[channel_id] = now
+        return True, region
+
+    async def handle_gateway_message_create(self, payload: dict[str, Any]) -> bool:
+        should_reply, region = self.should_respond_to_regional_message(payload)
+        if not should_reply or not region:
+            return False
+        return await self.post_channel(region, self.build_regional_prompt(region), action=f"regional_live_trigger_{region}")
+
+    async def run_gateway_listener(self) -> None:
+        if os.getenv("DISCORD_GATEWAY_LISTENER_ENABLED", "true").lower() in {"0", "false", "no"}:
+            logger.info("Discord gateway listener disabled by DISCORD_GATEWAY_LISTENER_ENABLED")
+            return
+        if not self.configured or websockets is None:
+            logger.warning("Discord gateway listener unavailable: token_configured=%s websockets_available=%s", self.configured, websockets is not None)
+            return
+        self._gateway_running = True
+        while True:
+            try:
+                async with websockets.connect("wss://gateway.discord.gg/?v=10&encoding=json") as ws:
+                    hello = json.loads(await ws.recv())
+                    interval = hello.get("d", {}).get("heartbeat_interval", 45000) / 1000
+                    await ws.send(json.dumps({"op": 2, "d": {"token": self.token, "intents": 33280, "properties": {"os": "linux", "browser": "simba", "device": "simba"}}}))
+
+                    async def heartbeat():
+                        while True:
+                            await asyncio.sleep(interval)
+                            await ws.send(json.dumps({"op": 1, "d": None}))
+
+                    heartbeat_task = asyncio.create_task(heartbeat())
+                    try:
+                        async for raw in ws:
+                            event = json.loads(raw)
+                            if event.get("t") == "MESSAGE_CREATE":
+                                await self.handle_gateway_message_create(event.get("d", {}))
+                    finally:
+                        heartbeat_task.cancel()
+            except Exception as exc:
+                self._gateway_running = False
+                logger.warning("Discord gateway listener reconnecting after %s", exc.__class__.__name__)
+                await self.log_action(action="gateway_listener", target_channel="regional_channels", success=False, status="reconnect", error=exc.__class__.__name__)
+                await asyncio.sleep(30)
+                self._gateway_running = True
 
 
 discord_bridge = DiscordBridge()

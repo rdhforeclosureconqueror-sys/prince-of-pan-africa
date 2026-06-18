@@ -36,3 +36,40 @@ def test_discord_bridge_skips_posts_without_token(monkeypatch):
 
     assert bridge.configured is False
     assert asyncio.run(bridge.post_daily_black_economics()) is False
+
+
+def test_regional_trigger_detects_new_orleans_south_message(monkeypatch):
+    from app.services import discord_bridge as module
+    from app.services.discord_bridge import DiscordBridge
+
+    monkeypatch.setenv("DISCORD_SOUTH_CHANNEL_ID", "south123")
+    monkeypatch.setitem(module.REGIONAL_CHANNELS, "south123", "south")
+    bridge = DiscordBridge()
+
+    should_reply, region = bridge.should_respond_to_regional_message({
+        "channel_id": "south123",
+        "content": "test, I’m from New Orleans",
+        "author": {"bot": False},
+    })
+
+    assert should_reply is True
+    assert region == "south"
+    assert "Welcome to the South Region" in bridge.build_regional_prompt("south")
+    assert "New Orleans" in bridge.build_regional_prompt("south")
+
+
+def test_regional_trigger_ignores_bot_messages(monkeypatch):
+    from app.services import discord_bridge as module
+    from app.services.discord_bridge import DiscordBridge
+
+    monkeypatch.setitem(module.REGIONAL_CHANNELS, "south123", "south")
+    bridge = DiscordBridge()
+
+    should_reply, region = bridge.should_respond_to_regional_message({
+        "channel_id": "south123",
+        "content": "I am from New Orleans",
+        "author": {"bot": True},
+    })
+
+    assert should_reply is False
+    assert region is None
