@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies.auth import get_current_user, require_auth
-from app.models import Activity, CommunityReputation
+from app.models import Activity, CommunityReputation, User
+from app.services.discord_bridge import discord_bridge
 from app.services.participation import (
     activity_history,
     available_opportunities,
@@ -62,6 +63,14 @@ def _serialize_activity(activity: Activity) -> dict:
         "star_award": activity.star_award,
         "metadata": activity.metadata_,
     }
+
+
+def _display_name_from_user(user) -> str:
+    attrs = getattr(getattr(user, "profile", None), "attributes", {}) or {}
+    for key in ("display_name", "first_name", "name"):
+        if attrs.get(key):
+            return str(attrs[key]).split()[0]
+    return (getattr(user, "email", "member").split("@", 1)[0].replace(".", " ").replace("_", " ").title())
 
 
 def _serialize_reputation(reputation: CommunityReputation) -> dict:
@@ -181,6 +190,7 @@ def get_community_leaderboards(db: Session = Depends(get_db)):
 @router.post("/verification-requests", status_code=status.HTTP_201_CREATED)
 def create_community_verification_request(
     payload: VerificationRequestPayload,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user=Depends(require_auth),
 ):
@@ -203,7 +213,11 @@ def create_community_verification_request(
         metadata=metadata,
     )
     reputation = get_or_create_reputation(db, current_user.id)
+    discord_activity = _serialize_activity(activity)
+    discord_activity["metadata_"] = activity.metadata_
+    display_name = _display_name_from_user(current_user)
     db.commit()
+    background_tasks.add_task(discord_bridge.post_verification_request, discord_activity, display_name)
     return {
         "ok": True,
         "message": "Community verification request created. Three member confirmations are required before STAR is awarded.",
@@ -217,6 +231,7 @@ def create_community_verification_request(
 def confirm_community_verification(
     activity_id: int,
     payload: VerificationConfirmPayload,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user=Depends(require_auth),
 ):
@@ -236,7 +251,13 @@ def confirm_community_verification(
     contributor_reputation = get_or_create_reputation(db, activity.user_id)
     verifier_reputation = get_or_create_reputation(db, current_user.id)
     confirmations = successful_verification_count(db, activity.id)
+    discord_activity = _serialize_activity(activity)
+    contributor_trust_score = contributor_reputation.trust_score
     db.commit()
+    if completed:
+        contributor = db.query(User).filter(User.id == activity.user_id).first()
+        display_name = _display_name_from_user(contributor)
+        background_tasks.add_task(discord_bridge.post_verification_completion, discord_activity, display_name, contributor_trust_score)
     return {
         "ok": True,
         "completed": completed,
