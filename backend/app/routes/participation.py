@@ -12,11 +12,14 @@ from app.services.participation import (
     available_opportunities,
     available_rewards,
     community_leaderboards,
+    community_trust_summary,
     create_labor_verification_request,
     find_duplicate_activity,
     get_or_create_reputation,
+    open_verification_requests,
     participation_summary,
     submit_activity,
+    recent_community_activity,
     successful_verification_count,
     verify_labor_contribution,
 )
@@ -256,3 +259,20 @@ def get_my_community_reputation(db: Session = Depends(get_db), current_user=Depe
     reputation = get_or_create_reputation(db, current_user.id)
     db.commit()
     return {"ok": True, "reputation": _serialize_reputation(reputation)}
+
+
+@router.get("/community-trust")
+def get_community_trust_dashboard(db: Session = Depends(get_db), current_user=Depends(require_auth)):
+    trust = community_trust_summary(db, user_id=current_user.id)
+    db.commit()
+    return {"ok": True, "community_trust": trust}
+
+
+@router.get("/verification-requests/open")
+def get_open_verification_requests(limit: int = 10, db: Session = Depends(get_db), current_user=Depends(require_auth)):
+    return {"ok": True, "verification_requests": open_verification_requests(db, current_user_id=current_user.id, limit=limit)}
+
+
+@router.get("/community-activity/recent")
+def get_recent_community_labor_activity(limit: int = 12, db: Session = Depends(get_db), current_user=Depends(require_auth)):
+    return {"ok": True, "activity": recent_community_activity(db, limit=limit)}

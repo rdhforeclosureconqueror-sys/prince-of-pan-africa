@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api/api";
-import { getStarExperience } from "../api/participation";
+import { getCommunityTrustExperience, getOpenVerificationRequests, getRecentCommunityActivity, getStarExperience } from "../api/participation";
 import { getDailyHistoricalSpotlight } from "../data/dailyHistoricalSpotlights";
 import { TIMELINE_A_AFRICA_ORIGINS } from "../data/timelineA_africaOrigins";
 import swahiliLessons from "../../public/languages/swahili_30days.json";
@@ -69,6 +69,9 @@ export default function MemberDashboard() {
   const [overview, setOverview] = useState(null);
   const [activity, setActivity] = useState([]);
   const [starExperience, setStarExperience] = useState(null);
+  const [communityTrust, setCommunityTrust] = useState(null);
+  const [verificationRequests, setVerificationRequests] = useState([]);
+  const [communityActivity, setCommunityActivity] = useState([]);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -92,16 +95,22 @@ export default function MemberDashboard() {
     window.addEventListener("simba:participation-updated", onParticipationUpdated);
     (async () => {
       try {
-        const [overviewRes, activityRes, starRes] = await Promise.all([
+        const [overviewRes, activityRes, starRes, trustRes, verificationRes, communityActivityRes] = await Promise.all([
           api("/member/overview", { method: "GET" }),
           api("/member/activity", { method: "GET" }),
           getStarExperience(),
+          getCommunityTrustExperience(),
+          getOpenVerificationRequests(),
+          getRecentCommunityActivity(),
         ]);
 
         if (!mounted) return;
         setOverview(overviewRes || null);
         setActivity(activityRes?.activity || activityRes?.items || []);
         setStarExperience(starRes || null);
+        setCommunityTrust(trustRes?.community_trust || null);
+        setVerificationRequests(verificationRes?.verification_requests || []);
+        setCommunityActivity(communityActivityRes?.activity || []);
       } catch (err) {
         if (!mounted) return;
         if (err.status === 401) {
@@ -162,6 +171,11 @@ export default function MemberDashboard() {
   const starHistory = starExperience?.history || activity || [];
   const starRewards = starExperience?.rewards || [];
   const leaderboards = starExperience?.leaderboards || {};
+  const trust = communityTrust || {};
+  const trustProgress = trust.progress || {};
+  const trustPercent = Math.min(100, trust.trust_percent ?? trust.trust_score ?? 0);
+  const trustLadder = trustProgress.levels || [];
+  const recentCommunityActivity = communityActivity.length ? communityActivity : [];
   const impactStats = [
     ["Businesses Supported This Month", summary?.businesses_supported_month ?? 0],
     ["Books Completed", summary?.books_completed ?? 0],
@@ -215,6 +229,41 @@ export default function MemberDashboard() {
       </header>
 
       <main className="member-hub-grid command-grid">
+
+        <section className="cosmic-section member-hub-card member-hub-card--wide community-trust-card" aria-label="Community Trust">
+          <p className="section-kicker">Community Labor Exchange</p>
+          <div className="community-trust-header">
+            <div>
+              <h2>Community Trust</h2>
+              <p>Community Trust grows when you complete verified contributions, help verify others, and participate consistently.</p>
+            </div>
+            <strong className="trust-badge">{trust.leadership_level || "Community Member"}</strong>
+          </div>
+          <div className="trust-score-layout">
+            <article className="trust-score-card"><span>Trust Score</span><strong>{trustPercent}%</strong><div className="star-progress-track"><i style={{ width: `${trustPercent}%` }} /></div></article>
+            <article><span>STAR Community Credits</span><strong>{currentStar}</strong><small>Rewards for participation</small></article>
+            <article><span>Verified Contributions</span><strong>{trust.verified_contributions ?? 0}</strong></article>
+            <article><span>Verifications Completed</span><strong>{trust.verifications_completed ?? 0}</strong></article>
+            <article><span>Verification Accuracy</span><strong>{trust.verification_accuracy ?? 100}%</strong></article>
+            <article><span>Consistency Streak</span><strong>{trust.consistency_streak ?? 0} Days</strong></article>
+          </div>
+          <div className="trust-next-level"><span>Next Level: {trust.next_level || "Verified Contributor"}</span><strong>{trustProgress.percent ?? 0}%</strong></div>
+          <div className="star-progress-track"><i style={{ width: `${trustProgress.percent ?? 0}%` }} /></div>
+          <div className="trust-ladder" aria-label="Community Trust ladder">{trustLadder.map((level) => <span key={level.level} className={(trust.trust_score ?? 0) >= level.threshold ? "is-active" : ""}>{level.level}</span>)}</div>
+          <ul className="trust-calculation-list">{(trust.calculation || []).map((line) => <li key={line}>{line}</li>)}</ul>
+        </section>
+
+        <section className="cosmic-section member-hub-card member-hub-card--wide verification-requests-card">
+          <p className="section-kicker">Help Verify Community Work</p>
+          <h2>Pending Verification Opportunities</h2>
+          {verificationRequests.length === 0 ? <p>No verification requests are open right now. When members submit proof of community work, you can help verify and earn STAR.</p> : <div className="verification-request-grid">{verificationRequests.map((request) => <article key={request.activity_id}><h3>{request.labor_category}</h3><p><strong>Submitted by:</strong> {request.submitted_by}</p><p><strong>Content/activity:</strong> {request.content || request.activity_type}</p><p><strong>Status:</strong> {request.status}</p><p><strong>Confirmations:</strong> {request.current_confirmations}/{request.required_confirmations}</p><strong className="star-reward-label">+{request.star_reward} STAR for verification</strong></article>)}</div>}
+        </section>
+
+        <section className="cosmic-section member-hub-card member-hub-card--wide community-activity-card">
+          <p className="section-kicker">Recent Community Labor Activity</p>
+          <h2>Community Activity</h2>
+          {recentCommunityActivity.length === 0 ? <p>Community labor activity will appear here as members learn, submit proof, and verify one another.</p> : <ul className="activity-feed">{recentCommunityActivity.map((item) => <li key={item.id}><span className="highlight">{item.message}</span><div>{item.timestamp ? new Date(item.timestamp).toLocaleDateString() : "Recently"} · {item.status} · +{item.star_award || 0} STAR</div></li>)}</ul>}
+        </section>
 
         <section className="cosmic-section member-hub-card member-hub-card--wide star-opportunities-card">
           <p className="section-kicker">STAR Engine</p>

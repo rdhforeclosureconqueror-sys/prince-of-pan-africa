@@ -99,3 +99,34 @@ def test_member_cannot_verify_own_labor_request(db_session):
 
     with pytest.raises(ValueError, match="cannot verify their own"):
         verify_labor_contribution(db_session, activity_id=activity.id, verifier=contributor)
+
+
+def test_community_trust_dashboard_helpers_show_open_requests_and_activity(db_session):
+    from app.services.participation import community_trust_summary, open_verification_requests, recent_community_activity
+
+    contributor = _user(db_session, "amina.member@example.com")
+    verifier = _user(db_session, "kwame.verifier@example.com")
+    activity = create_labor_verification_request(
+        db_session,
+        user=contributor,
+        labor_category="learning",
+        activity_type_name="swahili_lesson_completed",
+        source_module="swahili",
+        metadata={"content": "Swahili Day 3"},
+    )
+
+    requests = open_verification_requests(db_session, current_user_id=verifier.id)
+    assert requests[0]["activity_id"] == activity.id
+    assert requests[0]["labor_category"] == "Learning Labor"
+    assert requests[0]["submitted_by"] == "Amina"
+    assert requests[0]["star_reward"] == 3
+
+    trust = community_trust_summary(db_session, user_id=contributor.id)
+    assert trust["label"] == "Community Trust"
+    assert trust["star"] == 0
+    assert trust["leadership_level"] == "Community Member"
+    assert trust["next_level"] == "Verified Contributor"
+    assert "STAR Community Credits" in trust["calculation"][-1]
+
+    feed = recent_community_activity(db_session)
+    assert feed[0]["message"] == "Amina submitted proof of swahili lesson completed."
