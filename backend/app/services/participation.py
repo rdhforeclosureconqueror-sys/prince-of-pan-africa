@@ -77,6 +77,118 @@ STAR_OPPORTUNITIES = [
 
 logger = logging.getLogger("simba.participation")
 
+
+
+TRUST_LADDER = [
+    {"level": "Community Member", "threshold": 0},
+    {"level": "Verified Contributor", "threshold": 25},
+    {"level": "Community Builder", "threshold": 75},
+    {"level": "Community Steward", "threshold": 150},
+    {"level": "Community Leader", "threshold": 300},
+]
+
+
+def trust_ladder_progress(trust_score: int) -> dict:
+    current = TRUST_LADDER[0]
+    next_level = None
+    for idx, level in enumerate(TRUST_LADDER):
+        if trust_score >= level["threshold"]:
+            current = level
+            next_level = TRUST_LADDER[idx + 1] if idx + 1 < len(TRUST_LADDER) else None
+    if not next_level:
+        return {"current_level": current["level"], "next_level": "Highest community level", "percent": 100, "trust_to_next_level": 0, "levels": TRUST_LADDER}
+    span = max(next_level["threshold"] - current["threshold"], 1)
+    percent = min(100, round(((trust_score - current["threshold"]) / span) * 100))
+    return {"current_level": current["level"], "next_level": next_level["level"], "percent": percent, "trust_to_next_level": max(next_level["threshold"] - trust_score, 0), "levels": TRUST_LADDER}
+
+
+def _member_display_name(user: User | None) -> str:
+    if not user:
+        return "A member"
+    attrs = getattr(getattr(user, "profile", None), "attributes", {}) or {}
+    for key in ("display_name", "first_name", "name"):
+        value = attrs.get(key)
+        if value:
+            return str(value).split()[0]
+    local = (user.email or "member").split("@", 1)[0].replace(".", " ").replace("_", " ").strip()
+    return local.split()[0].title() if local else "Member"
+
+
+def community_trust_summary(db: Session, *, user_id: int) -> dict:
+    reputation = get_or_create_reputation(db, user_id)
+    participation = participation_summary(db, user_id=user_id)
+    ladder = trust_ladder_progress(reputation.trust_score)
+    return {
+        "label": "Community Trust",
+        "star": participation.get("star", 0),
+        "trust_score": reputation.trust_score,
+        "trust_percent": min(100, reputation.trust_score),
+        "verified_contributions": reputation.verified_contributions,
+        "verifications_completed": reputation.verifications_completed,
+        "verification_accuracy": reputation.verification_accuracy,
+        "leadership_level": ladder["current_level"],
+        "consistency_streak": reputation.consistency_streak,
+        "next_level": ladder["next_level"],
+        "progress": ladder,
+        "calculation": [
+            "Verified contributions increase Community Trust when community confirmations are completed.",
+            "Verification work increases trust when you help confirm another member’s proof honestly.",
+            "Consistency streaks show steady participation over time.",
+            "STAR Community Credits record rewards; Community Trust records reliability and service.",
+        ],
+        "updated_at": reputation.updated_at.isoformat() if reputation.updated_at else None,
+    }
+
+
+def open_verification_requests(db: Session, *, current_user_id: int | None = None, limit: int = 10) -> list[dict]:
+    query = db.query(Activity).filter(Activity.verification_status == "pending")
+    if current_user_id is not None:
+        query = query.filter(Activity.user_id != current_user_id)
+    activities = query.order_by(Activity.timestamp.desc(), Activity.id.desc()).limit(max(1, min(limit, 50))).all()
+    users = {u.id: u for u in db.query(User).filter(User.id.in_([a.user_id for a in activities if a.user_id])).all()} if activities else {}
+    rows = []
+    for activity in activities:
+        meta = activity.metadata_ or {}
+        verification_meta = meta.get("community_verification") or {}
+        confirmations = successful_verification_count(db, activity.id)
+        rows.append({
+            "id": activity.id,
+            "activity_id": activity.id,
+            "labor_category": meta.get("labor_category_label") or LABOR_CATEGORIES.get(meta.get("labor_category"), "Community Labor"),
+            "submitted_by": _member_display_name(users.get(activity.user_id)),
+            "activity_type": activity.activity_type,
+            "content": meta.get("content") or activity.activity_type.replace("_", " "),
+            "status": activity.verification_status,
+            "current_confirmations": confirmations,
+            "required_confirmations": verification_meta.get("required", VERIFICATIONS_REQUIRED),
+            "star_reward": FIRST_VERIFIER_STAR if confirmations == 0 else FOLLOWUP_VERIFIER_STAR,
+            "submitted_at": activity.timestamp.isoformat() if activity.timestamp else None,
+        })
+    return rows
+
+
+def recent_community_activity(db: Session, *, limit: int = 12) -> list[dict]:
+    activities = db.query(Activity).filter(Activity.user_id.isnot(None)).order_by(Activity.timestamp.desc(), Activity.id.desc()).limit(max(1, min(limit, 50))).all()
+    users = {u.id: u for u in db.query(User).filter(User.id.in_([a.user_id for a in activities if a.user_id])).all()} if activities else {}
+    feed = []
+    for activity in activities:
+        name = _member_display_name(users.get(activity.user_id))
+        action = activity.activity_type.replace("_", " ")
+        if activity.activity_type == "community_verification":
+            message = f"{name} earned STAR for helping verify community work."
+        elif activity.verification_status == "pending":
+            message = f"{name} submitted proof of {action}."
+        elif activity.activity_type in {"swahili_lesson_completed", "language_lesson"}:
+            message = f"{name} completed a Swahili lesson."
+        elif activity.activity_type == "decolonization_lesson_completed":
+            message = f"{name} completed a decolonization lesson."
+        elif activity.activity_type == "share_verified":
+            message = f"{name} completed a verified community share."
+        else:
+            message = f"{name} completed {action}."
+        feed.append({"id": activity.id, "message": message, "activity_type": activity.activity_type, "status": activity.verification_status, "star_award": activity.star_award, "timestamp": activity.timestamp.isoformat() if activity.timestamp else None})
+    return feed
+
 STAR_REWARDS = [
     {"title": "Recognition Badge", "star_cost": 25, "reward_type": "badge"},
     {"title": "Bonus Educational Resource", "star_cost": 50, "reward_type": "resource"},

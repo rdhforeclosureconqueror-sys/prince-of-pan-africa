@@ -33,3 +33,15 @@ export async function recordParticipationActivity(activityType, sourceModule, me
   }
   return response;
 }
+
+export function getCommunityTrustExperience() {
+  return api("/participation/community-trust", { method: "GET" });
+}
+
+export function getOpenVerificationRequests() {
+  return api("/participation/verification-requests/open", { method: "GET" });
+}
+
+export function getRecentCommunityActivity() {
+  return api("/participation/community-activity/recent", { method: "GET" });
+}

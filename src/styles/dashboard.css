@@ -726,3 +726,76 @@ body {
 .star-reward-list li.is-unlocked { border-color: rgba(46, 204, 113, .55); }
 .star-leaderboard-grid h3 { text-transform: capitalize; margin-top: 0; }
 @media (max-width: 760px) { .star-credits-card { grid-template-columns: 1fr; } }
+
+.community-trust-card {
+  border-color: rgba(46, 204, 113, 0.42);
+  background: linear-gradient(135deg, rgba(6, 78, 59, 0.35), rgba(4, 12, 28, 0.82), rgba(255, 215, 0, 0.10));
+}
+.community-trust-header, .trust-next-level {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+}
+.trust-badge, .star-reward-label {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 0.45rem 0.75rem;
+  border-radius: 999px;
+  color: #06140f;
+  background: linear-gradient(90deg, #ffd700, #2ecc71);
+  font-weight: 800;
+}
+.trust-score-layout, .verification-request-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: .75rem;
+  margin: 1rem 0;
+}
+.trust-score-layout article, .verification-request-grid article {
+  padding: .95rem;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 16px;
+  background: rgba(0,0,0,.25);
+}
+.trust-score-layout span {
+  display: block;
+  color: #f7d98f;
+  font-size: .75rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.trust-score-layout strong {
+  display: block;
+  margin-top: .25rem;
+  color: #fff;
+  font-size: 1.7rem;
+}
+.trust-score-card strong { color: #2ecc71; font-size: 2.4rem; }
+.trust-ladder {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+  margin-top: .9rem;
+}
+.trust-ladder span {
+  padding: .45rem .65rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.16);
+  background: rgba(255,255,255,.06);
+  font-size: .82rem;
+}
+.trust-ladder span.is-active {
+  border-color: rgba(46, 204, 113, .7);
+  color: #2ecc71;
+}
+.trust-calculation-list {
+  margin: 1rem 0 0;
+  padding-left: 1.2rem;
+  color: rgba(255,255,255,.84);
+}
+.verification-request-grid h3 { margin-top: 0; color: #ffd700; }
+@media (max-width: 760px) {
+  .community-trust-header, .trust-next-level { align-items: flex-start; flex-direction: column; }
+}
