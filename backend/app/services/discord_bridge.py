@@ -56,29 +56,36 @@ REGIONAL_PROMPTS = {
     "west": "Western Black communities built newspapers, churches, civic clubs, and business districts while creating new migration-era freedom spaces. What kind of cooperative business would serve your region now?",
 }
 
-DEFAULT_FACTS = [
-    {
-        "id": "seed-001",
-        "fact": "Black mutual-aid societies pooled member dues to support burials, sickness care, education, and business survival when banks and insurers excluded Black communities.",
-        "lesson": "Cooperative finance can convert small recurring contributions into community resilience.",
-        "question": "What modern mutual-aid fund would most help families in your city?",
-        "source_ids": ["seed-mutual-aid"],
-        "library_path": "/library",
-    },
-    {
-        "id": "seed-002",
-        "fact": "Historic Black business districts such as Greenwood showed how concentrated ownership, professional services, and community trust could circulate dollars locally.",
-        "lesson": "Local ownership matters because spending has more power when it recirculates through community institutions.",
-        "question": "Which missing Black-owned service would you want to bring back to your neighborhood first?",
-        "source_ids": ["seed-greenwood"],
-        "library_path": "/library",
-    },
-]
+BLACK_ECONOMICS_FACTS_FILE = "black_economics_365_facts.json"
+BLACK_ECONOMICS_SOURCES_FILE = "black_economics_sources.json"
 
-DEFAULT_SOURCES = {
-    "seed-mutual-aid": {"title": "Curated Simba seed note: Black mutual aid", "url": LIBRARY_URL},
-    "seed-greenwood": {"title": "Curated Simba seed note: Black business districts", "url": LIBRARY_URL},
-}
+REQUIRED_FACT_FIELDS = {"id", "title", "discord_post", "source_key"}
+
+
+def _validate_black_economics_fact(item: Any) -> dict[str, Any] | None:
+    if not isinstance(item, dict):
+        return None
+    if not REQUIRED_FACT_FIELDS.issubset(item):
+        return None
+    if not str(item.get("discord_post", "")).strip():
+        return None
+    return item
+
+
+def _extract_black_economics_facts(data: Any) -> list[dict[str, Any]]:
+    if isinstance(data, dict):
+        data = data.get("facts", [])
+    if not isinstance(data, list):
+        return []
+    return [fact for item in data if (fact := _validate_black_economics_fact(item))]
+
+
+def validate_black_economics_dataset(facts: list[dict[str, Any]], sources: dict[str, Any]) -> None:
+    if len(facts) < 365:
+        raise ValueError("Black Economics dataset must contain at least 365 usable daily posts")
+    missing_sources = sorted({str(fact["source_key"]) for fact in facts if str(fact["source_key"]) not in sources})
+    if missing_sources:
+        raise ValueError(f"Black Economics dataset references missing source keys: {', '.join(missing_sources[:5])}")
 
 
 def _data_dir() -> Path:
@@ -86,27 +93,22 @@ def _data_dir() -> Path:
 
 
 def load_black_economics_facts() -> list[dict[str, Any]]:
-    path = _data_dir() / "black_economics_365_facts.json"
-    if path.exists():
-        with path.open("r", encoding="utf-8") as handle:
-            data = json.load(handle)
-        if isinstance(data, dict):
-            data = data.get("facts", [])
-        facts = [item for item in data if isinstance(item, dict) and item.get("fact")]
-        return facts or DEFAULT_FACTS
-    return DEFAULT_FACTS
+    path = _data_dir() / BLACK_ECONOMICS_FACTS_FILE
+    with path.open("r", encoding="utf-8") as handle:
+        facts = _extract_black_economics_facts(json.load(handle))
+    validate_black_economics_dataset(facts, load_black_economics_sources())
+    return facts
 
 
 def load_black_economics_sources() -> dict[str, Any]:
-    path = _data_dir() / "black_economics_sources.json"
-    if path.exists():
-        with path.open("r", encoding="utf-8") as handle:
-            data = json.load(handle)
-        if isinstance(data, list):
-            return {str(item.get("id")): item for item in data if isinstance(item, dict) and item.get("id")}
-        if isinstance(data, dict):
-            return data
-    return DEFAULT_SOURCES
+    path = _data_dir() / BLACK_ECONOMICS_SOURCES_FILE
+    with path.open("r", encoding="utf-8") as handle:
+        data = json.load(handle)
+    if isinstance(data, list):
+        return {str(item.get("id")): item for item in data if isinstance(item, dict) and item.get("id")}
+    if isinstance(data, dict):
+        return data
+    raise ValueError("Black Economics sources must be a JSON object or list of source objects")
 
 
 def select_daily_fact(day: datetime | None = None) -> dict[str, Any]:
@@ -121,24 +123,13 @@ def select_random_fact() -> dict[str, Any]:
 
 
 def format_black_economics_post(fact: dict[str, Any], *, include_sources: bool = False) -> str:
-    lesson = fact.get("lesson") or fact.get("practical_lesson") or "Build institutions that keep knowledge, trust, and resources circulating in the community."
-    question = fact.get("question") or fact.get("discussion_question") or "How can we apply this lesson through cooperative economics this week?"
-    lines = [
-        "🦁 **Daily Black Economics Builder**",
-        f"**History Fact:** {fact['fact']}",
-        f"**Practical Lesson:** {lesson}",
-        f"**Discussion Question:** {question}",
-    ]
-    if fact.get("library_path") is not False:
-        lines.append(f"📚 Keep building in the Simba library: {LIBRARY_URL}")
+    lines = [str(fact["discord_post"]).strip()]
     if include_sources:
         sources = load_black_economics_sources()
-        labels = []
-        for source_id in fact.get("source_ids", []) or []:
-            source = sources.get(str(source_id), {})
-            labels.append(source.get("title") or str(source_id))
-        if labels:
-            lines.append("_Admin source note: " + "; ".join(labels[:3]) + "_")
+        source = sources.get(str(fact.get("source_key")), {})
+        citation = source.get("citation") or source.get("title")
+        if citation:
+            lines.append(f"📚 Source: {citation}")
     return "\n\n".join(lines)
 
 

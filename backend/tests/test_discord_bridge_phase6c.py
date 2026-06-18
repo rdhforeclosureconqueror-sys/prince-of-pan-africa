@@ -11,18 +11,19 @@ from app.services.discord_bridge import (
 )
 
 
-def test_black_economics_fact_post_uses_curated_seed_and_discussion_question():
+def test_black_economics_fact_post_uses_official_curated_dataset():
     facts = load_black_economics_facts()
     fact = select_daily_fact()
+    assert len(facts) >= 365
     assert fact in facts
+    assert "discord_post" in fact
+    assert "source_key" in fact
 
     post = format_black_economics_post(fact, include_sources=True)
 
-    assert "Daily Black Economics Builder" in post
-    assert "**History Fact:**" in post
-    assert "**Practical Lesson:**" in post
-    assert "**Discussion Question:**" in post
-    assert "https://simbawaujamaa.com/library" in post
+    assert "Black Economics Fact #" in post
+    assert "💡 Try it today:" in post
+    assert "📚 Source:" in post
 
 
 def test_discord_bridge_skips_posts_without_token(monkeypatch):
