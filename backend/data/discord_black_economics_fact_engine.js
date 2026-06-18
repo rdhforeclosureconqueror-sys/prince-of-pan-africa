@@ -1,15 +1,36 @@
-// Discord Black Economics Fact Engine
-// Usage: const { getRandomFact, getFactById, facts } = require("./discord_black_economics_fact_engine");
+// Discord Black Economics Fact Engine reference helper.
+// Production backend posting is implemented in backend/app/services/discord_bridge.py.
 
-const fs = require("fs");
-const path = require("path");
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 
-const dataPath = path.join(__dirname, "black_economics_365_facts.json");
-const data = JSON.parse(fs.readFileSync(dataPath, "utf8"));
-const facts = data.facts;
-const sources = data.sources;
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-function getRandomFact(options = {}) {
+const factsPath = path.join(__dirname, "black_economics_365_facts.json");
+const sourcesPath = path.join(__dirname, "black_economics_sources.json");
+const data = JSON.parse(fs.readFileSync(factsPath, "utf8"));
+export const sources = JSON.parse(fs.readFileSync(sourcesPath, "utf8"));
+export const facts = data.facts;
+
+export function validateDataset() {
+  if (!Array.isArray(facts) || facts.length < 365) {
+    throw new Error("Black Economics facts must include at least 365 daily posts.");
+  }
+  for (const fact of facts) {
+    if (!fact || !fact.id || !fact.title || !fact.discord_post || !fact.source_key) {
+      throw new Error("Black Economics fact is missing required production fields.");
+    }
+    if (!sources[fact.source_key]) {
+      throw new Error(`Black Economics source metadata missing for ${fact.source_key}.`);
+    }
+  }
+}
+
+validateDataset();
+
+export function getRandomFact(options = {}) {
   let pool = facts;
   if (options.theme) {
     const theme = options.theme.toLowerCase();
@@ -27,11 +48,11 @@ function getRandomFact(options = {}) {
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
-function getFactById(id) {
+export function getFactById(id) {
   return facts.find(f => f.id === Number(id)) || null;
 }
 
-function formatForDiscord(fact, includeSource = false) {
+export function formatForDiscord(fact, includeSource = false) {
   if (!fact) return "No matching Black economics fact found.";
   let message = fact.discord_post;
   if (includeSource && sources[fact.source_key]) {
@@ -40,9 +61,6 @@ function formatForDiscord(fact, includeSource = false) {
   return message;
 }
 
-module.exports = { facts, sources, getRandomFact, getFactById, formatForDiscord };
-
-// CLI test: node discord_black_economics_fact_engine.js
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
   console.log(formatForDiscord(getRandomFact(), false));
 }
