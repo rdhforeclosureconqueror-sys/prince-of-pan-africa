@@ -6,6 +6,31 @@ const EMPTY_ARRAY = [];
 
 const OVERVIEW_ROUTE_CANDIDATES = ["/admin/ai/overview", "/admin/overview"];
 
+
+const DISCORD_ACTIONS = [
+  { label: "Test Discord Health", method: "GET", path: "/discord/health" },
+  { label: "Post Daily Black Economics Fact", method: "POST", path: "/discord/black-economics/daily", body: {} },
+  { label: "Dry Run Black Economics Fact", method: "POST", path: "/discord/black-economics/dry-run", body: {} },
+  { label: "Post Regional Prompt — North", method: "POST", path: "/discord/regional/north", body: {} },
+  { label: "Post Regional Prompt — South", method: "POST", path: "/discord/regional/south", body: {} },
+  { label: "Post Regional Prompt — East", method: "POST", path: "/discord/regional/east", body: {} },
+  { label: "Post Regional Prompt — West", method: "POST", path: "/discord/regional/west", body: {} },
+  { label: "Send Test Verification Request", method: "POST", path: "/discord/test/verification-request", body: {} },
+  { label: "Send Test Celebration", method: "POST", path: "/discord/test/celebration", body: {} },
+  { label: "Send Test Bot Log Message", method: "POST", path: "/discord/test/bot-log", body: {} },
+];
+
+function sanitizeDiscordResult(result) {
+  return {
+    success: Boolean(result?.success ?? result?.ok),
+    target_channel: result?.target_channel || "—",
+    message_preview: result?.message_preview || result?.content || "—",
+    error: result?.error || result?.detail || null,
+    timestamp: result?.timestamp || new Date().toISOString(),
+    raw: result,
+  };
+}
+
 const METRIC_CARDS = [
   ["total_users", "Total Users"],
   ["total_member_profiles", "Member Profiles"],
@@ -35,6 +60,8 @@ export default function AdminOperationsDashboard() {
   const [overviewRouteUsed, setOverviewRouteUsed] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [discordResults, setDiscordResults] = useState({});
+  const [discordRunning, setDiscordRunning] = useState(null);
 
   useEffect(() => {
     let mounted = true;
@@ -82,6 +109,30 @@ export default function AdminOperationsDashboard() {
   const metrics = useMemo(() => overview?.metrics || {}, [overview]);
   const usersByRole = metrics?.users_by_role?.value || {};
 
+  const runDiscordAction = async (action) => {
+    setDiscordRunning(action.path);
+    try {
+      const result = await api(action.path, {
+        method: action.method,
+        ...(action.method === "POST" ? { body: JSON.stringify(action.body || {}) } : {}),
+      });
+      setDiscordResults((current) => ({ ...current, [action.path]: sanitizeDiscordResult(result) }));
+    } catch (err) {
+      setDiscordResults((current) => ({
+        ...current,
+        [action.path]: sanitizeDiscordResult({
+          ok: false,
+          target_channel: "—",
+          message_preview: "—",
+          error: err?.message || "Discord action failed.",
+          timestamp: new Date().toISOString(),
+        }),
+      }));
+    } finally {
+      setDiscordRunning(null);
+    }
+  };
+
   if (loading) return <div className="admin-loading">Loading Operations Deck...</div>;
   if (error) return <div className="admin-error">⚠️ {error}</div>;
 
@@ -103,6 +154,34 @@ export default function AdminOperationsDashboard() {
           </div>
         ))}
       </div>
+
+
+      <section className="cosmic-section">
+        <h2>🦁 Discord Tools</h2>
+        <p className="admin-subtext">Admin-authenticated controls for testing Simba Bot posts and regional automation. Secrets are never displayed.</p>
+        <div className="dashboard-grid">
+          {DISCORD_ACTIONS.map((action) => {
+            const result = discordResults[action.path];
+            return (
+              <div className="stat-card" key={action.path}>
+                <h3>{action.label}</h3>
+                <button className="hero-btn hero-btn--secondary" type="button" onClick={() => runDiscordAction(action)} disabled={discordRunning === action.path}>
+                  {discordRunning === action.path ? "Running..." : "Run"}
+                </button>
+                {result && (
+                  <div className="admin-subtext">
+                    <p><strong>Status:</strong> {result.success ? "✅ Success" : "❌ Failed"}</p>
+                    <p><strong>Target channel:</strong> {result.target_channel}</p>
+                    <p><strong>Message preview:</strong> {result.message_preview}</p>
+                    {result.error && <p><strong>Error:</strong> {result.error}</p>}
+                    <p><strong>Timestamp:</strong> {new Date(result.timestamp).toLocaleString()}</p>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </section>
 
       <section className="cosmic-section">
         <h2>👥 Users by Role</h2>
