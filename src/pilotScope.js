@@ -8,6 +8,7 @@ export const PILOT_INCLUDED_ROUTES = [
   "/library",
   "/library/organizer",
   "/portal/decolonize",
+  "/assessments",
   "/leadership",
   "/results",
   "/ops/verification",
@@ -34,7 +35,7 @@ export const PILOT_NAV_LINKS = [
   { label: "Languages Hub", to: "/languages" },
   { label: "Library", to: "/library" },
   { label: "Membership", to: "/membership" },
-  { label: "Leadership", to: "/leadership" },
+  { label: "Assessments", to: "/assessments" },
   { label: "Audiobooks", to: "/study" },
   { label: "Brain Training", to: "/brain-training" },
 ];

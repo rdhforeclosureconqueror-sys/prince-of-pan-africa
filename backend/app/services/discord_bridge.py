@@ -153,6 +153,11 @@ class DiscordBridge:
         self.guild_id = os.getenv("DISCORD_GUILD_ID", "").strip()
         self._gateway_running = False
         self._last_regional_reply: dict[str, float] = {}
+        self._last_gateway_event: dict[str, Any] | None = None
+        self._last_message_received: dict[str, Any] | None = None
+        self._last_message_sent: dict[str, Any] | None = None
+        self._last_error: dict[str, Any] | None = None
+        self._current_latency_ms: float | None = None
 
     @property
     def configured(self) -> bool:
@@ -179,15 +184,23 @@ class DiscordBridge:
             content += f"\nerror: `{safe_error[:300]}`"
         return await self.post_channel("bot_log", content, action="bot_log_post")
 
-    async def post_channel(self, key: str, content: str, *, allowed_mentions: dict | None = None, action: str = "post_channel") -> bool:
+    def _record_error(self, action: str, error: str) -> None:
+        self._last_error = {"action": action, "error": error, "timestamp": datetime.now(timezone.utc).isoformat()}
+
+    async def post_channel_result(self, key: str, content: str, *, allowed_mentions: dict | None = None, action: str = "post_channel") -> dict[str, Any]:
         channel_id = self.channel_id(key)
         if not self.configured or not channel_id:
-            logger.info("Discord post skipped; bot token or channel %s is not configured", key)
-            await self.log_action(action=action, target_channel=self.safe_channel_label(key), success=False, status="not_configured")
-            return False
+            error = f"Discord bot token or channel '{key}' is not configured"
+            logger.info("Discord post skipped; %s", error)
+            self._record_error(action, error)
+            await self.log_action(action=action, target_channel=self.safe_channel_label(key), success=False, status="not_configured", error=error)
+            return {"ok": False, "error": error, "status": "not_configured"}
         if httpx is None:
-            logger.warning("Discord post failed for channel %s: httpx unavailable", key)
-            return False
+            error = "httpx is unavailable in this runtime"
+            logger.warning("Discord post failed for channel %s: %s", key, error)
+            self._record_error(action, error)
+            return {"ok": False, "error": error, "status": "dependency_missing"}
+        started = time.monotonic()
         try:
             async with httpx.AsyncClient(timeout=10) as client:
                 response = await client.post(
@@ -196,12 +209,20 @@ class DiscordBridge:
                     json={"content": content[:1900], "allowed_mentions": allowed_mentions or {"parse": []}},
                 )
                 response.raise_for_status()
+            self._current_latency_ms = round((time.monotonic() - started) * 1000, 2)
+            self._last_message_sent = {"channel": self.safe_channel_label(key), "action": action, "preview": content[:160], "timestamp": datetime.now(timezone.utc).isoformat()}
             await self.log_action(action=action, target_channel=self.safe_channel_label(key), success=True, status=str(response.status_code))
-            return True
+            return {"ok": True, "status": str(response.status_code), "latency_ms": self._current_latency_ms}
         except Exception as exc:
-            logger.warning("Discord post failed for channel %s: %s", key, exc.__class__.__name__)
-            await self.log_action(action=action, target_channel=self.safe_channel_label(key), success=False, status="exception", error=exc.__class__.__name__)
-            return False
+            detail = str(exc)[:500] or exc.__class__.__name__
+            logger.warning("Discord post failed for channel %s: %s", key, detail)
+            self._record_error(action, detail)
+            await self.log_action(action=action, target_channel=self.safe_channel_label(key), success=False, status="exception", error=detail)
+            return {"ok": False, "error": detail, "status": "exception"}
+
+    async def post_channel(self, key: str, content: str, *, allowed_mentions: dict | None = None, action: str = "post_channel") -> bool:
+        result = await self.post_channel_result(key, content, allowed_mentions=allowed_mentions, action=action)
+        return bool(result.get("ok"))
 
     async def log_error(self, message: str) -> bool:
         if not self.configured or not self.channel_id("bot_log"):
@@ -267,6 +288,42 @@ class DiscordBridge:
             "websockets_available": websockets is not None,
         }
 
+    def diagnostics(self) -> dict[str, Any]:
+        channel_ids = {key: self.channel_id(key) for key in CHANNEL_ENV}
+        valid_channels = {key: bool(value and str(value).isdigit()) for key, value in channel_ids.items()}
+        return {
+            "gateway_connected": self._gateway_running,
+            "bot_token_loaded": self.configured,
+            "guild_connected": bool(self.guild_id),
+            "webhook_connected": bool(os.getenv("DISCORD_WEBHOOK_URL", "").strip()),
+            "channel_ids_valid": valid_channels,
+            "bot_permissions": "unknown until Discord API validation" if self.configured else "bot token missing",
+            "last_gateway_event": self._last_gateway_event,
+            "last_message_received": self._last_message_received,
+            "last_message_sent": self._last_message_sent,
+            "last_error": self._last_error,
+            "current_latency": self._current_latency_ms,
+        }
+
+    async def reload_channel_cache(self) -> dict[str, Any]:
+        global REGIONAL_CHANNELS
+        REGIONAL_CHANNELS = {
+            os.getenv("DISCORD_NORTH_CHANNEL_ID", "").strip(): "north",
+            os.getenv("DISCORD_SOUTH_CHANNEL_ID", "").strip(): "south",
+            os.getenv("DISCORD_EAST_CHANNEL_ID", "").strip(): "east",
+            os.getenv("DISCORD_WEST_CHANNEL_ID", "").strip(): "west",
+        }
+        REGIONAL_CHANNELS.pop("", None)
+        return {"ok": True, "channels": {key: bool(self.channel_id(key)) for key in CHANNEL_ENV}}
+
+    async def reconnect_gateway(self) -> dict[str, Any]:
+        if not self.configured:
+            return {"ok": False, "error": "Discord bot token is not configured"}
+        if websockets is None:
+            return {"ok": False, "error": "websockets package is unavailable"}
+        asyncio.create_task(self.run_gateway_listener())
+        return {"ok": True, "status": "gateway reconnect requested"}
+
     def should_respond_to_regional_message(self, payload: dict[str, Any]) -> tuple[bool, str | None]:
         if payload.get("author", {}).get("bot"):
             return False, None
@@ -282,10 +339,43 @@ class DiscordBridge:
         return True, region
 
     async def handle_gateway_message_create(self, payload: dict[str, Any]) -> bool:
-        should_reply, region = self.should_respond_to_regional_message(payload)
-        if not should_reply or not region:
+        author = payload.get("author", {}) or {}
+        channel_id = str(payload.get("channel_id", ""))
+        content = str(payload.get("content", ""))
+        log_payload: dict[str, Any] = {
+            "author": author.get("username") or author.get("id") or "unknown",
+            "channel": channel_id,
+            "matched_trigger": None,
+            "ignored_reason": None,
+            "response_generated": False,
+            "response_posted": False,
+            "exception": None,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        self._last_message_received = {"author": log_payload["author"], "channel": channel_id, "preview": content[:160], "timestamp": log_payload["timestamp"]}
+        try:
+            should_reply, region = self.should_respond_to_regional_message(payload)
+            log_payload["matched_trigger"] = region
+            if not should_reply or not region:
+                if author.get("bot"):
+                    log_payload["ignored_reason"] = "author_is_bot"
+                elif not region:
+                    log_payload["ignored_reason"] = "channel_not_configured_for_regional_trigger"
+                else:
+                    log_payload["ignored_reason"] = "trigger_not_matched_or_cooldown"
+                logger.info("Discord trigger debug %s", json.dumps(log_payload, sort_keys=True))
+                return False
+            response = self.build_regional_prompt(region)
+            log_payload["response_generated"] = True
+            posted = await self.post_channel(region, response, action=f"regional_live_trigger_{region}")
+            log_payload["response_posted"] = posted
+            logger.info("Discord trigger debug %s", json.dumps(log_payload, sort_keys=True))
+            return posted
+        except Exception as exc:
+            log_payload["exception"] = str(exc)[:500] or exc.__class__.__name__
+            self._record_error("gateway_message_create", log_payload["exception"])
+            logger.exception("Discord trigger debug %s", json.dumps(log_payload, sort_keys=True))
             return False
-        return await self.post_channel(region, self.build_regional_prompt(region), action=f"regional_live_trigger_{region}")
 
     async def run_gateway_listener(self) -> None:
         if os.getenv("DISCORD_GATEWAY_LISTENER_ENABLED", "true").lower() in {"0", "false", "no"}:
@@ -311,6 +401,7 @@ class DiscordBridge:
                     try:
                         async for raw in ws:
                             event = json.loads(raw)
+                            self._last_gateway_event = {"type": event.get("t") or event.get("op"), "timestamp": datetime.now(timezone.utc).isoformat()}
                             if event.get("t") == "MESSAGE_CREATE":
                                 await self.handle_gateway_message_create(event.get("d", {}))
                     finally:

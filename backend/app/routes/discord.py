@@ -71,8 +71,9 @@ async def _post_action(action: str, key: str, content_factory: Callable[[], str]
         result = _response(ok=True, action=action, target_channel=target, content=content, posted=False, dry_run=True)
         await discord_bridge.log_action(action=action, target_channel=target, success=True, status="dry_run")
         return result
-    posted = await discord_bridge.post_channel(key, str(content), action=action)
-    return _response(ok=posted, action=action, target_channel=target, content=str(content), posted=posted, error=None if posted else "Discord post failed or channel/bot is not configured")
+    post_result = await discord_bridge.post_channel_result(key, str(content), action=action)
+    posted = bool(post_result.get("ok"))
+    return _response(ok=posted, action=action, target_channel=target, content=str(content), posted=posted, error=None if posted else post_result.get("error") or "Discord post failed")
 
 
 @router.get("/health")
@@ -81,9 +82,44 @@ def discord_bridge_health(_: object = Depends(require_discord_admin_or_internal(
         "ok": True,
         "bot_configured": discord_bridge.configured,
         "gateway_listener": discord_bridge.gateway_status(),
+        "diagnostics": discord_bridge.diagnostics(),
         "channels": {key: bool(discord_bridge.channel_id(key)) for key in ("verification", "celebrations", "bot_log", "black_economics", *REGIONS)},
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
+
+
+@router.get("/diagnostics")
+def discord_diagnostics(_: object = Depends(require_discord_admin_or_internal())):
+    return {"ok": True, "diagnostics": discord_bridge.diagnostics(), "timestamp": datetime.now(timezone.utc).isoformat()}
+
+
+@router.post("/gateway/reconnect")
+async def reconnect_gateway(_: object = Depends(require_discord_admin_or_internal())):
+    result = await discord_bridge.reconnect_gateway()
+    return {**result, "success": bool(result.get("ok")), "timestamp": datetime.now(timezone.utc).isoformat()}
+
+
+@router.post("/channels/reload-cache")
+async def reload_channel_cache(_: object = Depends(require_discord_admin_or_internal())):
+    result = await discord_bridge.reload_channel_cache()
+    return {**result, "success": bool(result.get("ok")), "timestamp": datetime.now(timezone.utc).isoformat()}
+
+
+@router.post("/test/message")
+async def send_test_message(_: object = Depends(require_discord_admin_or_internal())):
+    content = "🦁 **Discord Diagnostics Test**\nAdmin-triggered test message from the Operations Deck."
+    return await _post_action("diagnostics_test_message", "bot_log", lambda: content)
+
+
+@router.post("/test/all-channels")
+async def test_all_configured_channels(_: object = Depends(require_discord_admin_or_internal())):
+    results = []
+    for key in ("verification", "celebrations", "bot_log", "black_economics", *REGIONS):
+        if discord_bridge.channel_id(key):
+            content = f"🦁 **Discord channel test**\nConfigured channel `{key}` accepted an Operations Deck test."
+            results.append(await _post_action(f"test_channel_{key}", key, lambda content=content: content))
+    ok = bool(results) and all(item.get("ok") for item in results)
+    return {"ok": ok, "success": ok, "results": results, "error": None if ok else "One or more configured channels failed; inspect results for exact backend errors.", "timestamp": datetime.now(timezone.utc).isoformat()}
 
 
 @router.post("/black-economics/daily")

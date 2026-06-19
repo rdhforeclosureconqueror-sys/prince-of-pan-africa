@@ -8,19 +8,46 @@ function normalizeCatalog(payload) {
   if (Array.isArray(payload?.assessments)) return payload.assessments;
   if (Array.isArray(payload?.items)) return payload.items;
   if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.catalog)) return payload.catalog;
   return [];
 }
 
 function assessmentKey(assessment) {
-  return assessment.id || assessment.slug || assessment.assessment_type || assessment.type || assessment.name || assessment.title;
+  return assessment.id || assessment.slug || assessment.key || assessment.assessment_type || assessment.type || assessment.name || assessment.title;
 }
 
 function assessmentTitle(assessment) {
-  return assessment.name || assessment.title || assessment.assessment_name || "Simba Assessment";
+  return assessment.title || assessment.name || assessment.assessment_name || "Garvey Assessment";
 }
 
 function assessmentDescription(assessment) {
-  return assessment.description || assessment.summary || assessment.short_description || "A guided Simba wa Ujamaa assessment to help shape your next step.";
+  return assessment.description || assessment.summary || assessment.short_description || "A guided Garvey-powered assessment to help shape your next step.";
+}
+
+function assessmentTime(assessment) {
+  const minutes = assessment.estimated_minutes || assessment.estimated_time_minutes || assessment.duration_minutes;
+  if (minutes) return `${minutes} minutes`;
+  return assessment.estimated_time || assessment.duration || "Time varies";
+}
+
+function assessmentCategory(assessment) {
+  return assessment.category || assessment.domain || assessment.track || "Personal Development";
+}
+
+function completionFor(assessment, results) {
+  const key = String(assessmentKey(assessment) || "").toLowerCase();
+  return results.find((result) => {
+    const candidates = [result.assessment_type, result.assessment_name, result.slug, result.id].filter(Boolean).map((item) => String(item).toLowerCase());
+    return candidates.includes(key);
+  });
+}
+
+function recommendedNextFor(assessment, catalog, results) {
+  const explicit = assessment.recommended_next_assessment || assessment.recommended_next || assessment.next_assessment;
+  if (explicit) return typeof explicit === "string" ? explicit : assessmentTitle(explicit);
+  const currentIndex = catalog.findIndex((item) => assessmentKey(item) === assessmentKey(assessment));
+  const nextIncomplete = catalog.slice(currentIndex + 1).find((item) => !completionFor(item, results)) || catalog.find((item) => !completionFor(item, results) && assessmentKey(item) !== assessmentKey(assessment));
+  return nextIncomplete ? assessmentTitle(nextIncomplete) : "Review your latest results";
 }
 
 export default function AssessmentCenter() {
@@ -48,6 +75,8 @@ export default function AssessmentCenter() {
   }, []);
 
   const latestResult = useMemo(() => results[0] || null, [results]);
+  const completedCount = useMemo(() => catalog.filter((assessment) => completionFor(assessment, results)).length, [catalog, results]);
+  const primaryRecommendation = useMemo(() => catalog.find((assessment) => !completionFor(assessment, results)) || catalog[0], [catalog, results]);
 
   const startAssessment = async (assessment) => {
     const key = assessmentKey(assessment);
@@ -68,10 +97,10 @@ export default function AssessmentCenter() {
   return (
     <main className="admin-dashboard member-launchpad command-center-shell cosmic-readable-shell">
       <header className="mission-control member-hero dashboard-header">
-        <p className="member-kicker">Simba Assessment Center</p>
-        <h1>Continue Your Journey</h1>
-        <p className="subtitle">Choose a guided assessment, complete it securely, and return here for your Simba recommendations and STAR handling.</p>
-        <div className="mission-status-strip"><span>Member-facing Simba experience</span><span>Single sign-on bridge active</span><span>Recommendations return here</span></div>
+        <p className="member-kicker">Garvey Assessment Center</p>
+        <h1>Assessment Center</h1>
+        <p className="subtitle">Your primary hub for all Garvey-powered assessments. The catalog below is loaded live from Garvey, so Leadership is now one assessment among the full set.</p>
+        <div className="mission-status-strip"><span>{catalog.length} assessments available</span><span>{completedCount} completed</span><span>Recommended next: {primaryRecommendation ? assessmentTitle(primaryRecommendation) : "None yet"}</span></div>
       </header>
 
       {error ? <section className="cosmic-section admin-error">⚠️ {error}</section> : null}
@@ -89,18 +118,22 @@ export default function AssessmentCenter() {
 
       <section className="cosmic-section member-hub-card member-hub-card--wide">
         <div className="section-heading-row">
-          <div><p className="section-kicker">Available Assessments</p><h2>Start Assessment</h2></div>
+          <div><p className="section-kicker">Live Garvey Catalog</p><h2>Available Assessments</h2></div>
           <Link to="/dashboard" className="member-action-btn member-action-btn--secondary">Back to Dashboard</Link>
         </div>
         {catalog.length === 0 ? <p>No assessments are open right now. Check back soon.</p> : (
           <div className="builder-dashboard-grid">
             {catalog.map((assessment) => {
               const key = assessmentKey(assessment);
+              const completed = completionFor(assessment, results);
               return (
-                <article key={key}>
+                <article key={key} className="member-hub-card">
+                  <p className="section-kicker">{assessmentCategory(assessment)}</p>
                   <h3>{assessmentTitle(assessment)}</h3>
                   <p>{assessmentDescription(assessment)}</p>
-                  {assessment.estimated_minutes ? <p><strong>Time:</strong> {assessment.estimated_minutes} minutes</p> : null}
+                  <p><strong>Estimated time:</strong> {assessmentTime(assessment)}</p>
+                  <p><strong>Status:</strong> {completed ? "✅ Completed" : "Open"}</p>
+                  <p><strong>Recommended next:</strong> {recommendedNextFor(assessment, catalog, results)}</p>
                   {assessment.star_reward ? <strong className="star-reward-label">STAR eligible</strong> : null}
                   <button type="button" className="member-action-btn" onClick={() => startAssessment(assessment)} disabled={startingKey === key}>
                     {startingKey === key ? "Opening..." : "Start Assessment"}

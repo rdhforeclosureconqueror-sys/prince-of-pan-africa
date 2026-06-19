@@ -8,7 +8,11 @@ const OVERVIEW_ROUTE_CANDIDATES = ["/admin/ai/overview", "/admin/overview"];
 
 
 const DISCORD_ACTIONS = [
-  { label: "Test Discord Health", method: "GET", path: "/discord/health" },
+  { label: "Refresh Discord Status", method: "GET", path: "/discord/diagnostics", refreshStatus: true },
+  { label: "Reconnect Gateway", method: "POST", path: "/discord/gateway/reconnect", body: {}, refreshStatus: true },
+  { label: "Reload Channel Cache", method: "POST", path: "/discord/channels/reload-cache", body: {}, refreshStatus: true },
+  { label: "Send Test Message", method: "POST", path: "/discord/test/message", body: {}, refreshStatus: true },
+  { label: "Test Every Configured Channel", method: "POST", path: "/discord/test/all-channels", body: {}, refreshStatus: true },
   { label: "Post Daily Black Economics Fact", method: "POST", path: "/discord/black-economics/daily", body: {} },
   { label: "Dry Run Black Economics Fact", method: "POST", path: "/discord/black-economics/dry-run", body: {} },
   { label: "Post Regional Prompt — North", method: "POST", path: "/discord/regional/north", body: {} },
@@ -30,6 +34,28 @@ function sanitizeDiscordResult(result) {
     raw: result,
   };
 }
+
+function formatDiagnosticValue(value) {
+  if (value === true) return "✅ Yes";
+  if (value === false) return "❌ No";
+  if (value == null || value === "") return "—";
+  if (typeof value === "object") return JSON.stringify(value, null, 2);
+  return String(value);
+}
+
+const DIAGNOSTIC_ROWS = [
+  ["gateway_connected", "Gateway Connected"],
+  ["bot_token_loaded", "Bot Token Loaded"],
+  ["guild_connected", "Guild Connected"],
+  ["webhook_connected", "Webhook Connected"],
+  ["channel_ids_valid", "Channel IDs Valid"],
+  ["bot_permissions", "Bot Permissions"],
+  ["last_gateway_event", "Last Gateway Event"],
+  ["last_message_received", "Last Message Received"],
+  ["last_message_sent", "Last Message Sent"],
+  ["last_error", "Last Error"],
+  ["current_latency", "Current Latency"],
+];
 
 const METRIC_CARDS = [
   ["total_users", "Total Users"],
@@ -62,6 +88,7 @@ export default function AdminOperationsDashboard() {
   const [loading, setLoading] = useState(true);
   const [discordResults, setDiscordResults] = useState({});
   const [discordRunning, setDiscordRunning] = useState(null);
+  const [discordDiagnostics, setDiscordDiagnostics] = useState(null);
 
   useEffect(() => {
     let mounted = true;
@@ -84,15 +111,17 @@ export default function AdminOperationsDashboard() {
 
     (async () => {
       try {
-        const [overviewResult, activityRes] = await Promise.all([
+        const [overviewResult, activityRes, discordRes] = await Promise.all([
           loadOverview(),
           api("/admin/activity-stream"),
+          api("/discord/diagnostics").catch(() => null),
         ]);
 
         if (!mounted) return;
         setOverviewRouteUsed(overviewResult.route);
         setOverview(overviewResult.payload?.data || {});
         setActivityItems(activityRes?.items || EMPTY_ARRAY);
+        setDiscordDiagnostics(discordRes?.diagnostics || null);
       } catch (err) {
         if (!mounted) return;
         setError(formatError(err));
@@ -109,6 +138,12 @@ export default function AdminOperationsDashboard() {
   const metrics = useMemo(() => overview?.metrics || {}, [overview]);
   const usersByRole = metrics?.users_by_role?.value || {};
 
+  const refreshDiscordDiagnostics = async () => {
+    const result = await api("/discord/diagnostics", { method: "GET" });
+    setDiscordDiagnostics(result?.diagnostics || result);
+    return result;
+  };
+
   const runDiscordAction = async (action) => {
     setDiscordRunning(action.path);
     try {
@@ -117,6 +152,9 @@ export default function AdminOperationsDashboard() {
         ...(action.method === "POST" ? { body: JSON.stringify(action.body || {}) } : {}),
       });
       setDiscordResults((current) => ({ ...current, [action.path]: sanitizeDiscordResult(result) }));
+      if (action.refreshStatus || result?.diagnostics) {
+        setDiscordDiagnostics(result?.diagnostics || (await refreshDiscordDiagnostics())?.diagnostics || null);
+      }
     } catch (err) {
       setDiscordResults((current) => ({
         ...current,
@@ -157,8 +195,23 @@ export default function AdminOperationsDashboard() {
 
 
       <section className="cosmic-section">
-        <h2>🦁 Discord Tools</h2>
-        <p className="admin-subtext">Admin-authenticated controls for testing Simba Bot posts and regional automation. Secrets are never displayed.</p>
+        <h2>🦁 Discord Diagnostics</h2>
+        <p className="admin-subtext">Live health dashboard for the Discord gateway, channel configuration, bot activity, and trigger debugging. Secrets are never displayed.</p>
+        <table className="admin-table">
+          <tbody>
+            {DIAGNOSTIC_ROWS.map(([key, label]) => (
+              <tr key={key}>
+                <td><strong>{label}</strong></td>
+                <td><pre className="data-note">{formatDiagnosticValue(discordDiagnostics?.[key])}</pre></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+
+      <section className="cosmic-section">
+        <h2>🦁 Discord Controls</h2>
+        <p className="admin-subtext">Admin-authenticated controls report success or the exact backend error returned by the Discord API layer.</p>
         <div className="dashboard-grid">
           {DISCORD_ACTIONS.map((action) => {
             const result = discordResults[action.path];

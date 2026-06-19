@@ -146,7 +146,7 @@ export default function Home({ user, isAdmin, canAccessOrganizer = false, authCh
           {authChecked && user ? (
             <Link to="/dashboard" className="hero-btn hero-btn--ghost">{isAdmin ? "Operations Deck" : "Member Dashboard"}</Link>
           ) : null}
-          <Link to="/leadership" className="hero-btn hero-btn--ghost">Leadership Assessment</Link>
+          <Link to="/assessments" className="hero-btn hero-btn--ghost">Assessment Center</Link>
         </div>
       </section>
 
