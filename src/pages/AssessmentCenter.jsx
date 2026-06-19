@@ -42,6 +42,26 @@ function completionFor(assessment, results) {
   });
 }
 
+function scoreFor(completion) {
+  return completion?.overall_score ?? completion?.latest_score ?? null;
+}
+
+function statusFor(assessment, completion) {
+  const raw = assessment.status || completion?.completion_status || (completion ? "completed" : "not_started");
+  return String(raw).toLowerCase().replace(" ", "_");
+}
+
+function actionFor(status, completion) {
+  if (status === "in_progress") return "Continue Assessment";
+  if (status === "completed" && completion) return "View Results";
+  if (status === "retake") return "Retake Assessment";
+  return "Start Assessment";
+}
+
+function difficultyFor(assessment) {
+  return assessment.difficulty || assessment.level || "Guided";
+}
+
 function recommendedNextFor(assessment, catalog, results) {
   const explicit = assessment.recommended_next_assessment || assessment.recommended_next || assessment.next_assessment;
   if (explicit) return typeof explicit === "string" ? explicit : assessmentTitle(explicit);
@@ -126,17 +146,25 @@ export default function AssessmentCenter() {
             {catalog.map((assessment) => {
               const key = assessmentKey(assessment);
               const completed = completionFor(assessment, results);
+              const status = statusFor(assessment, completed);
+              const action = actionFor(status, completed);
+              const score = scoreFor(completed);
+              const recommendedNext = completed?.recommended_next_assessment?.assessment_name || recommendedNextFor(assessment, catalog, results);
               return (
                 <article key={key} className="member-hub-card">
                   <p className="section-kicker">{assessmentCategory(assessment)}</p>
                   <h3>{assessmentTitle(assessment)}</h3>
                   <p>{assessmentDescription(assessment)}</p>
                   <p><strong>Estimated time:</strong> {assessmentTime(assessment)}</p>
-                  <p><strong>Status:</strong> {completed ? "✅ Completed" : "Open"}</p>
-                  <p><strong>Recommended next:</strong> {recommendedNextFor(assessment, catalog, results)}</p>
+                  <p><strong>Category:</strong> {assessmentCategory(assessment)}</p>
+                  <p><strong>Difficulty:</strong> {difficultyFor(assessment)}</p>
+                  <p><strong>Status:</strong> {status === "completed" ? "✅ Completed" : status === "in_progress" ? "In Progress" : "Not Started"}</p>
+                  <p><strong>Last completed:</strong> {completed?.completed_at ? new Date(completed.completed_at).toLocaleDateString() : "Not yet"}</p>
+                  <p><strong>Current score:</strong> {score !== null ? `${score}%` : "Not scored"}</p>
+                  <p><strong>Recommended next:</strong> {recommendedNext}</p>
                   {assessment.star_reward ? <strong className="star-reward-label">STAR eligible</strong> : null}
                   <button type="button" className="member-action-btn" onClick={() => startAssessment(assessment)} disabled={startingKey === key}>
-                    {startingKey === key ? "Opening..." : "Start Assessment"}
+                    {startingKey === key ? "Opening..." : action}
                   </button>
                 </article>
               );

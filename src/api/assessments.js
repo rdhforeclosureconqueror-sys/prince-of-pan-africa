@@ -14,3 +14,8 @@ export async function createAssessmentTransferToken(redirectAssessment) {
 export async function getAssessmentResults() {
   return api("/member/assessments/results", { method: "GET" });
 }
+
+
+export async function getGrowthProfile() {
+  return api("/member/assessments/growth-profile", { method: "GET" });
+}
