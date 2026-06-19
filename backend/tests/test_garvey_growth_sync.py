@@ -110,6 +110,32 @@ class GarveyGrowthSyncTests(unittest.TestCase):
         self.assertEqual(saved["assessment_name"], "Voice of Customer")
         self.assertEqual(saved["primary_result"]["label"], "Community Listener")
 
+
+    def test_callback_accepts_current_garvey_payload_without_optional_fields(self):
+        response = self.client.post(
+            "/garvey/callback",
+            headers={"X-Garvey-Callback-Secret": "callback-secret", "X-Garvey-Signature": "sig", "X-Garvey-Timestamp": "2026-06-19T13:00:00Z"},
+            json={
+                "event": "completed",
+                "issuer": "simba_wajuma",
+                "email": "growth-member@example.com",
+                "assessment_id": "love-archetype-engine",
+                "result_id": "garvey-current-result-1",
+                "completion_status": "completed",
+                "result_summary": {"headline": "Secure Connector"},
+                "archetype": {"name": "Nurturer"},
+                "recommendations": ["Review your profile"],
+                "result_url": "https://garvey.example/results/garvey-current-result-1",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["stored"]["assessment_name"], "love-archetype-engine")
+        self.assertEqual(payload["stored"]["result_summary"]["headline"], "Secure Connector")
+        self.assertEqual(payload["stored"]["archetype"]["name"], "Nurturer")
+        self.assertEqual(payload["stored"]["recommended_next_steps"], ["Review your profile"])
+
     def test_callback_routes_are_registered(self):
         from app.main import app
 
