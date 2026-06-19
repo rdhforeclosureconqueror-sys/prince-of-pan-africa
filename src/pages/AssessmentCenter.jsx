@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import { createAssessmentTransferToken, getAssessmentCatalog, getAssessmentResults } from "../api/assessments";
+import { Link, useParams } from "react-router-dom";
+import { createAssessmentTransferToken, getAssessmentCatalog, getAssessmentResult, getAssessmentResults } from "../api/assessments";
 import "../styles/dashboard.css";
 
 function normalizeCatalog(payload) {
@@ -37,7 +37,7 @@ function assessmentCategory(assessment) {
 function completionFor(assessment, results) {
   const key = String(assessmentKey(assessment) || "").toLowerCase();
   return results.find((result) => {
-    const candidates = [result.assessment_type, result.assessment_name, result.slug, result.id].filter(Boolean).map((item) => String(item).toLowerCase());
+    const candidates = [result.assessment_id, result.assessment_type, result.assessment_name, result.slug, result.id].filter(Boolean).map((item) => String(item).toLowerCase());
     return candidates.includes(key);
   });
 }
@@ -104,7 +104,8 @@ export default function AssessmentCenter() {
     setError("");
     try {
       const response = await createAssessmentTransferToken(key);
-      const target = `${response.start_url}?token=${encodeURIComponent(response.token)}`;
+      const params = new URLSearchParams({ token: response.token, return_url: response.return_url || "https://simbawaujamaa.com/dashboard" });
+      const target = `${response.start_url}?${params.toString()}`;
       window.location.assign(target);
     } catch (err) {
       setError(err.message || "We could not start this assessment yet.");
@@ -117,9 +118,10 @@ export default function AssessmentCenter() {
   return (
     <main className="admin-dashboard member-launchpad command-center-shell cosmic-readable-shell">
       <header className="mission-control member-hero dashboard-header">
-        <p className="member-kicker">Garvey Assessment Center</p>
-        <h1>Assessment Center</h1>
-        <p className="subtitle">Your primary hub for all Garvey-powered assessments. The catalog below is loaded live from Garvey, so Leadership is now one assessment among the full set.</p>
+        <p className="member-kicker">Simba + Garvey Assessment Engine</p>
+        <h1>Official Assessment Center</h1>
+        <p className="subtitle">One polished assessment experience for Simba members. Garvey powers the assessment engine, while your progress and results sync back to your Simba dashboard.</p>
+        <a href="https://simbawaujamaa.com/dashboard" className="member-action-btn member-action-btn--secondary">Back to Simba Dashboard</a>
         <div className="mission-status-strip"><span>{catalog.length} assessments available</span><span>{completedCount} completed</span><span>Recommended next: {primaryRecommendation ? assessmentTitle(primaryRecommendation) : "None yet"}</span></div>
       </header>
 
@@ -139,7 +141,7 @@ export default function AssessmentCenter() {
       <section className="cosmic-section member-hub-card member-hub-card--wide">
         <div className="section-heading-row">
           <div><p className="section-kicker">Live Garvey Catalog</p><h2>Available Assessments</h2></div>
-          <Link to="/dashboard" className="member-action-btn member-action-btn--secondary">Back to Dashboard</Link>
+          <a href="https://simbawaujamaa.com/dashboard" className="member-action-btn member-action-btn--secondary">Back to Simba Dashboard</a>
         </div>
         {catalog.length === 0 ? <p>No assessments are open right now. Check back soon.</p> : (
           <div className="builder-dashboard-grid">
@@ -162,7 +164,9 @@ export default function AssessmentCenter() {
                   <p><strong>Last completed:</strong> {completed?.completed_at ? new Date(completed.completed_at).toLocaleDateString() : "Not yet"}</p>
                   <p><strong>Current score:</strong> {score !== null ? `${score}%` : "Not scored"}</p>
                   <p><strong>Recommended next:</strong> {recommendedNext}</p>
+                  {String(assessmentTitle(assessment)).toLowerCase().includes("rite") || String(assessmentTitle(assessment)).toLowerCase().includes("k–6") || String(assessmentTitle(assessment)).toLowerCase().includes("k-6") ? <p className="data-note">Youth and K–6 assessments may ask a parent or guardian to confirm setup inside this official flow.</p> : null}
                   {assessment.star_reward ? <strong className="star-reward-label">STAR eligible</strong> : null}
+                  {completed ? <Link className="member-action-btn member-action-btn--secondary" to={`/assessments/results/${encodeURIComponent(completed.result_id || completed.assessment_id)}`}>View Results</Link> : null}
                   <button type="button" className="member-action-btn" onClick={() => startAssessment(assessment)} disabled={startingKey === key}>
                     {startingKey === key ? "Opening..." : action}
                   </button>
@@ -172,6 +176,56 @@ export default function AssessmentCenter() {
           </div>
         )}
       </section>
+    </main>
+  );
+}
+
+
+export function AssessmentResultPage() {
+  const { resultId } = useParams();
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const res = await getAssessmentResult(resultId);
+        if (mounted) setResult(res?.result || null);
+      } catch (err) {
+        if (mounted) setError(err.message || "Result could not be loaded.");
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [resultId]);
+
+  if (loading) return <div className="admin-loading">Loading result...</div>;
+
+  return (
+    <main className="admin-dashboard member-launchpad command-center-shell cosmic-readable-shell">
+      <header className="mission-control member-hero dashboard-header">
+        <p className="member-kicker">Saved Garvey Result</p>
+        <h1>{result?.assessment_name || "Assessment Result"}</h1>
+        <p className="subtitle">This result is stored in Simba from the signed Garvey callback.</p>
+        <a href="https://simbawaujamaa.com/dashboard" className="member-action-btn member-action-btn--secondary">Back to Simba Dashboard</a>
+      </header>
+      {error ? <section className="cosmic-section admin-error">⚠️ {error}</section> : (
+        <section className="cosmic-section member-hub-card member-hub-card--wide">
+          <p><strong>Status:</strong> {result?.completion_status || "completed"}</p>
+          <p><strong>Completed:</strong> {result?.completed_at ? new Date(result.completed_at).toLocaleString() : "Recently"}</p>
+          <p><strong>Score:</strong> {result?.overall_score ?? "Not scored"}</p>
+          <p><strong>Primary result:</strong> {typeof result?.primary_result === "string" ? result.primary_result : JSON.stringify(result?.primary_result || {})}</p>
+          <p><strong>Recommended Next:</strong> {result?.recommended_next_assessment?.assessment_name || "Return to the Assessment Center for your next step."}</p>
+          <h2>Strengths</h2>
+          <ul>{(result?.strengths || []).map((item) => <li key={item}>{item}</li>)}</ul>
+          <h2>Recommendations</h2>
+          <pre className="data-note">{typeof result?.recommended_next_steps === "string" ? result.recommended_next_steps : JSON.stringify(result?.recommended_next_steps || result?.opportunities_for_growth || [], null, 2)}</pre>
+          <Link to="/assessments" className="member-action-btn">Retake or Continue Assessment Center</Link>
+        </section>
+      )}
     </main>
   );
 }

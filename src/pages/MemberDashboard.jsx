@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api/api";
-import { getGrowthProfile } from "../api/assessments";
+import { getAssessmentResults, getGrowthProfile } from "../api/assessments";
 import { getCommunityTrustExperience, getOpenVerificationRequests, getRecentCommunityActivity, getStarExperience } from "../api/participation";
 import { getDailyHistoricalSpotlight } from "../data/dailyHistoricalSpotlights";
 import { TIMELINE_A_AFRICA_ORIGINS } from "../data/timelineA_africaOrigins";
@@ -76,6 +76,7 @@ export default function MemberDashboard() {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [growthProfile, setGrowthProfile] = useState(null);
+  const [assessmentResults, setAssessmentResults] = useState([]);
 
   useEffect(() => {
     let mounted = true;
@@ -97,7 +98,7 @@ export default function MemberDashboard() {
     window.addEventListener("simba:participation-updated", onParticipationUpdated);
     (async () => {
       try {
-        const [overviewRes, activityRes, starRes, trustRes, verificationRes, communityActivityRes, growthRes] = await Promise.all([
+        const [overviewRes, activityRes, starRes, trustRes, verificationRes, communityActivityRes, growthRes, assessmentResultsRes] = await Promise.all([
           api("/member/overview", { method: "GET" }),
           api("/member/activity", { method: "GET" }),
           getStarExperience(),
@@ -105,6 +106,7 @@ export default function MemberDashboard() {
           getOpenVerificationRequests(),
           getRecentCommunityActivity(),
           getGrowthProfile(),
+          getAssessmentResults(),
         ]);
 
         if (!mounted) return;
@@ -115,6 +117,7 @@ export default function MemberDashboard() {
         setVerificationRequests(verificationRes?.verification_requests || []);
         setCommunityActivity(communityActivityRes?.activity || []);
         setGrowthProfile(growthRes?.growth_profile || null);
+        setAssessmentResults(Array.isArray(assessmentResultsRes?.results) ? assessmentResultsRes.results : []);
       } catch (err) {
         if (!mounted) return;
         if (err.status === 401) {
@@ -185,6 +188,7 @@ export default function MemberDashboard() {
   const growthBadges = Array.isArray(growthProfile?.badges) ? growthProfile.badges : [];
   const growthTimeline = Array.isArray(growthProfile?.timeline) ? growthProfile.timeline : [];
   const growthDisplayCategories = ["Leadership", "Cooperative Economics", "Entrepreneurship", "Community Participation", "Financial Literacy"];
+  const completedAssessments = assessmentResults.filter((item) => item?.completion_status === "completed" || item?.completed_at);
 
   const impactStats = [
     ["Businesses Supported This Month", summary?.businesses_supported_month ?? 0],
@@ -258,7 +262,11 @@ export default function MemberDashboard() {
         <section className="cosmic-section member-hub-card member-hub-card--wide growth-history-card">
           <p className="section-kicker">Assessment History</p>
           <h2>Personal Growth Timeline</h2>
-          {growthTimeline.length === 0 ? <p>Your completed assessments will appear here automatically after Garvey syncs results.</p> : <ul className="star-timeline">{growthTimeline.slice(0, 8).map((item) => <li key={`${item.assessment_id}-${item.completed_at}`}><strong>{item.assessment_name}</strong><span>{item.completed_at ? new Date(item.completed_at).toLocaleDateString("en-US", { month: "long", year: "numeric" }) : "Recently"} · {item.score ?? "Not scored"}% · {item.status}</span></li>)}</ul>}
+          {completedAssessments.length === 0 ? <p>Your completed assessments will appear here automatically after Garvey syncs results.</p> : <div className="builder-dashboard-grid">{completedAssessments.slice(0, 8).map((item) => {
+            const resultId = item.result_id || item.assessment_id || item.assessment_name;
+            return <article key={`${resultId}-${item.completed_at}`}><h3>{item.assessment_name}</h3><p><strong>Status:</strong> {item.completion_status || "completed"}</p><p><strong>Latest score/result:</strong> {item.overall_score ?? (typeof item.primary_result === "string" ? item.primary_result : JSON.stringify(item.primary_result || "Not scored"))}</p><p><strong>Completion date:</strong> {item.completed_at ? new Date(item.completed_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "Recently"}</p><p><strong>Recommended Next:</strong> {item.recommended_next_assessment?.assessment_name || growthSummary.recommended_next_assessment?.assessment_name || "Return to the Assessment Center"}</p><Link to={`/assessments/results/${encodeURIComponent(resultId)}`} className="member-action-btn member-action-btn--secondary">View Result Details</Link><Link to="/assessments" className="member-action-btn">Retake or Continue</Link></article>;
+          })}</div>}
+          {growthTimeline.length ? <ul className="star-timeline">{growthTimeline.slice(0, 4).map((item) => <li key={`${item.assessment_id}-${item.completed_at}`}><strong>{item.assessment_name}</strong><span>{item.completed_at ? new Date(item.completed_at).toLocaleDateString("en-US", { month: "long", year: "numeric" }) : "Recently"} · {item.score ?? "Not scored"}% · {item.status}</span></li>)}</ul> : null}
         </section>
 
         <section className="cosmic-section member-hub-card member-hub-card--wide community-trust-card" aria-label="Community Trust">
@@ -359,7 +367,7 @@ export default function MemberDashboard() {
         <section className="cosmic-section member-hub-card assessment-center-card">
           <p className="section-kicker">Continue Your Journey</p>
           <h2>Assessment Center</h2>
-          <p>Take a Simba assessment, receive recommendations, and let STAR rewards process automatically when eligible.</p>
+          <p>Open the official Garvey-powered assessment experience, then return here to see synced results and recommendations.</p>
           <Link to="/assessments" className="member-action-btn">Open Assessment Center</Link>
         </section>
 

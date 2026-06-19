@@ -15,7 +15,7 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from app.config import settings
 from app.database import get_db
-from app.dependencies.auth import require_auth
+from app.dependencies.auth import require_auth, require_permission
 from app.models import GarveySyncEvent, MemberProfile, User
 from app.routes.member import _membership_type_from_subscription
 from app.services.billing import latest_subscription_for_user
@@ -51,6 +51,39 @@ def _member_profile(db: Session, user: User) -> MemberProfile:
         db.add(profile)
         db.flush()
     return profile
+
+
+def _sync_event_payload(payload: BaseModel | dict, *, signature_valid: bool | None = None, synced_member_email: str | None = None, error_message: str | None = None) -> dict:
+    body = _payload_json(payload) if isinstance(payload, BaseModel) else dict(payload or {})
+    body["sync_diagnostics"] = {
+        "callback_signature_valid": signature_valid,
+        "synced_member_email": synced_member_email,
+        "assessment_id": body.get("assessment_id") or body.get("assessment_type") or body.get("assessment_name"),
+        "error_message": error_message,
+        "received_at": datetime.utcnow().isoformat(),
+    }
+    return body
+
+
+def _serialize_sync_event(row: GarveySyncEvent | None) -> dict | None:
+    if not row:
+        return None
+    payload = row.payload or {}
+    diagnostics = payload.get("sync_diagnostics") if isinstance(payload, dict) else {}
+    return {
+        "id": row.id,
+        "event_type": row.event_type,
+        "status": row.status,
+        "external_user_id": row.external_user_id,
+        "retry_count": row.retry_count,
+        "last_error": row.last_error,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+        "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+        "callback_signature_validation_status": diagnostics.get("callback_signature_valid"),
+        "synced_member_email": diagnostics.get("synced_member_email"),
+        "assessment_id": diagnostics.get("assessment_id"),
+        "error_message": diagnostics.get("error_message") or row.last_error,
+    }
 
 
 def _display_name(user: User, profile: MemberProfile | None) -> str:
@@ -216,6 +249,19 @@ def get_assessment_catalog(current_user: User = Depends(require_auth)):
     return response.json()
 
 
+
+def _official_assessment_key(raw: str) -> str:
+    normalized = raw.strip().lower().replace("_", "-").replace(" ", "-")
+    aliases = {
+        "youth-rite-of-passage": "youth-rite-of-passage",
+        "rite-of-passage": "youth-rite-of-passage",
+        "k-6-assessment-mvp": "k-6-assessment-mvp",
+        "k6-assessment-mvp": "k-6-assessment-mvp",
+        "k-6": "k-6-assessment-mvp",
+    }
+    return aliases.get(normalized, raw)
+
+
 @router.post("/transfer-token")
 def create_transfer_token(
     payload: TransferTokenPayload,
@@ -242,8 +288,8 @@ def create_transfer_token(
         "exp": int((now + timedelta(minutes=5)).timestamp()),
     }
     if payload.redirect_assessment:
-        token_payload["redirect_assessment"] = payload.redirect_assessment
-    return {"ok": True, "token": _sign(token_payload, settings.GARVEY_TRANSFER_SECRET), "start_url": f"{base}/simbawajuma/start"}
+        token_payload["redirect_assessment"] = _official_assessment_key(payload.redirect_assessment)
+    return {"ok": True, "token": _sign(token_payload, settings.GARVEY_TRANSFER_SECRET), "start_url": f"{base}/simbawajuma/start", "return_url": "https://simbawaujamaa.com/dashboard"}
 
 
 @router.get("/results")
@@ -252,6 +298,24 @@ def get_assessment_results(current_user: User = Depends(require_auth), db: Sessi
     attributes = profile.attributes or {}
     completions = list(attributes.get("garvey_assessment_completions", []))
     return {"ok": True, "results": completions, "growth_profile": attributes.get("growth_profile", _blank_growth_profile())}
+
+
+@router.get("/results/{result_id}")
+def get_assessment_result(result_id: str, current_user: User = Depends(require_auth), db: Session = Depends(get_db)):
+    profile = _member_profile(db, current_user)
+    completions = list((profile.attributes or {}).get("garvey_assessment_completions", []))
+    for completion in completions:
+        if str(completion.get("result_id") or completion.get("assessment_id")) == result_id:
+            return {"ok": True, "result": completion}
+    raise HTTPException(status_code=404, detail="Assessment result not found.")
+
+
+@router.get("/sync-diagnostics")
+def get_garvey_sync_diagnostics(_: User = Depends(require_permission("admin:read_dashboard")), db: Session = Depends(get_db)):
+    latest = db.query(GarveySyncEvent).order_by(GarveySyncEvent.created_at.desc(), GarveySyncEvent.id.desc()).first()
+    successful = db.query(GarveySyncEvent).filter(GarveySyncEvent.status == "processed").order_by(GarveySyncEvent.updated_at.desc(), GarveySyncEvent.id.desc()).first()
+    failed = db.query(GarveySyncEvent).filter(GarveySyncEvent.status.in_(["failed", "pending"])).order_by(GarveySyncEvent.updated_at.desc(), GarveySyncEvent.id.desc()).first()
+    return {"ok": True, "last_callback_received": _serialize_sync_event(latest), "last_successful_assessment_sync": _serialize_sync_event(successful), "last_failed_assessment_sync": _serialize_sync_event(failed)}
 
 
 @router.get("/growth-profile")
@@ -282,7 +346,7 @@ def garvey_assessment_callback(
         raise HTTPException(status_code=400, detail="Invalid Simba member id") from exc
     user = db.query(User).filter(User.id == simba_user_id).first()
     if not user:
-        db.add(GarveySyncEvent(event_type=payload.event, external_user_id=str(payload.external_user_id), payload=_payload_json(payload), status="pending", retry_count=0, last_error="Simba member not found"))
+        db.add(GarveySyncEvent(event_type=payload.event, external_user_id=str(payload.external_user_id), payload=_sync_event_payload(payload, signature_valid=True, error_message="Simba member not found"), status="pending", retry_count=0, last_error="Simba member not found"))
         db.commit()
         return {"ok": False, "queued": True, "detail": "Simba member not found; queued for retry"}
     profile = _member_profile(db, user)
@@ -320,6 +384,6 @@ def garvey_assessment_callback(
         metadata = {"result_id": payload.result_id, "assessment_type": payload.assessment_type, "completion_key": f"garvey:{payload.result_id}"}
         duplicate = find_duplicate_activity(db, user=user, guest_session_id=None, activity_type_name="quiz_completed", source_module="assessment_center", metadata=metadata)
         activity = submit_activity(db, user=user, guest_session_id=None, activity_type_name="quiz_completed", source_module="assessment_center", metadata=metadata)
-    db.add(GarveySyncEvent(event_type=payload.event, external_user_id=str(payload.external_user_id), payload=_payload_json(payload), status="processed", retry_count=0))
+    db.add(GarveySyncEvent(event_type=payload.event, external_user_id=str(payload.external_user_id), payload=_sync_event_payload(payload, signature_valid=True, synced_member_email=user.email), status="processed", retry_count=0))
     db.commit()
     return {"ok": True, "stored": completion, "growth_profile": growth_profile, "star_awarded": bool(activity and not duplicate), "activity_id": activity.id if activity else None}
