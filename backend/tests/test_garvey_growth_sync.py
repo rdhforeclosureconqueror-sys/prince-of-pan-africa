@@ -136,6 +136,35 @@ class GarveyGrowthSyncTests(unittest.TestCase):
         self.assertEqual(payload["stored"]["archetype"]["name"], "Nurturer")
         self.assertEqual(payload["stored"]["recommended_next_steps"], ["Review your profile"])
 
+    def test_callback_accepts_numeric_result_and_assessment_ids(self):
+        response = self.client.post(
+            "/api/garvey/callback",
+            headers={"X-Garvey-Callback-Secret": "callback-secret"},
+            json={
+                "event": "assessment.completed",
+                "issuer": "simba_wajuma",
+                "member_email": "growth-member@example.com",
+                "assessment_id": 450,
+                "assessment_name": "Legacy Business Assessment",
+                "result_id": 180,
+                "completion_status": "completed",
+                "overall_score": 77,
+                "completed_at": "2026-06-19T14:00:00Z",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["stored"]["result_id"], "180")
+        self.assertEqual(payload["stored"]["assessment_id"], "450")
+
+        results = self.client.get("/member/assessments/results", cookies=session_cookie(self.member_id))
+        self.assertEqual(results.status_code, 200)
+        saved = results.json()["results"][0]
+        self.assertEqual(saved["result_id"], "180")
+        self.assertEqual(saved["assessment_id"], "450")
+
+
     def test_callback_routes_are_registered(self):
         from app.main import app
 

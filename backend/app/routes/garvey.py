@@ -108,9 +108,9 @@ class GarveyCompletionPayload(BaseModel):
     email: str | None = None
     external_membership_id: str | int | None = None
     assessment_type: str | None = None
-    assessment_id: str | None = None
+    assessment_id: str | int | None = None
     assessment_name: str | None = None
-    result_id: str | None = None
+    result_id: str | int | None = None
     completion_status: str = "completed"
     overall_score: float | None = None
     percentile: float | None = None
@@ -131,6 +131,18 @@ class GarveyCompletionPayload(BaseModel):
         allow_population_by_field_name = True
         populate_by_name = True
         extra = "allow"
+
+
+def _string_or_none(value: str | int | None) -> str | None:
+    if value is None:
+        return None
+    return str(value)
+
+
+def _normalize_garvey_payload_ids(payload: GarveyCompletionPayload) -> GarveyCompletionPayload:
+    payload.result_id = _string_or_none(payload.result_id)
+    payload.assessment_id = _string_or_none(payload.assessment_id)
+    return payload
 
 
 def _payload_json(payload: BaseModel) -> dict:
@@ -390,6 +402,7 @@ def _process_garvey_assessment_callback(
     x_garvey_timestamp: str | None = None,
     db: Session = Depends(get_db),
 ):
+    payload = _normalize_garvey_payload_ids(payload)
     expected_secret = settings.GARVEY_CALLBACK_SECRET.strip()
     bearer = authorization.removeprefix("Bearer ").strip() if authorization else None
     if not expected_secret or not hmac.compare_digest(x_garvey_callback_secret or bearer or "", expected_secret):
