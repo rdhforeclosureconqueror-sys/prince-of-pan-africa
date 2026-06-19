@@ -136,6 +136,38 @@ class GarveyGrowthSyncTests(unittest.TestCase):
         self.assertEqual(payload["stored"]["archetype"]["name"], "Nurturer")
         self.assertEqual(payload["stored"]["recommended_next_steps"], ["Review your profile"])
 
+    def test_callback_maps_interpreted_result_fields_from_summary(self):
+        response = self.client.post(
+            "/garvey/callback",
+            headers={"X-Garvey-Callback-Secret": "callback-secret"},
+            json={
+                "event": "completed",
+                "issuer": "simba_wajuma",
+                "member_email": "growth-member@example.com",
+                "assessment_id": "business-owner-assessment",
+                "result_id": "summary-result-1",
+                "completion_status": "completed",
+                "result_summary": {
+                    "score": 86,
+                    "primary_result": {"label": "Ujamaa Builder"},
+                    "strengths": ["customer empathy"],
+                    "growth_edges": ["pricing clarity"],
+                },
+                "recommendations": [
+                    {"type": "book", "value": "The Ujamaa Business Starter"},
+                    {"type": "discord_channel", "value": "#business-builders"},
+                ],
+                "completed_at": "2026-06-19T15:00:00Z",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        stored = response.json()["stored"]
+        self.assertEqual(stored["overall_score"], 86.0)
+        self.assertEqual(stored["primary_result"], {"label": "Ujamaa Builder"})
+        self.assertEqual(stored["strengths"], ["customer empathy"])
+        self.assertEqual(stored["opportunities_for_growth"], ["pricing clarity"])
+        self.assertEqual(stored["recommended_next_steps"][0]["type"], "book")
+
     def test_callback_accepts_numeric_result_and_assessment_ids(self):
         response = self.client.post(
             "/api/garvey/callback",
