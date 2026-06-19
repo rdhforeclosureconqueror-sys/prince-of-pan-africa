@@ -183,11 +183,9 @@ export default function MemberDashboard() {
   const trustPercent = Math.min(100, trust.trust_percent ?? trust.trust_score ?? 0);
   const trustLadder = trustProgress.levels || [];
   const recentCommunityActivity = communityActivity.length ? communityActivity : [];
-  const growthCategories = growthProfile?.categories || {};
   const growthSummary = growthProfile?.summary || {};
   const growthBadges = Array.isArray(growthProfile?.badges) ? growthProfile.badges : [];
   const growthTimeline = Array.isArray(growthProfile?.timeline) ? growthProfile.timeline : [];
-  const growthDisplayCategories = ["Leadership", "Cooperative Economics", "Entrepreneurship", "Community Participation", "Financial Literacy"];
   const completedAssessments = assessmentResults.filter((item) => item?.completion_status === "completed" || item?.completed_at);
 
   const impactStats = [
@@ -249,22 +247,18 @@ export default function MemberDashboard() {
             <div><p className="section-kicker">Garvey Intelligence Engine</p><h2>Growth Journey</h2></div>
             <Link to="/assessments" className="member-action-btn member-action-btn--secondary">Open Assessment Center</Link>
           </div>
-          <div className="trust-score-layout">{growthDisplayCategories.map((name) => {
-            const score = growthCategories[name]?.latest_score;
-            const percent = Math.max(0, Math.min(100, Number(score || 0)));
-            return <article key={name} className="trust-score-card"><span>{name}</span><strong>{score === null || score === undefined ? "Not Started" : `${Math.round(percent)}%`}</strong><div className="star-progress-track"><i style={{ width: `${percent}%` }} /></div></article>;
-          })}</div>
-          <p><strong>Overall Growth Completion:</strong> {growthSummary.overall_completion ?? 0}%</p>
+          <p>Only real active or completed assessments are shown here. Future growth categories stay hidden until their assessments are live.</p>
+          {completedAssessments.length ? <p><strong>Completed active assessments:</strong> {completedAssessments.length}</p> : <p>No completed active assessments yet.</p>}
           {growthSummary.recommended_next_assessment ? <p><strong>Recommended Next Assessment:</strong> {growthSummary.recommended_next_assessment.assessment_name}</p> : null}
           <div className="command-chip-list" aria-label="Unlocked badges">{growthBadges.length ? growthBadges.map((badge) => <span key={badge.id}>✓ {badge.label}</span>) : <span>No badges unlocked yet</span>}</div>
         </section>
 
         <section className="cosmic-section member-hub-card member-hub-card--wide growth-history-card">
           <p className="section-kicker">Assessment History</p>
-          <h2>Personal Growth Timeline</h2>
+          <h2>Completed Assessment Results</h2>
           {completedAssessments.length === 0 ? <p>Your completed assessments will appear here automatically after Garvey syncs results.</p> : <div className="builder-dashboard-grid">{completedAssessments.slice(0, 8).map((item) => {
             const resultId = item.result_id || item.assessment_id || item.assessment_name;
-            return <article key={`${resultId}-${item.completed_at}`}><h3>{item.assessment_name}</h3><p><strong>Status:</strong> {item.completion_status || "completed"}</p><p><strong>Latest score/result:</strong> {item.overall_score ?? (typeof item.primary_result === "string" ? item.primary_result : JSON.stringify(item.primary_result || "Not scored"))}</p><p><strong>Completion date:</strong> {item.completed_at ? new Date(item.completed_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "Recently"}</p><p><strong>Recommended Next:</strong> {item.recommended_next_assessment?.assessment_name || growthSummary.recommended_next_assessment?.assessment_name || "Return to the Assessment Center"}</p><Link to={`/assessments/results/${encodeURIComponent(resultId)}`} className="member-action-btn member-action-btn--secondary">View Result Details</Link><Link to="/assessments" className="member-action-btn">Retake or Continue</Link></article>;
+            return <article key={`${resultId}-${item.completed_at}`}><h3>{item.assessment_name}</h3><p><strong>Result:</strong> {typeof item.primary_result === "string" ? item.primary_result : item.primary_result?.label || item.primary_result?.name || item.overall_score || "Saved"}</p><p><strong>Status:</strong> {item.completion_status || "completed"}</p><p><strong>Latest score/result:</strong> {item.overall_score ?? (typeof item.primary_result === "string" ? item.primary_result : JSON.stringify(item.primary_result || "Not scored"))}</p><p><strong>Completed:</strong> {item.completed_at ? new Date(item.completed_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "Recently"}</p><p><strong>Recommended Next:</strong> {item.recommended_next_assessment?.assessment_name || growthSummary.recommended_next_assessment?.assessment_name || "Return to the Assessment Center"}</p><Link to={`/assessments/results/${encodeURIComponent(resultId)}`} className="member-action-btn member-action-btn--secondary">View Results</Link><Link to="/assessments" className="member-action-btn">Retake or Continue</Link></article>;
           })}</div>}
           {growthTimeline.length ? <ul className="star-timeline">{growthTimeline.slice(0, 4).map((item) => <li key={`${item.assessment_id}-${item.completed_at}`}><strong>{item.assessment_name}</strong><span>{item.completed_at ? new Date(item.completed_at).toLocaleDateString("en-US", { month: "long", year: "numeric" }) : "Recently"} · {item.score ?? "Not scored"}% · {item.status}</span></li>)}</ul> : null}
         </section>
