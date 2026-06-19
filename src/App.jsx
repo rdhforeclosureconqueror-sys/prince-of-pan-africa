@@ -10,8 +10,6 @@ import PortalDecolonize from "./pages/PortalDecolonize";
 import LibraryOrganizer from "./pages/LibraryOrganizer";
 import TimelinePage from "./pages/TimelinePage";
 import MemberDashboard from "./pages/MemberDashboard";
-import LeadershipAssessmentPage from "./pages/LeadershipAssessmentPage";
-import LeadershipResultsPage from "./pages/LeadershipResultsPage";
 import SystemVerificationPage from "./pages/SystemVerificationPage";
 import AuthDebugPage from "./pages/AuthDebugPage";
 import AssessmentCenter, { AssessmentResultPage } from "./pages/AssessmentCenter";
@@ -188,8 +186,8 @@ function AppRoutes({ user, rbac, isAdmin, canAccessOrganizer, authChecked, refre
         <Route path="/billing/cancel" element={<BillingCancelPage />} />
         <Route path="/assessments" element={<AssessmentCenter />} />
         <Route path="/assessments/results/:resultId" element={<AssessmentResultPage />} />
-        <Route path="/leadership" element={<LeadershipAssessmentPage />} />
-        <Route path="/results" element={<LeadershipResultsPage />} />
+        <Route path="/leadership" element={<Navigate to="/assessments" replace />} />
+        <Route path="/results" element={<Navigate to="/assessments" replace />} />
         <Route path="/ops/verification" element={<SystemVerificationPage />} />
         <Route path="/debug/auth" element={<AuthDebugPage authChecked={authChecked} user={user} rbac={rbac} />} />
         <Route path="/decolonize" element={<Navigate to="/library" replace />} />

@@ -3,6 +3,26 @@ import { Link, useParams } from "react-router-dom";
 import { createAssessmentTransferToken, getAssessmentCatalog, getAssessmentResult, getAssessmentResults } from "../api/assessments";
 import "../styles/dashboard.css";
 
+const OFFICIAL_ASSESSMENTS = [
+  ["Business Owner Assessment", "business-assessment", "business-owner"],
+  ["Customer / Voice of Customer", "voice-of-customer", "customer-assessment", "voc"],
+  ["Love Archetype Engine", "love-engine", "love-archetype"],
+  ["Leadership Archetype Engine", "leadership-engine", "leadership-archetype"],
+  ["Loyalty Archetype Engine", "loyalty-engine", "loyalty-archetype"],
+  ["Youth Rite of Passage / Gates", "rite-of-passage", "gates"],
+  ["K–6 Assessment MVP", "k6-assessment-mvp", "k-6", "k6"],
+];
+
+function normalizeText(value) {
+  return String(value || "").toLowerCase().replace(/[–_\/]/g, "-").replace(/\s+/g, "-");
+}
+
+function isOfficialAssessment(assessment) {
+  const raw = [assessment.id, assessment.slug, assessment.key, assessment.assessment_type, assessment.type, assessment.name, assessment.title, assessment.assessment_name].filter(Boolean).join(" ");
+  const normalized = normalizeText(raw);
+  return OFFICIAL_ASSESSMENTS.some((names) => names.some((name) => normalized.includes(normalizeText(name))));
+}
+
 function normalizeCatalog(payload) {
   if (Array.isArray(payload)) return payload;
   if (Array.isArray(payload?.assessments)) return payload.assessments;
@@ -83,7 +103,7 @@ export default function AssessmentCenter() {
       try {
         const [catalogRes, resultsRes] = await Promise.all([getAssessmentCatalog(), getAssessmentResults()]);
         if (!mounted) return;
-        setCatalog(normalizeCatalog(catalogRes));
+        setCatalog(normalizeCatalog(catalogRes).filter(isOfficialAssessment));
         setResults(Array.isArray(resultsRes?.results) ? resultsRes.results : []);
       } catch (err) {
         if (mounted) setError(err.message || "Assessment Center is temporarily unavailable.");
@@ -224,6 +244,7 @@ export function AssessmentResultPage() {
           <h2>Recommendations</h2>
           <pre className="data-note">{typeof result?.recommended_next_steps === "string" ? result.recommended_next_steps : JSON.stringify(result?.recommended_next_steps || result?.opportunities_for_growth || [], null, 2)}</pre>
           <Link to="/assessments" className="member-action-btn">Retake or Continue Assessment Center</Link>
+          <a href="https://simbawaujamaa.com/dashboard" className="member-action-btn member-action-btn--secondary">Back to Simba Dashboard</a>
         </section>
       )}
     </main>

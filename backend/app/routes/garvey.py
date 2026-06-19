@@ -130,47 +130,41 @@ def _payload_json(payload: BaseModel) -> dict:
     return json.loads(payload.json())
 
 
-GROWTH_CATEGORIES = [
-    "Leadership",
-    "Cooperative Economics",
-    "Entrepreneurship",
-    "Financial Literacy",
-    "Community Participation",
-    "Learning Style",
-    "Personality",
-    "Rite of Passage",
-    "Future Assessments",
+OFFICIAL_ASSESSMENTS = [
+    {"key": "business-owner-assessment", "title": "Business Owner Assessment", "aliases": ["business-assessment", "business-owner"]},
+    {"key": "customer-voice-of-customer", "title": "Customer / Voice of Customer", "aliases": ["voice-of-customer", "customer-assessment", "voc"]},
+    {"key": "love-archetype-engine", "title": "Love Archetype Engine", "aliases": ["love-engine", "love-archetype"]},
+    {"key": "leadership-archetype-engine", "title": "Leadership Archetype Engine", "aliases": ["leadership-engine", "leadership-archetype"]},
+    {"key": "loyalty-archetype-engine", "title": "Loyalty Archetype Engine", "aliases": ["loyalty-engine", "loyalty-archetype"]},
+    {"key": "youth-rite-of-passage", "title": "Youth Rite of Passage / Gates", "aliases": ["rite-of-passage", "gates"]},
+    {"key": "k-6-assessment-mvp", "title": "K–6 Assessment MVP", "aliases": ["k6-assessment-mvp", "k-6", "k6"]},
 ]
+
+GROWTH_CATEGORIES = [item["title"] for item in OFFICIAL_ASSESSMENTS]
 
 BADGE_RULES = [
     ("first_assessment", "First Assessment", lambda profile: profile["summary"]["completed_assessments"] >= 1),
-    ("leadership_certified", "Leadership Certified", lambda profile: _category_score(profile, "Leadership") >= 80),
-    ("cooperative_economics_explorer", "Cooperative Economics Explorer", lambda profile: _category_attempts(profile, "Cooperative Economics") >= 1),
-    ("entrepreneur_ready", "Entrepreneur Ready", lambda profile: _category_score(profile, "Entrepreneurship") >= 80),
-    ("community_builder", "Community Builder", lambda profile: _category_score(profile, "Community Participation") >= 70),
     ("lifelong_learner", "Lifelong Learner", lambda profile: profile["summary"]["total_attempts"] >= 3),
 ]
 
 
 def _category_from_payload(payload: GarveyCompletionPayload) -> str:
-    raw = (payload.assessment_type or payload.assessment_name or "Future Assessments").replace("_", " " ).lower()
+    raw = (payload.assessment_type or payload.assessment_id or payload.assessment_name or "").replace("_", " ").replace("-", " ").lower()
+    if "business" in raw or "owner" in raw:
+        return "Business Owner Assessment"
+    if "customer" in raw or "voice of customer" in raw or "voc" in raw:
+        return "Customer / Voice of Customer"
+    if "love" in raw:
+        return "Love Archetype Engine"
     if "leadership" in raw:
-        return "Leadership"
-    if "economic" in raw or "cooperative" in raw:
-        return "Cooperative Economics"
-    if "entrepreneur" in raw or "business" in raw:
-        return "Entrepreneurship"
-    if "financial" in raw or "finance" in raw:
-        return "Financial Literacy"
-    if "community" in raw or "participation" in raw:
-        return "Community Participation"
-    if "learning" in raw:
-        return "Learning Style"
-    if "personality" in raw:
-        return "Personality"
-    if "rite" in raw or "passage" in raw:
-        return "Rite of Passage"
-    return "Future Assessments"
+        return "Leadership Archetype Engine"
+    if "loyalty" in raw:
+        return "Loyalty Archetype Engine"
+    if "rite" in raw or "passage" in raw or "gate" in raw:
+        return "Youth Rite of Passage / Gates"
+    if "k 6" in raw or "k6" in raw or "elementary" in raw:
+        return "K–6 Assessment MVP"
+    return payload.assessment_name
 
 
 def _blank_growth_profile() -> dict:
@@ -192,16 +186,9 @@ def _recommended_review_date(completed_at: datetime) -> str:
 def _next_assessment(profile: dict, fallback: str | None) -> dict:
     if fallback:
         return {"assessment_name": fallback, "confidence": None, "reason": "Garvey recommended this from the latest result."}
-    scores = {name: _category_score(profile, name) for name in GROWTH_CATEGORIES}
-    if scores["Leadership"] and scores["Leadership"] < 70:
-        return {"assessment_name": "Leadership Foundations", "confidence": 0.82, "reason": "Leadership score needs reinforcement."}
-    if scores["Leadership"] >= 80 and not scores["Community Participation"]:
-        return {"assessment_name": "Community Builder Assessment", "confidence": 0.78, "reason": "Strong leadership can be applied through community practice."}
-    if scores["Cooperative Economics"] >= 80 and not scores["Entrepreneurship"]:
-        return {"assessment_name": "Entrepreneur Assessment", "confidence": 0.76, "reason": "Economic strengths point toward venture readiness."}
-    if scores["Entrepreneurship"] >= 80:
-        return {"assessment_name": "Cooperative Governance", "confidence": 0.74, "reason": "Entrepreneurial strength is ready for shared-governance development."}
-    return {"assessment_name": "Leadership Foundations", "confidence": 0.65, "reason": "A foundational assessment gives Garvey more signal."}
+    attempted = {name for name in GROWTH_CATEGORIES if _category_attempts(profile, name)}
+    next_item = next((item for item in OFFICIAL_ASSESSMENTS if item["title"] not in attempted), OFFICIAL_ASSESSMENTS[0])
+    return {"assessment_name": next_item["title"], "confidence": 0.65, "reason": "Continue with the next official active assessment."}
 
 
 def _apply_assessment_completion(profile: dict, payload: GarveyCompletionPayload, completed_at: datetime) -> tuple[dict, dict]:
@@ -246,8 +233,41 @@ def get_assessment_catalog(current_user: User = Depends(require_auth)):
             response.raise_for_status()
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=502, detail="Assessment catalog is temporarily unavailable.") from exc
-    return response.json()
+    return _filter_official_catalog(response.json())
 
+
+def _catalog_items(payload: dict | list) -> list:
+    if isinstance(payload, list):
+        return payload
+    for key in ("assessments", "items", "data", "catalog"):
+        if isinstance(payload, dict) and isinstance(payload.get(key), list):
+            return payload[key]
+    return []
+
+
+def _assessment_slug(value: str) -> str:
+    return value.strip().lower().replace("_", "-").replace("/", " ").replace("–", "-").replace(" ", "-")
+
+
+def _is_official_assessment(item: dict) -> bool:
+    raw = " ".join(str(item.get(key, "")) for key in ("id", "slug", "key", "assessment_type", "type", "name", "title", "assessment_name"))
+    normalized = _assessment_slug(raw)
+    return any(
+        official["key"] in normalized
+        or _assessment_slug(official["title"]) in normalized
+        or any(_assessment_slug(alias) in normalized for alias in official.get("aliases", []))
+        for official in OFFICIAL_ASSESSMENTS
+    )
+
+
+def _filter_official_catalog(payload: dict | list) -> dict | list:
+    items = [item for item in _catalog_items(payload) if isinstance(item, dict) and _is_official_assessment(item)]
+    if isinstance(payload, list):
+        return items
+    cleaned = dict(payload or {})
+    target_key = next((key for key in ("assessments", "items", "data", "catalog") if isinstance(cleaned.get(key), list)), "assessments")
+    cleaned[target_key] = items
+    return cleaned
 
 
 def _official_assessment_key(raw: str) -> str:
@@ -285,6 +305,9 @@ def create_transfer_token(
         "display_name": _display_name(user, profile),
         "simba_role": profile.role or user.role or "member",
         "membership_status": membership_status,
+        "return_url": "https://simbawaujamaa.com/dashboard",
+        "result_return_url": "https://simbawaujamaa.com/dashboard",
+        "dashboard_url": "https://simbawaujamaa.com/dashboard",
         "exp": int((now + timedelta(minutes=5)).timestamp()),
     }
     if payload.redirect_assessment:
