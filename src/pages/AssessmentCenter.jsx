@@ -176,6 +176,43 @@ function completionFor(assessment, results) {
   });
 }
 
+
+function asArray(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+  return [value];
+}
+
+function primaryResultLabel(value) {
+  if (!value) return "Growth profile captured";
+  if (typeof value === "string") return value;
+  return value.label || value.name || value.title || value.headline || value.archetype || "Growth profile captured";
+}
+
+const recommendationMeta = {
+  book: ["📘", "Read"],
+  audiobook: ["🎧", "Listen"],
+  discord_channel: ["💬", "Join"],
+  training: ["🧠", "Train"],
+  course: ["🌍", "Learn"],
+  next_assessment: ["➡️", "Next Assessment"],
+};
+
+function recommendationCard(item, index) {
+  if (typeof item === "string") return { icon: "✨", action: "Do", value: item, key: `${item}-${index}` };
+  const type = item?.type || item?.kind || "recommendation";
+  const [icon, action] = recommendationMeta[type] || [item?.icon || "✨", item?.label || "Explore"];
+  return { icon, action, value: item?.value || item?.title || item?.name || item?.assessment_name || "Recommended next step", key: `${type}-${item?.value || item?.title || index}` };
+}
+
+function recommendationsFor(result) {
+  const direct = asArray(result?.recommended_next_steps || result?.recommendations);
+  const growth = asArray(result?.opportunities_for_growth).map((value) => ({ type: "training", value }));
+  const next = result?.recommended_next_assessment?.assessment_name ? [{ type: "next_assessment", value: result.recommended_next_assessment.assessment_name }] : [];
+  const items = [...direct, ...growth, ...next].filter(Boolean).map(recommendationCard);
+  return items.length ? items : [{ icon: "➡️", action: "Continue", value: "Return to the Assessment Center for your next guided step.", key: "continue-assessment-center" }];
+}
+
 function scoreFor(completion) {
   return completion?.overall_score ?? completion?.latest_score ?? null;
 }
@@ -350,18 +387,50 @@ export function AssessmentResultPage() {
         <Link to="/dashboard" className="member-action-btn member-action-btn--secondary">Back to Simba Dashboard</Link>
       </header>
       {error ? <section className="cosmic-section admin-error">⚠️ {error}</section> : (
-        <section className="cosmic-section member-hub-card member-hub-card--wide">
-          <p><strong>Status:</strong> {result?.completion_status || "completed"}</p>
-          <p><strong>Completed:</strong> {result?.completed_at ? new Date(result.completed_at).toLocaleString() : "Recently"}</p>
-          <p><strong>Score:</strong> {result?.overall_score ?? "Not scored"}</p>
-          <p><strong>Primary result:</strong> {typeof result?.primary_result === "string" ? result.primary_result : JSON.stringify(result?.primary_result || {})}</p>
-          <p><strong>Recommended Next:</strong> {result?.recommended_next_assessment?.assessment_name || "Return to the Assessment Center for your next step."}</p>
-          <h2>Strengths</h2>
-          <ul>{(result?.strengths || []).map((item) => <li key={item}>{item}</li>)}</ul>
-          <h2>Recommendations</h2>
-          <pre className="data-note">{typeof result?.recommended_next_steps === "string" ? result.recommended_next_steps : JSON.stringify(result?.recommended_next_steps || result?.opportunities_for_growth || [], null, 2)}</pre>
-          <Link to="/assessments/center" className="member-action-btn">Retake or Continue in Garvey</Link>
-          <Link to="/dashboard" className="member-action-btn member-action-btn--secondary">Back to Simba Dashboard</Link>
+        <section className="cosmic-section member-hub-card member-hub-card--wide growth-report-card">
+          <div className="growth-report-hero">
+            <div>
+              <p className="section-kicker">Growth Report</p>
+              <h2>{primaryResultLabel(result?.primary_result)}</h2>
+              <p>Your Garvey assessment has been interpreted and saved into Simba for continued growth planning.</p>
+            </div>
+            <div className="growth-score-orb" aria-label="Assessment score">
+              <span>{result?.overall_score ?? "—"}</span>
+              <small>{result?.overall_score == null ? "Insight saved" : "score"}</small>
+            </div>
+          </div>
+          <div className="growth-report-meta">
+            <span>Status: {result?.completion_status || "completed"}</span>
+            <span>Completed: {result?.completed_at ? new Date(result.completed_at).toLocaleString() : "Recently"}</span>
+            <span>Track: {result?.category || result?.assessment_name || "Garvey Assessment"}</span>
+          </div>
+
+          <div className="growth-report-grid">
+            <article className="growth-panel">
+              <h3>Strength Signals</h3>
+              {asArray(result?.strengths).length ? <ul className="growth-list">{asArray(result.strengths).map((item) => <li key={String(item)}>⚡ {String(item)}</li>)}</ul> : <p className="data-note">Garvey did not send separate strength bullets for this result, but your primary profile is saved above.</p>}
+            </article>
+            <article className="growth-panel">
+              <h3>Growth Edges</h3>
+              {asArray(result?.opportunities_for_growth).length ? <ul className="growth-list">{asArray(result.opportunities_for_growth).map((item) => <li key={String(item)}>🛠️ {String(item)}</li>)}</ul> : <p className="data-note">No separate growth edges were included in this callback.</p>}
+            </article>
+          </div>
+
+          <article className="growth-panel recommended-path-panel">
+            <h3>Recommended Path</h3>
+            <div className="recommendation-card-grid">
+              {recommendationsFor(result).map((item) => (
+                <div className="recommendation-card" key={item.key}>
+                  <span className="recommendation-icon">{item.icon}</span>
+                  <div><strong>{item.action}</strong><p>{item.value}</p></div>
+                </div>
+              ))}
+            </div>
+          </article>
+          <div className="hero-cta-row">
+            <Link to="/assessments/center" className="member-action-btn">Retake or Continue in Garvey</Link>
+            <Link to="/dashboard" className="member-action-btn member-action-btn--secondary">Back to Simba Dashboard</Link>
+          </div>
         </section>
       )}
     </main>

@@ -169,6 +169,80 @@ BADGE_RULES = [
 ]
 
 
+
+
+def _first_present(*values):
+    for value in values:
+        if value not in (None, "", [], {}):
+            return value
+    return None
+
+
+def _lookup_nested(source, *paths):
+    if not isinstance(source, dict):
+        return None
+    for path in paths:
+        current = source
+        for key in path:
+            if not isinstance(current, dict) or key not in current:
+                current = None
+                break
+            current = current[key]
+        if current not in (None, "", [], {}):
+            return current
+    return None
+
+
+def _normalize_score(payload: GarveyCompletionPayload):
+    score = _first_present(
+        payload.overall_score,
+        _lookup_nested(payload.result_summary, ("overall_score",), ("score",), ("scores", "overall"), ("summary", "score")),
+        _lookup_nested(payload.primary_result, ("overall_score",), ("score",)),
+        _lookup_nested(payload.archetype, ("overall_score",), ("score",)),
+    )
+    if score is None:
+        return None
+    try:
+        return float(score)
+    except (TypeError, ValueError):
+        return score
+
+
+def _normalize_primary_result(payload: GarveyCompletionPayload):
+    primary = _first_present(
+        payload.primary_result,
+        _lookup_nested(payload.result_summary, ("primary_result",), ("primary",), ("archetype",), ("result",)),
+        payload.archetype,
+        _lookup_nested(payload.result_summary, ("headline",)),
+    )
+    if isinstance(primary, dict) and not primary:
+        return None
+    return primary
+
+
+def _normalize_strengths(payload: GarveyCompletionPayload) -> list:
+    strengths = _first_present(
+        payload.strengths,
+        _lookup_nested(payload.result_summary, ("strengths",), ("top_strengths",), ("insights", "strengths")),
+        _lookup_nested(payload.primary_result, ("strengths",)),
+        _lookup_nested(payload.archetype, ("strengths",)),
+    )
+    if isinstance(strengths, str):
+        return [strengths]
+    return strengths if isinstance(strengths, list) else []
+
+
+def _normalize_growth_edges(payload: GarveyCompletionPayload) -> list:
+    edges = _first_present(
+        payload.opportunities_for_growth,
+        _lookup_nested(payload.result_summary, ("opportunities_for_growth",), ("growth_edges",), ("growth_opportunities",), ("insights", "opportunities_for_growth")),
+        _lookup_nested(payload.primary_result, ("opportunities_for_growth",), ("growth_edges",)),
+        _lookup_nested(payload.archetype, ("opportunities_for_growth",), ("growth_edges",)),
+    )
+    if isinstance(edges, str):
+        return [edges]
+    return edges if isinstance(edges, list) else []
+
 def _category_from_payload(payload: GarveyCompletionPayload) -> str:
     raw = (payload.assessment_type or payload.assessment_id or payload.assessment_name or "").replace("_", " ").replace("-", " ").lower()
     if "business" in raw or "owner" in raw:
@@ -226,9 +300,11 @@ def _apply_assessment_completion(profile: dict, payload: GarveyCompletionPayload
     assessment_name = payload.assessment_name or payload.assessment_type or payload.assessment_id or "Garvey Assessment"
     assessment_id = payload.assessment_id or payload.assessment_type or assessment_name
     current = assessments.get(assessment_id, {})
-    score = payload.overall_score
+    score = _normalize_score(payload)
+    strengths = _normalize_strengths(payload)
+    opportunities_for_growth = _normalize_growth_edges(payload)
     attempts = int(current.get("attempts") or 0) + 1
-    record = {**current, "assessment_id": assessment_id, "assessment_name": assessment_name, "latest_score": score, "highest_score": max([v for v in [current.get("highest_score"), score] if v is not None], default=None), "completion_date": completed_at.isoformat(), "attempts": attempts, "completion_status": payload.completion_status, "recommended_review_date": _recommended_review_date(completed_at), "percentile": payload.percentile, "strengths": payload.strengths, "opportunities_for_growth": payload.opportunities_for_growth}
+    record = {**current, "assessment_id": assessment_id, "assessment_name": assessment_name, "latest_score": score, "highest_score": max([v for v in [current.get("highest_score"), score] if isinstance(v, (int, float))], default=None), "completion_date": completed_at.isoformat(), "attempts": attempts, "completion_status": payload.completion_status, "recommended_review_date": _recommended_review_date(completed_at), "percentile": payload.percentile, "strengths": strengths, "opportunities_for_growth": opportunities_for_growth}
     assessments[assessment_id] = record
     cat["latest_score"] = score
     cat["status"] = payload.completion_status
@@ -487,7 +563,11 @@ def _process_garvey_assessment_callback(
     profile = _member_profile(db, user)
     completed_at = payload.completed_at or datetime.utcnow()
     assessment_name = payload.assessment_name or payload.assessment_type or payload.assessment_id or "Garvey Assessment"
-    recommended_steps = payload.recommended_next_steps if payload.recommended_next_steps is not None else payload.recommendations
+    recommended_steps = payload.recommended_next_steps if payload.recommended_next_steps not in (None, "", [], {}) else payload.recommendations
+    normalized_score = _normalize_score(payload)
+    normalized_primary_result = _normalize_primary_result(payload)
+    normalized_strengths = _normalize_strengths(payload)
+    normalized_growth_edges = _normalize_growth_edges(payload)
     attributes = dict(profile.attributes or {})
     growth_profile, assessment_record = _apply_assessment_completion(attributes.get("growth_profile", _blank_growth_profile()), payload, completed_at)
     completion = {
@@ -497,12 +577,12 @@ def _process_garvey_assessment_callback(
         "assessment_name": assessment_name,
         "result_id": payload.result_id or payload.assessment_id or assessment_name,
         "completion_status": payload.completion_status,
-        "overall_score": payload.overall_score,
+        "overall_score": normalized_score,
         "percentile": payload.percentile,
-        "strengths": payload.strengths,
-        "opportunities_for_growth": payload.opportunities_for_growth,
+        "strengths": normalized_strengths,
+        "opportunities_for_growth": normalized_growth_edges,
         "recommended_next_assessment": assessment_record.get("recommended_next_assessment"),
-        "primary_result": payload.primary_result,
+        "primary_result": normalized_primary_result,
         "recommended_next_steps": recommended_steps,
         "recommendations": payload.recommendations,
         "result_summary": payload.result_summary,

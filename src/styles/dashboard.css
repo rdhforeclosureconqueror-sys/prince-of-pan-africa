@@ -829,3 +829,95 @@ body {
   gap: .75rem;
   padding-top: .5rem;
 }
+
+.growth-report-card {
+  border: 1px solid rgba(252, 211, 77, 0.25);
+  background: linear-gradient(135deg, rgba(8, 13, 30, 0.96), rgba(28, 20, 8, 0.88));
+}
+
+.growth-report-hero,
+.growth-report-meta,
+.growth-report-grid,
+.recommendation-card-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.growth-report-hero {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.growth-score-orb {
+  width: 8rem;
+  height: 8rem;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  background: radial-gradient(circle, rgba(250, 204, 21, 0.34), rgba(34, 197, 94, 0.14));
+  border: 1px solid rgba(250, 204, 21, 0.45);
+  box-shadow: 0 0 40px rgba(250, 204, 21, 0.18);
+}
+
+.growth-score-orb span {
+  display: block;
+  font-size: 2.6rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.growth-score-orb small,
+.growth-report-meta span {
+  color: rgba(255, 255, 255, 0.72);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.72rem;
+}
+
+.growth-report-meta,
+.growth-report-grid,
+.recommendation-card-grid {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.growth-panel,
+.recommendation-card {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 1.25rem;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 1rem;
+}
+
+.growth-list {
+  display: grid;
+  gap: 0.65rem;
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+}
+
+.recommended-path-panel {
+  margin-top: 1rem;
+}
+
+.recommendation-card {
+  display: flex;
+  gap: 0.85rem;
+  align-items: flex-start;
+}
+
+.recommendation-icon {
+  font-size: 1.8rem;
+  line-height: 1;
+}
+
+.recommendation-card p {
+  margin: 0.2rem 0 0;
+}
+
+@media (max-width: 720px) {
+  .growth-report-hero {
+    grid-template-columns: 1fr;
+  }
+}
