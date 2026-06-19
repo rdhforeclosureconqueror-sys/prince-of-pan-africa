@@ -3,6 +3,8 @@ import { Link, useParams } from "react-router-dom";
 import { createAssessmentTransferToken, getAssessmentCatalog, getAssessmentResult, getAssessmentResults } from "../api/assessments";
 import "../styles/dashboard.css";
 
+const ARCHETYPE_BASE_URL = (import.meta.env.VITE_GARVEY_ARCHETYPE_BASE_URL || import.meta.env.VITE_SIMBA_ARCHETYPE_BASE_URL || "").replace(/\/$/, "");
+
 const OFFICIAL_ASSESSMENTS = [
   ["Business Owner Assessment", "business-assessment", "business-owner"],
   ["Customer / Voice of Customer", "voice-of-customer", "customer-assessment", "voc"],
@@ -12,6 +14,91 @@ const OFFICIAL_ASSESSMENTS = [
   ["Youth Rite of Passage / Gates", "rite-of-passage", "gates"],
   ["K–6 Assessment MVP", "k6-assessment-mvp", "k-6", "k6"],
 ];
+
+const ASSESSMENT_FAMILY_PREVIEWS = [
+  {
+    title: "Business Owner Assessment",
+    shortTitle: "Business Owner",
+    key: "business-owner-assessment",
+    estimatedTime: "12–15 minutes",
+    description: "Discover how you currently build, operate, and steward economic power.",
+    discover: ["Your business owner archetype", "Your current operating strength", "The next constraint to remove"],
+    whyItMatters: "A business is more than an idea. This assessment helps founders connect vision, systems, customers, and responsibility.",
+    archetypeCollection: "business",
+    archetypes: ["Creator", "Builder", "Architect", "Visionary", "Operator", "Strategist", "Steward", "Innovator"],
+  },
+  {
+    title: "Voice of Customer Assessment",
+    shortTitle: "Voice of Customer",
+    key: "voice-of-customer",
+    estimatedTime: "10–12 minutes",
+    description: "Explore how you listen, interpret needs, and translate customer signals into better service.",
+    discover: ["Your customer personality pattern", "How customers experience your offer", "What evidence should guide your next improvement"],
+    whyItMatters: "Community-centered builders grow by listening before scaling. This assessment strengthens empathy, trust, and offer clarity.",
+    archetypeCollection: "customer",
+    archetypes: ["Listener", "Advocate", "Analyst", "Connector", "Problem Solver", "Experience Keeper"],
+  },
+  {
+    title: "Love Archetype Engine",
+    shortTitle: "Love",
+    key: "love-archetype-engine",
+    estimatedTime: "10–14 minutes",
+    description: "Reflect on care, reciprocity, attachment, boundaries, and relational repair.",
+    discover: ["Your relationship archetype", "Your care and connection strengths", "A growth practice for healthier bonds"],
+    whyItMatters: "Liberation work is relational. Understanding how you love helps strengthen family, partnership, friendship, and community trust.",
+    archetypeCollection: "love",
+    archetypes: ["Nurturer", "Protector", "Healer", "Devotee", "Companion", "Truth Teller"],
+  },
+  {
+    title: "Leadership Archetype Engine",
+    shortTitle: "Leadership",
+    key: "leadership-archetype-engine",
+    estimatedTime: "12–15 minutes",
+    description: "Preview how you lead, decide, delegate, organize, and serve under pressure.",
+    discover: ["Your leadership archetype", "Your decision-making pattern", "Your next leadership growth edge"],
+    whyItMatters: "Movements need disciplined leadership. This assessment helps members convert influence into service and accountability.",
+    archetypeCollection: "leadership",
+    archetypes: ["Architect", "Organizer", "Diplomat", "Strategist", "Teacher", "Guardian", "Catalyst", "Steward"],
+  },
+  {
+    title: "Loyalty Archetype Engine",
+    shortTitle: "Loyalty",
+    key: "loyalty-archetype-engine",
+    estimatedTime: "8–12 minutes",
+    description: "Understand how commitment, trust, accountability, and belonging operate in your life.",
+    discover: ["Your loyalty archetype", "How you build and protect trust", "Where boundaries or repair may be needed"],
+    whyItMatters: "Loyalty without clarity can become strain. This assessment helps members practice commitment with wisdom and integrity.",
+    archetypeCollection: "loyalty",
+    archetypes: ["Guardian", "Ally", "Keeper", "Witness", "Protector", "Bridge Builder"],
+  },
+  {
+    title: "Youth Rite of Passage",
+    shortTitle: "Youth Rite of Passage",
+    key: "youth-rite-of-passage",
+    estimatedTime: "15–20 minutes",
+    description: "Preview developmental pathways for identity, discipline, responsibility, and community readiness.",
+    discover: ["A current developmental pathway", "Mentorship needs", "The next growth gate"],
+    whyItMatters: "Young people need structure, affirmation, and responsibility. This assessment supports a guided path into maturity.",
+    archetypeCollection: "youth",
+    archetypes: ["Seed", "Pathfinder", "Apprentice", "Torchbearer", "Guardian-in-Training", "Community Builder"],
+  },
+  {
+    title: "K–6 Learning Assessment",
+    shortTitle: "K–6 Learning",
+    key: "k-6-assessment-mvp",
+    estimatedTime: "8–10 minutes with guardian support",
+    description: "Preview learning profiles for younger members through curiosity, confidence, and support needs.",
+    discover: ["A learning profile", "Confidence and curiosity signals", "Family or guardian next steps"],
+    whyItMatters: "Early learning thrives when adults see the whole child. This assessment supports encouragement, patience, and targeted support.",
+    archetypeCollection: "k-6",
+    archetypes: ["Explorer", "Story Keeper", "Pattern Finder", "Creative Maker", "Question Asker", "Team Helper"],
+  },
+];
+
+function archetypeUrl(collection, slug) {
+  const path = `/archetypes/${collection}/${slug}`;
+  return ARCHETYPE_BASE_URL ? `${ARCHETYPE_BASE_URL}${path}` : path;
+}
 
 function normalizeText(value) {
   return String(value || "").toLowerCase().replace(/[–_\/]/g, "-").replace(/\s+/g, "-");
@@ -41,7 +128,7 @@ function assessmentTitle(assessment) {
 }
 
 function assessmentDescription(assessment) {
-  return assessment.description || assessment.summary || assessment.short_description || "A guided Garvey-powered assessment to help shape your next step.";
+  return assessment.description || assessment.summary || assessment.short_description || "A guided assessment to help shape your next step.";
 }
 
 function assessmentTime(assessment) {
@@ -90,7 +177,58 @@ function recommendedNextFor(assessment, catalog, results) {
   return nextIncomplete ? assessmentTitle(nextIncomplete) : "Review your latest results";
 }
 
-export default function AssessmentCenter() {
+export default function AssessmentLandingPage() {
+  return (
+    <main className="admin-dashboard member-launchpad command-center-shell cosmic-readable-shell">
+      <header className="mission-control member-hero dashboard-header">
+        <p className="member-kicker">Simba wa Ujamaa Assessments</p>
+        <h1>Official Assessment Landing Page</h1>
+        <p className="subtitle">Begin with insight before you begin the assessment. Walk through the official assessment families, preview the archetypes you may discover, and then enter the operational Assessment Center when you are ready to choose your path.</p>
+        <div className="mission-status-strip"><span>Native Simba journey</span><span>Powered by the Garvey Assessment Engine</span><span>Results sync to your dashboard</span></div>
+        <div className="hero-cta-row">
+          <Link to="/assessments/center" className="member-action-btn">Open Assessment Center</Link>
+          <Link to="/dashboard" className="member-action-btn member-action-btn--secondary">Back to Dashboard</Link>
+        </div>
+      </header>
+
+      <section className="cosmic-section member-hub-card member-hub-card--wide">
+        <p className="section-kicker">Educational entrance</p>
+        <h2>Assessments are mirrors for action.</h2>
+        <p>Each experience is designed to help members name strengths, understand patterns, and choose a next step with more clarity. Explore the previews below first; then move into the Official Assessment Center to launch the assessment, consent, complete questions, review results, and return to Simba.</p>
+      </section>
+
+      <section className="cosmic-section member-hub-card member-hub-card--wide">
+        <div className="section-heading-row"><div><p className="section-kicker">Assessment previews</p><h2>Explore what you may discover</h2></div><Link to="/assessments/center" className="member-action-btn">Take Assessment</Link></div>
+        <div className="builder-dashboard-grid">
+          {ASSESSMENT_FAMILY_PREVIEWS.map((assessment) => {
+            const collectionUrl = archetypeUrl(assessment.archetypeCollection, "");
+            return (
+              <article key={assessment.key} className="member-hub-card">
+                <p className="section-kicker">{assessment.estimatedTime}</p>
+                <h3>{assessment.title}</h3>
+                <p>{assessment.description}</p>
+                <p><strong>What you will discover:</strong></p>
+                <ul>{assessment.discover.map((item) => <li key={item}>{item}</li>)}</ul>
+                <p><strong>Why it matters:</strong> {assessment.whyItMatters}</p>
+                <p><strong>Archetype preview:</strong></p>
+                <div className="command-chip-list" aria-label={`${assessment.shortTitle} archetype preview`}>
+                  {assessment.archetypes.map((name) => {
+                    const slug = normalizeText(name);
+                    return <a key={name} href={archetypeUrl(assessment.archetypeCollection, slug)}>{name}</a>;
+                  })}
+                </div>
+                <a href={collectionUrl} className="member-action-btn member-action-btn--secondary">View All {assessment.shortTitle} Archetypes</a>
+                <Link to={`/assessments/center?assessment=${encodeURIComponent(assessment.key)}`} className="member-action-btn">Take Assessment</Link>
+              </article>
+            );
+          })}
+        </div>
+      </section>
+    </main>
+  );
+}
+
+export function AssessmentCenter() {
   const [catalog, setCatalog] = useState([]);
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -119,14 +257,13 @@ export default function AssessmentCenter() {
   const primaryRecommendation = useMemo(() => catalog.find((assessment) => !completionFor(assessment, results)) || catalog[0], [catalog, results]);
 
   const startAssessment = async (assessment) => {
-    const key = assessmentKey(assessment);
+    const key = typeof assessment === "string" ? assessment : assessmentKey(assessment);
     setStartingKey(key);
     setError("");
     try {
       const response = await createAssessmentTransferToken(key);
       const params = new URLSearchParams({ token: response.token, return_url: response.return_url || "https://simbawaujamaa.com/dashboard" });
-      const target = `${response.start_url}?${params.toString()}`;
-      window.location.assign(target);
+      window.location.assign(`${response.start_url}?${params.toString()}`);
     } catch (err) {
       setError(err.message || "We could not start this assessment yet.");
       setStartingKey(null);
@@ -138,30 +275,35 @@ export default function AssessmentCenter() {
   return (
     <main className="admin-dashboard member-launchpad command-center-shell cosmic-readable-shell">
       <header className="mission-control member-hero dashboard-header">
-        <p className="member-kicker">Simba + Garvey Assessment Engine</p>
-        <h1>Official Assessment Center</h1>
-        <p className="subtitle">One polished assessment experience for Simba members. Garvey powers the assessment engine, while your progress and results sync back to your Simba dashboard.</p>
-        <a href="https://simbawaujamaa.com/dashboard" className="member-action-btn member-action-btn--secondary">Back to Simba Dashboard</a>
+        <p className="member-kicker">Official Assessment Center</p>
+        <h1>Continue Your Journey</h1>
+        <p className="subtitle">Choose an assessment, complete the consent step in the official flow, and return to Simba when your results are ready. Powered by the Garvey Assessment Engine.</p>
         <div className="mission-status-strip"><span>{catalog.length} assessments available</span><span>{completedCount} completed</span><span>Recommended next: {primaryRecommendation ? assessmentTitle(primaryRecommendation) : "None yet"}</span></div>
+        <div className="hero-cta-row">
+          <Link to="/assessments" className="member-action-btn member-action-btn--secondary">Explore Assessment Previews</Link>
+          <Link to="/dashboard" className="member-action-btn member-action-btn--secondary">Back to Simba Dashboard</Link>
+        </div>
       </header>
 
       {error ? <section className="cosmic-section admin-error">⚠️ {error}</section> : null}
 
       {latestResult ? (
         <section className="cosmic-section member-hub-card member-hub-card--wide">
-          <p className="section-kicker">Latest Assessment Result</p>
-          <h2>{latestResult.assessment_name}</h2>
-          <p><strong>Primary result:</strong> {typeof latestResult.primary_result === "string" ? latestResult.primary_result : JSON.stringify(latestResult.primary_result)}</p>
+          <p className="section-kicker">Continue Your Journey</p>
+          <h2>Latest Assessment Result</h2>
+          <p><strong>Assessment:</strong> {latestResult.assessment_name}</p>
+          <p><strong>Primary result:</strong> {typeof latestResult.primary_result === "string" ? latestResult.primary_result : latestResult.primary_result?.label || latestResult.primary_result?.name || JSON.stringify(latestResult.primary_result || "Saved")}</p>
           <p><strong>Completed:</strong> {latestResult.completed_at ? new Date(latestResult.completed_at).toLocaleString() : "Recently"}</p>
           {latestResult.star_reward_eligible ? <p className="star-reward-label">STAR reward eligible · processed once through Simba participation.</p> : null}
           {latestResult.recommended_next_steps ? <pre className="data-note">{typeof latestResult.recommended_next_steps === "string" ? latestResult.recommended_next_steps : JSON.stringify(latestResult.recommended_next_steps, null, 2)}</pre> : null}
+          <Link className="member-action-btn member-action-btn--secondary" to={`/assessments/results/${encodeURIComponent(latestResult.result_id || latestResult.assessment_id || latestResult.assessment_name)}`}>View Results</Link>
         </section>
       ) : null}
 
       <section className="cosmic-section member-hub-card member-hub-card--wide">
         <div className="section-heading-row">
-          <div><p className="section-kicker">Live Garvey Catalog</p><h2>Available Assessments</h2></div>
-          <a href="https://simbawaujamaa.com/dashboard" className="member-action-btn member-action-btn--secondary">Back to Simba Dashboard</a>
+          <div><p className="section-kicker">Progress</p><h2>Available Assessments</h2></div>
+          <Link to="/dashboard" className="member-action-btn member-action-btn--secondary">Back to Simba Dashboard</Link>
         </div>
         {catalog.length === 0 ? <p>No assessments are open right now. Check back soon.</p> : (
           <div className="builder-dashboard-grid">
@@ -183,7 +325,7 @@ export default function AssessmentCenter() {
                   <p><strong>Status:</strong> {status === "completed" ? "✅ Completed" : status === "in_progress" ? "In Progress" : "Not Started"}</p>
                   <p><strong>Last completed:</strong> {completed?.completed_at ? new Date(completed.completed_at).toLocaleDateString() : "Not yet"}</p>
                   <p><strong>Current score:</strong> {score !== null ? `${score}%` : "Not scored"}</p>
-                  <p><strong>Recommended next:</strong> {recommendedNext}</p>
+                  <p><strong>Recommended next assessment:</strong> {recommendedNext}</p>
                   {String(assessmentTitle(assessment)).toLowerCase().includes("rite") || String(assessmentTitle(assessment)).toLowerCase().includes("k–6") || String(assessmentTitle(assessment)).toLowerCase().includes("k-6") ? <p className="data-note">Youth and K–6 assessments may ask a parent or guardian to confirm setup inside this official flow.</p> : null}
                   {assessment.star_reward ? <strong className="star-reward-label">STAR eligible</strong> : null}
                   {completed ? <Link className="member-action-btn member-action-btn--secondary" to={`/assessments/results/${encodeURIComponent(completed.result_id || completed.assessment_id)}`}>View Results</Link> : null}
@@ -199,7 +341,6 @@ export default function AssessmentCenter() {
     </main>
   );
 }
-
 
 export function AssessmentResultPage() {
   const { resultId } = useParams();
@@ -230,7 +371,7 @@ export function AssessmentResultPage() {
         <p className="member-kicker">Saved Garvey Result</p>
         <h1>{result?.assessment_name || "Assessment Result"}</h1>
         <p className="subtitle">This result is stored in Simba from the signed Garvey callback.</p>
-        <a href="https://simbawaujamaa.com/dashboard" className="member-action-btn member-action-btn--secondary">Back to Simba Dashboard</a>
+        <Link to="/dashboard" className="member-action-btn member-action-btn--secondary">Back to Simba Dashboard</Link>
       </header>
       {error ? <section className="cosmic-section admin-error">⚠️ {error}</section> : (
         <section className="cosmic-section member-hub-card member-hub-card--wide">
@@ -243,8 +384,8 @@ export function AssessmentResultPage() {
           <ul>{(result?.strengths || []).map((item) => <li key={item}>{item}</li>)}</ul>
           <h2>Recommendations</h2>
           <pre className="data-note">{typeof result?.recommended_next_steps === "string" ? result.recommended_next_steps : JSON.stringify(result?.recommended_next_steps || result?.opportunities_for_growth || [], null, 2)}</pre>
-          <Link to="/assessments" className="member-action-btn">Retake or Continue Assessment Center</Link>
-          <a href="https://simbawaujamaa.com/dashboard" className="member-action-btn member-action-btn--secondary">Back to Simba Dashboard</a>
+          <Link to="/assessments/center" className="member-action-btn">Retake or Continue Assessment Center</Link>
+          <Link to="/dashboard" className="member-action-btn member-action-btn--secondary">Back to Simba Dashboard</Link>
         </section>
       )}
     </main>

@@ -22,7 +22,8 @@ from app.services.billing import latest_subscription_for_user
 from app.services.participation import find_duplicate_activity, submit_activity
 
 router = APIRouter(prefix="/member/assessments", tags=["Garvey Assessments"])
-callback_router = APIRouter(prefix="/api/simbawajuma", tags=["Garvey Assessments"])
+legacy_callback_router = APIRouter(prefix="/api/simbawajuma", tags=["Garvey Assessments"])
+callback_router = APIRouter(tags=["Garvey Assessments"])
 
 
 def _b64url(raw: bytes) -> str:
@@ -101,7 +102,9 @@ class TransferTokenPayload(BaseModel):
 class GarveyCompletionPayload(BaseModel):
     event: str = "assessment.completed"
     issuer: str | None = None
-    external_user_id: str | int = Field(alias="member_id")
+    external_user_id: str | int | None = Field(default=None, alias="member_id")
+    member_email: str | None = None
+    email: str | None = None
     external_membership_id: str | int | None = None
     assessment_type: str | None = None
     assessment_id: str | None = None
@@ -335,10 +338,12 @@ def get_assessment_result(result_id: str, current_user: User = Depends(require_a
 
 @router.get("/sync-diagnostics")
 def get_garvey_sync_diagnostics(_: User = Depends(require_permission("admin:read_dashboard")), db: Session = Depends(get_db)):
+    required_env = ["GARVEY_BASE_URL", "GARVEY_TRANSFER_SECRET", "GARVEY_ALLOWED_ISSUER", "GARVEY_CALLBACK_SECRET"]
+    env = {name: {"present": bool(getattr(settings, name, "").strip()), "configured_name": name} for name in required_env}
     latest = db.query(GarveySyncEvent).order_by(GarveySyncEvent.created_at.desc(), GarveySyncEvent.id.desc()).first()
     successful = db.query(GarveySyncEvent).filter(GarveySyncEvent.status == "processed").order_by(GarveySyncEvent.updated_at.desc(), GarveySyncEvent.id.desc()).first()
     failed = db.query(GarveySyncEvent).filter(GarveySyncEvent.status.in_(["failed", "pending"])).order_by(GarveySyncEvent.updated_at.desc(), GarveySyncEvent.id.desc()).first()
-    return {"ok": True, "last_callback_received": _serialize_sync_event(latest), "last_successful_assessment_sync": _serialize_sync_event(successful), "last_failed_assessment_sync": _serialize_sync_event(failed)}
+    return {"ok": True, "required_env": env, "last_callback_received": _serialize_sync_event(latest), "last_successful_assessment_sync": _serialize_sync_event(successful), "last_failed_assessment_sync": _serialize_sync_event(failed)}
 
 
 @router.get("/growth-profile")
@@ -347,8 +352,7 @@ def get_growth_profile(current_user: User = Depends(require_auth), db: Session =
     return {"ok": True, "growth_profile": (profile.attributes or {}).get("growth_profile", _blank_growth_profile())}
 
 
-@callback_router.post("/assessment-callback")
-def garvey_assessment_callback(
+def _process_garvey_assessment_callback(
     payload: GarveyCompletionPayload,
     x_garvey_callback_secret: str | None = Header(default=None, alias="X-Garvey-Callback-Secret"),
     authorization: str | None = Header(default=None),
@@ -363,13 +367,19 @@ def garvey_assessment_callback(
     if settings.GARVEY_ALLOWED_ISSUER and payload.issuer and payload.issuer != settings.GARVEY_ALLOWED_ISSUER:
         raise HTTPException(status_code=403, detail="Unsupported Garvey issuer")
 
-    try:
-        simba_user_id = int(payload.external_user_id)
-    except (TypeError, ValueError) as exc:
-        raise HTTPException(status_code=400, detail="Invalid Simba member id") from exc
-    user = db.query(User).filter(User.id == simba_user_id).first()
+    user = None
+    if payload.external_user_id is not None:
+        try:
+            simba_user_id = int(payload.external_user_id)
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail="Invalid Simba member id") from exc
+        user = db.query(User).filter(User.id == simba_user_id).first()
+    callback_email = (payload.member_email or payload.email or "").strip().lower()
+    if not user and callback_email:
+        user = db.query(User).filter(User.email == callback_email).first()
+    external_id = str(payload.external_user_id or callback_email or "unknown")
     if not user:
-        db.add(GarveySyncEvent(event_type=payload.event, external_user_id=str(payload.external_user_id), payload=_sync_event_payload(payload, signature_valid=True, error_message="Simba member not found"), status="pending", retry_count=0, last_error="Simba member not found"))
+        db.add(GarveySyncEvent(event_type=payload.event, external_user_id=external_id, payload=_sync_event_payload(payload, signature_valid=True, error_message="Simba member not found"), status="pending", retry_count=0, last_error="Simba member not found"))
         db.commit()
         return {"ok": False, "queued": True, "detail": "Simba member not found; queued for retry"}
     profile = _member_profile(db, user)
@@ -378,6 +388,7 @@ def garvey_assessment_callback(
     growth_profile, assessment_record = _apply_assessment_completion(attributes.get("growth_profile", _blank_growth_profile()), payload, completed_at)
     completion = {
         "assessment_type": payload.assessment_type or _category_from_payload(payload).lower().replace(" ", "_"),
+        "category": _category_from_payload(payload),
         "assessment_id": payload.assessment_id or payload.assessment_type or payload.assessment_name,
         "assessment_name": payload.assessment_name,
         "result_id": payload.result_id or payload.assessment_id or payload.assessment_name,
@@ -407,6 +418,31 @@ def garvey_assessment_callback(
         metadata = {"result_id": payload.result_id, "assessment_type": payload.assessment_type, "completion_key": f"garvey:{payload.result_id}"}
         duplicate = find_duplicate_activity(db, user=user, guest_session_id=None, activity_type_name="quiz_completed", source_module="assessment_center", metadata=metadata)
         activity = submit_activity(db, user=user, guest_session_id=None, activity_type_name="quiz_completed", source_module="assessment_center", metadata=metadata)
-    db.add(GarveySyncEvent(event_type=payload.event, external_user_id=str(payload.external_user_id), payload=_sync_event_payload(payload, signature_valid=True, synced_member_email=user.email), status="processed", retry_count=0))
+    db.add(GarveySyncEvent(event_type=payload.event, external_user_id=external_id, payload=_sync_event_payload(payload, signature_valid=True, synced_member_email=user.email), status="processed", retry_count=0))
     db.commit()
     return {"ok": True, "stored": completion, "growth_profile": growth_profile, "star_awarded": bool(activity and not duplicate), "activity_id": activity.id if activity else None}
+
+
+@legacy_callback_router.post("/assessment-callback")
+def garvey_legacy_assessment_callback(payload: GarveyCompletionPayload, x_garvey_callback_secret: str | None = Header(default=None, alias="X-Garvey-Callback-Secret"), authorization: str | None = Header(default=None), db: Session = Depends(get_db)):
+    return _process_garvey_assessment_callback(payload, x_garvey_callback_secret, authorization, db)
+
+
+@callback_router.get("/garvey/callback")
+def garvey_callback_status():
+    return {"ok": True, "route": "/garvey/callback", "method": "POST", "configured": bool(settings.GARVEY_CALLBACK_SECRET.strip())}
+
+
+@callback_router.get("/api/garvey/callback")
+def api_garvey_callback_status():
+    return {"ok": True, "route": "/api/garvey/callback", "method": "POST", "configured": bool(settings.GARVEY_CALLBACK_SECRET.strip())}
+
+
+@callback_router.post("/garvey/callback")
+def garvey_callback(payload: GarveyCompletionPayload, x_garvey_callback_secret: str | None = Header(default=None, alias="X-Garvey-Callback-Secret"), authorization: str | None = Header(default=None), db: Session = Depends(get_db)):
+    return _process_garvey_assessment_callback(payload, x_garvey_callback_secret, authorization, db)
+
+
+@callback_router.post("/api/garvey/callback")
+def api_garvey_callback(payload: GarveyCompletionPayload, x_garvey_callback_secret: str | None = Header(default=None, alias="X-Garvey-Callback-Secret"), authorization: str | None = Header(default=None), db: Session = Depends(get_db)):
+    return _process_garvey_assessment_callback(payload, x_garvey_callback_secret, authorization, db)

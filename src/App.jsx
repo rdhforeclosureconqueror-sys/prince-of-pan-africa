@@ -12,7 +12,7 @@ import TimelinePage from "./pages/TimelinePage";
 import MemberDashboard from "./pages/MemberDashboard";
 import SystemVerificationPage from "./pages/SystemVerificationPage";
 import AuthDebugPage from "./pages/AuthDebugPage";
-import AssessmentCenter, { AssessmentResultPage } from "./pages/AssessmentCenter";
+import AssessmentLandingPage, { AssessmentCenter, AssessmentResultPage } from "./pages/AssessmentCenter";
 import PilotDeferredPage from "./pages/PilotDeferredPage";
 import StudyPage from "./pages/StudyPage";
 import BrainTraining from "./pages/BrainTraining";
@@ -184,7 +184,8 @@ function AppRoutes({ user, rbac, isAdmin, canAccessOrganizer, authChecked, refre
         <Route path="/builder/onboarding" element={<BuilderOnboardingPage />} />
         <Route path="/community/onboarding" element={<CommunityOnboardingPage />} />
         <Route path="/billing/cancel" element={<BillingCancelPage />} />
-        <Route path="/assessments" element={<AssessmentCenter />} />
+        <Route path="/assessments" element={<AssessmentLandingPage />} />
+        <Route path="/assessments/center" element={<AssessmentCenter />} />
         <Route path="/assessments/results/:resultId" element={<AssessmentResultPage />} />
         <Route path="/leadership" element={<Navigate to="/assessments" replace />} />
         <Route path="/results" element={<Navigate to="/assessments" replace />} />
