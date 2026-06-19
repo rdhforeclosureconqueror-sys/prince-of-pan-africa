@@ -325,6 +325,13 @@ export default function MemberDashboard() {
           <p className="highlight">{learningPath.title}</p><p>{featuredTimeline?.summary || "Study a focused pathway that turns knowledge into daily practice."}</p><p><strong>Why am I seeing this today?</strong> {learningPath.reason}</p><Link to="/library" className="member-action-btn member-action-btn--secondary">Open Learning Path</Link>
         </section>
 
+        <section className="cosmic-section member-hub-card assessment-center-card">
+          <p className="section-kicker">Continue Your Journey</p>
+          <h2>Assessment Center</h2>
+          <p>Take a Simba assessment, receive recommendations, and let STAR rewards process automatically when eligible.</p>
+          <Link to="/assessments" className="member-action-btn">Open Assessment Center</Link>
+        </section>
+
         <section className="cosmic-section member-hub-card member-hub-card--wide feed-command-card" id="community-feed">
           <p className="section-kicker">Section 7</p>
           <h2>Community Feed</h2>

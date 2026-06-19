@@ -29,6 +29,10 @@ class Settings:
     STRIPE_COMMUNITY_PRICE_ID: str = os.getenv("STRIPE_COMMUNITY_PRICE_ID", "")
     STRIPE_BUILDER_PRICE_ID: str = os.getenv("STRIPE_BUILDER_PRICE_ID", "")
     ENABLE_STRIPE_CHECKOUT: bool = os.getenv("ENABLE_STRIPE_CHECKOUT", "false").strip().lower() in {"1", "true", "yes", "on"}
+    GARVEY_BASE_URL: str = os.getenv("GARVEY_BASE_URL", "")
+    GARVEY_TRANSFER_SECRET: str = os.getenv("GARVEY_TRANSFER_SECRET", "")
+    GARVEY_ALLOWED_ISSUER: str = os.getenv("GARVEY_ALLOWED_ISSUER", "simba_wajuma")
+    GARVEY_CALLBACK_SECRET: str = os.getenv("GARVEY_CALLBACK_SECRET", "")
 
 
 settings = Settings()

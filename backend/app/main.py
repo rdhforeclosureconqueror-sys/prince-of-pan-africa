@@ -16,7 +16,7 @@ from app.database import (
     is_production_like_environment,
     is_unsafe_sqlite_fallback,
 )
-from app.routes import admin, assessment, audio, audiobook, auth, billing, chat, discord, member, participation, portal, skill_world, system, tts, voice
+from app.routes import admin, assessment, audio, audiobook, auth, billing, chat, discord, garvey, member, participation, portal, skill_world, system, tts, voice
 from app.services.admin_seed import seed_admin
 from app.authz import seed_rbac_defaults
 from app.session import SessionValidationError, get_session_secret
@@ -195,6 +195,8 @@ app.include_router(assessment.router)
 app.include_router(admin.router)
 app.include_router(admin.legacy_router)
 app.include_router(member.router)
+app.include_router(garvey.router)
+app.include_router(garvey.callback_router)
 app.include_router(participation.router)
 app.include_router(audiobook.router)
 app.include_router(audio.router)
