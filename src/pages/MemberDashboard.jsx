@@ -66,6 +66,59 @@ function formatDate(date) {
   return date.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 }
 
+function normalizeAssessmentText(value) {
+  return String(value || "").toLowerCase().replace(/[\s_]+/g, "-").replace(/[^a-z0-9-]/g, "");
+}
+
+const ASSESSMENT_GROUPS = [
+  { key: "business-owner-assessment", terms: ["business-owner-assessment", "business-assessment", "business-owner"] },
+  { key: "customer-voice-of-customer", terms: ["customer-voice-of-customer", "voice-of-customer", "customer-assessment", "voc"] },
+  { key: "love-archetype-engine", terms: ["love-archetype-engine", "love-engine", "love-archetype"] },
+  { key: "leadership-archetype-engine", terms: ["leadership-archetype-engine", "leadership-engine", "leadership-archetype"] },
+  { key: "loyalty-archetype-engine", terms: ["loyalty-archetype-engine", "loyalty-engine", "loyalty-archetype"] },
+  { key: "youth-rite-of-passage", terms: ["youth-rite-of-passage", "rite-of-passage", "gates"] },
+  { key: "k-6-assessment-mvp", terms: ["k-6-assessment-mvp", "k6-assessment-mvp", "k-6", "k6"] },
+];
+
+function assessmentGroupKey(item) {
+  const raw = [item?.assessment_id, item?.assessment_type, item?.assessment_name, item?.category, item?.slug, item?.id]
+    .filter(Boolean)
+    .map(normalizeAssessmentText)
+    .join(" ");
+  const match = ASSESSMENT_GROUPS.find((group) => group.terms.some((term) => raw.includes(normalizeAssessmentText(term))));
+  return match?.key || normalizeAssessmentText(item?.assessment_id || item?.assessment_type || item?.assessment_name || item?.category || "garvey-assessment");
+}
+
+function assessmentTime(item) {
+  return item?.completed_at || item?.completion_date || item?.created_at || "";
+}
+
+function sortAssessmentsByTime(a, b) {
+  return assessmentTime(b).localeCompare(assessmentTime(a));
+}
+
+function latestCompletedAssessments(results) {
+  const grouped = new Map();
+  results
+    .filter((item) => item?.completion_status === "completed" || item?.completed_at)
+    .forEach((item) => {
+      const key = item.assessment_group_key || assessmentGroupKey(item);
+      grouped.set(key, [...(grouped.get(key) || []), item]);
+    });
+
+  return Array.from(grouped.entries())
+    .map(([key, attempts]) => {
+      const sortedAttempts = [...attempts].sort(sortAssessmentsByTime);
+      return { ...sortedAttempts[0], assessment_group_key: key, attempt_count: sortedAttempts.length, attempt_history: sortedAttempts };
+    })
+    .sort(sortAssessmentsByTime);
+}
+
+function resultLabel(item) {
+  if (typeof item?.primary_result === "string") return item.primary_result;
+  return item?.primary_result?.label || item?.primary_result?.name || item?.archetype?.name || item?.archetype?.label || item?.overall_score || "Saved";
+}
+
 export default function MemberDashboard() {
   const [overview, setOverview] = useState(null);
   const [activity, setActivity] = useState([]);
@@ -77,6 +130,7 @@ export default function MemberDashboard() {
   const [loading, setLoading] = useState(true);
   const [growthProfile, setGrowthProfile] = useState(null);
   const [assessmentResults, setAssessmentResults] = useState([]);
+  const [latestAssessmentResults, setLatestAssessmentResults] = useState([]);
 
   useEffect(() => {
     let mounted = true;
@@ -117,7 +171,9 @@ export default function MemberDashboard() {
         setVerificationRequests(verificationRes?.verification_requests || []);
         setCommunityActivity(communityActivityRes?.activity || []);
         setGrowthProfile(growthRes?.growth_profile || null);
-        setAssessmentResults(Array.isArray(assessmentResultsRes?.results) ? assessmentResultsRes.results : []);
+        const allResults = Array.isArray(assessmentResultsRes?.results) ? assessmentResultsRes.results : [];
+        setAssessmentResults(allResults);
+        setLatestAssessmentResults(Array.isArray(assessmentResultsRes?.latest_results) ? assessmentResultsRes.latest_results : latestCompletedAssessments(allResults));
       } catch (err) {
         if (!mounted) return;
         if (err.status === 401) {
@@ -186,7 +242,7 @@ export default function MemberDashboard() {
   const growthSummary = growthProfile?.summary || {};
   const growthBadges = Array.isArray(growthProfile?.badges) ? growthProfile.badges : [];
   const growthTimeline = Array.isArray(growthProfile?.timeline) ? growthProfile.timeline : [];
-  const completedAssessments = assessmentResults.filter((item) => item?.completion_status === "completed" || item?.completed_at);
+  const completedAssessments = latestAssessmentResults.length ? latestAssessmentResults : latestCompletedAssessments(assessmentResults);
 
   const impactStats = [
     ["Businesses Supported This Month", summary?.businesses_supported_month ?? 0],
@@ -258,7 +314,20 @@ export default function MemberDashboard() {
           <h2>Completed Assessment Results</h2>
           {completedAssessments.length === 0 ? <p>Your completed assessments will appear here automatically after Garvey syncs results.</p> : <div className="builder-dashboard-grid">{completedAssessments.slice(0, 8).map((item) => {
             const resultId = item.result_id || item.assessment_id || item.assessment_name;
-            return <article key={`${resultId}-${item.completed_at}`}><h3>{item.assessment_name}</h3><p><strong>Result:</strong> {typeof item.primary_result === "string" ? item.primary_result : item.primary_result?.label || item.primary_result?.name || item.overall_score || "Saved"}</p><p><strong>Status:</strong> {item.completion_status || "completed"}</p><p><strong>Latest score/result:</strong> {item.overall_score ?? (typeof item.primary_result === "string" ? item.primary_result : JSON.stringify(item.primary_result || "Not scored"))}</p><p><strong>Completed:</strong> {item.completed_at ? new Date(item.completed_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "Recently"}</p><p><strong>Recommended Next:</strong> {item.recommended_next_assessment?.assessment_name || growthSummary.recommended_next_assessment?.assessment_name || "Return to the Assessment Center"}</p><Link to={`/assessments/results/${encodeURIComponent(resultId)}`} className="member-action-btn member-action-btn--secondary">View Results</Link><Link to="/assessments" className="member-action-btn">Retake or Continue</Link></article>;
+            const attempts = Array.isArray(item.attempt_history) ? item.attempt_history : [item];
+            return <article key={item.assessment_group_key || `${resultId}-${item.completed_at}`}>
+              <h3>{item.assessment_name}</h3>
+              <p><strong>Latest Result:</strong> {resultLabel(item)}</p>
+              <p><strong>Status:</strong> {item.completion_status || "completed"}</p>
+              <p><strong>Completed:</strong> {item.completed_at ? new Date(item.completed_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "Recently"}</p>
+              <p><strong>Recommended Next:</strong> {item.recommended_next_assessment?.assessment_name || growthSummary.recommended_next_assessment?.assessment_name || "Return to the Assessment Center"}</p>
+              <Link to={`/assessments/results/${encodeURIComponent(resultId)}`} className="member-action-btn member-action-btn--secondary">View Results</Link>
+              <Link to="/assessments" className="member-action-btn">Retake or Continue</Link>
+              {attempts.length > 1 ? <details className="attempt-history"><summary className="member-action-btn member-action-btn--ghost">View Attempt History</summary><ol>{attempts.map((attempt) => {
+                const attemptResultId = attempt.result_id || attempt.assessment_id || attempt.assessment_name;
+                return <li key={`${attemptResultId}-${attempt.completed_at}`}><span>{attempt.completed_at ? new Date(attempt.completed_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "Recently"} · {resultLabel(attempt)} · {attempt.completion_status || "completed"}</span><Link to={`/assessments/results/${encodeURIComponent(attemptResultId)}`}>View</Link></li>;
+              })}</ol></details> : null}
+            </article>;
           })}</div>}
           {growthTimeline.length ? <ul className="star-timeline">{growthTimeline.slice(0, 4).map((item) => <li key={`${item.assessment_id}-${item.completed_at}`}><strong>{item.assessment_name}</strong><span>{item.completed_at ? new Date(item.completed_at).toLocaleDateString("en-US", { month: "long", year: "numeric" }) : "Recently"} · {item.score ?? "Not scored"}% · {item.status}</span></li>)}</ul> : null}
         </section>
