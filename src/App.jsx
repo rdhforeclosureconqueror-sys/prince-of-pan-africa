@@ -14,7 +14,7 @@ import LeadershipAssessmentPage from "./pages/LeadershipAssessmentPage";
 import LeadershipResultsPage from "./pages/LeadershipResultsPage";
 import SystemVerificationPage from "./pages/SystemVerificationPage";
 import AuthDebugPage from "./pages/AuthDebugPage";
-import AssessmentCenter from "./pages/AssessmentCenter";
+import AssessmentCenter, { AssessmentResultPage } from "./pages/AssessmentCenter";
 import PilotDeferredPage from "./pages/PilotDeferredPage";
 import StudyPage from "./pages/StudyPage";
 import BrainTraining from "./pages/BrainTraining";
@@ -187,6 +187,7 @@ function AppRoutes({ user, rbac, isAdmin, canAccessOrganizer, authChecked, refre
         <Route path="/community/onboarding" element={<CommunityOnboardingPage />} />
         <Route path="/billing/cancel" element={<BillingCancelPage />} />
         <Route path="/assessments" element={<AssessmentCenter />} />
+        <Route path="/assessments/results/:resultId" element={<AssessmentResultPage />} />
         <Route path="/leadership" element={<LeadershipAssessmentPage />} />
         <Route path="/results" element={<LeadershipResultsPage />} />
         <Route path="/ops/verification" element={<SystemVerificationPage />} />

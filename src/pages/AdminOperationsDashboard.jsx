@@ -89,6 +89,7 @@ export default function AdminOperationsDashboard() {
   const [discordResults, setDiscordResults] = useState({});
   const [discordRunning, setDiscordRunning] = useState(null);
   const [discordDiagnostics, setDiscordDiagnostics] = useState(null);
+  const [garveyDiagnostics, setGarveyDiagnostics] = useState(null);
 
   useEffect(() => {
     let mounted = true;
@@ -111,10 +112,11 @@ export default function AdminOperationsDashboard() {
 
     (async () => {
       try {
-        const [overviewResult, activityRes, discordRes] = await Promise.all([
+        const [overviewResult, activityRes, discordRes, garveyRes] = await Promise.all([
           loadOverview(),
           api("/admin/activity-stream"),
           api("/discord/diagnostics").catch(() => null),
+          api("/member/assessments/sync-diagnostics").catch(() => null),
         ]);
 
         if (!mounted) return;
@@ -122,6 +124,7 @@ export default function AdminOperationsDashboard() {
         setOverview(overviewResult.payload?.data || {});
         setActivityItems(activityRes?.items || EMPTY_ARRAY);
         setDiscordDiagnostics(discordRes?.diagnostics || null);
+        setGarveyDiagnostics(garveyRes || null);
       } catch (err) {
         if (!mounted) return;
         setError(formatError(err));
@@ -193,6 +196,31 @@ export default function AdminOperationsDashboard() {
         ))}
       </div>
 
+
+      <section className="cosmic-section">
+        <h2>🧭 Garvey Assessment Sync Diagnostics</h2>
+        <p className="admin-subtext">Shows the latest Garvey callback, latest successful sync, and latest queued/failed sync so silent assessment-sync failures are visible.</p>
+        <table className="admin-table">
+          <thead><tr><th>Signal</th><th>Status</th><th>Member</th><th>Assessment</th><th>Signature Valid</th><th>Error</th><th>Updated</th></tr></thead>
+          <tbody>
+            {[
+              ["Last Garvey callback received", garveyDiagnostics?.last_callback_received],
+              ["Last successful assessment sync", garveyDiagnostics?.last_successful_assessment_sync],
+              ["Last failed/queued assessment sync", garveyDiagnostics?.last_failed_assessment_sync],
+            ].map(([label, row]) => (
+              <tr key={label}>
+                <td><strong>{label}</strong></td>
+                <td>{row?.status || "—"}</td>
+                <td>{row?.synced_member_email || row?.external_user_id || "—"}</td>
+                <td>{row?.assessment_id || "—"}</td>
+                <td>{row?.callback_signature_validation_status === true ? "✅ valid" : row?.callback_signature_validation_status === false ? "❌ invalid" : "—"}</td>
+                <td>{row?.error_message || row?.last_error || "—"}</td>
+                <td>{row?.updated_at ? new Date(row.updated_at).toLocaleString() : "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
 
       <section className="cosmic-section">
         <h2>🦁 Discord Diagnostics</h2>
