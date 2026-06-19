@@ -285,6 +285,55 @@ def _is_official_assessment(item: dict) -> bool:
     )
 
 
+def _assessment_group_key(item: dict) -> str:
+    raw_values = [
+        item.get("assessment_id"),
+        item.get("assessment_type"),
+        item.get("assessment_name"),
+        item.get("category"),
+        item.get("slug"),
+        item.get("id"),
+    ]
+    raw = " ".join(str(value) for value in raw_values if value).replace("_", " ").replace("-", " ").lower()
+    for official in OFFICIAL_ASSESSMENTS:
+        terms = [official["key"], official["title"], *official.get("aliases", [])]
+        normalized_terms = [term.replace("_", " ").replace("-", " ").lower() for term in terms]
+        if any(term and term in raw for term in normalized_terms):
+            return official["key"]
+    fallback = item.get("assessment_id") or item.get("assessment_type") or item.get("assessment_name") or item.get("category") or "garvey-assessment"
+    return _assessment_slug(str(fallback))
+
+
+def _completion_timestamp(item: dict) -> str:
+    return str(item.get("completed_at") or item.get("completion_date") or item.get("created_at") or "")
+
+
+def _completion_sort_key(item: dict) -> tuple[str, str]:
+    return (_completion_timestamp(item), str(item.get("result_id") or item.get("assessment_id") or ""))
+
+
+def _group_assessment_attempts(completions: list[dict]) -> tuple[list[dict], dict]:
+    grouped: dict[str, list[dict]] = {}
+    for completion in completions:
+        if not isinstance(completion, dict):
+            continue
+        grouped.setdefault(_assessment_group_key(completion), []).append(completion)
+
+    latest_results = []
+    attempt_history = {}
+    for key, attempts in grouped.items():
+        sorted_attempts = sorted(attempts, key=_completion_sort_key, reverse=True)
+        latest = dict(sorted_attempts[0])
+        latest["assessment_group_key"] = key
+        latest["attempt_count"] = len(sorted_attempts)
+        latest["attempt_history"] = sorted_attempts
+        latest_results.append(latest)
+        attempt_history[key] = sorted_attempts
+
+    latest_results.sort(key=_completion_sort_key, reverse=True)
+    return latest_results, attempt_history
+
+
 def _filter_official_catalog(payload: dict | list) -> dict | list:
     items = [item for item in _catalog_items(payload) if isinstance(item, dict) and _is_official_assessment(item)]
     if isinstance(payload, list):
@@ -365,7 +414,14 @@ def get_assessment_results(current_user: User = Depends(require_auth), db: Sessi
     profile = _member_profile(db, current_user)
     attributes = profile.attributes or {}
     completions = list(attributes.get("garvey_assessment_completions", []))
-    return {"ok": True, "results": completions, "growth_profile": attributes.get("growth_profile", _blank_growth_profile())}
+    latest_results, attempt_history = _group_assessment_attempts(completions)
+    return {
+        "ok": True,
+        "results": completions,
+        "latest_results": latest_results,
+        "attempt_history": attempt_history,
+        "growth_profile": attributes.get("growth_profile", _blank_growth_profile()),
+    }
 
 
 @router.get("/results/{result_id}")

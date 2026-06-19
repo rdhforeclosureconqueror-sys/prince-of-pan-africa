@@ -165,6 +165,43 @@ class GarveyGrowthSyncTests(unittest.TestCase):
         self.assertEqual(saved["assessment_id"], "450")
 
 
+
+    def test_results_endpoint_groups_latest_attempts_without_deleting_history(self):
+        attempts = [
+            ("business-result-older", "Builder", 70, "2026-06-18T12:00:00Z"),
+            ("business-result-latest", "Architect", 88, "2026-06-19T12:00:00Z"),
+        ]
+        for result_id, label, score, completed_at in attempts:
+            response = self.client.post(
+                "/garvey/callback",
+                headers={"X-Garvey-Callback-Secret": "callback-secret"},
+                json={
+                    "event": "assessment.completed",
+                    "issuer": "simba_wajuma",
+                    "member_email": "growth-member@example.com",
+                    "assessment_id": "business-owner-assessment",
+                    "assessment_type": "business-owner",
+                    "assessment_name": "Business Owner Assessment",
+                    "result_id": result_id,
+                    "completion_status": "completed",
+                    "overall_score": score,
+                    "primary_result": {"label": label},
+                    "completed_at": completed_at,
+                },
+            )
+            self.assertEqual(response.status_code, 200)
+
+        results = self.client.get("/member/assessments/results", cookies=session_cookie(self.member_id))
+        self.assertEqual(results.status_code, 200)
+        payload = results.json()
+        self.assertEqual(len(payload["results"]), 2)
+        self.assertEqual(len(payload["latest_results"]), 1)
+        latest = payload["latest_results"][0]
+        self.assertEqual(latest["result_id"], "business-result-latest")
+        self.assertEqual(latest["attempt_count"], 2)
+        self.assertEqual([attempt["result_id"] for attempt in latest["attempt_history"]], ["business-result-latest", "business-result-older"])
+        self.assertEqual([attempt["result_id"] for attempt in payload["attempt_history"]["business-owner-assessment"]], ["business-result-latest", "business-result-older"])
+
     def test_callback_routes_are_registered(self):
         from app.main import app
 
