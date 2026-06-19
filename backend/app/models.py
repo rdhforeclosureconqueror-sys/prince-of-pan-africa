@@ -139,6 +139,20 @@ class LeadershipAssessment(Base):
     user: Mapped[User] = relationship(back_populates="assessments")
 
 
+class GarveySyncEvent(Base):
+    __tablename__ = "garvey_sync_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    event_type: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    external_user_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    payload: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending", index=True)
+    retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, onupdate=datetime.utcnow)
+
+
 class AudioAsset(Base):
     __tablename__ = "audio_assets"
 
