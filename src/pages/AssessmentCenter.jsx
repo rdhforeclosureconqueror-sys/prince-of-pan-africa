@@ -1,9 +1,8 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
-import { createAssessmentTransferToken, getAssessmentCatalog, getAssessmentResult, getAssessmentResults } from "../api/assessments";
+import React, { useEffect, useState } from "react";
+import { Link, useLocation, useParams } from "react-router-dom";
+import { createAssessmentTransferToken, getArchetypeCatalog, getAssessmentResult } from "../api/assessments";
 import "../styles/dashboard.css";
 
-const ARCHETYPE_BASE_URL = (import.meta.env.VITE_GARVEY_ARCHETYPE_BASE_URL || import.meta.env.VITE_SIMBA_ARCHETYPE_BASE_URL || "").replace(/\/$/, "");
 
 const OFFICIAL_ASSESSMENTS = [
   ["Business Owner Assessment", "business-assessment", "business-owner"],
@@ -95,9 +94,37 @@ const ASSESSMENT_FAMILY_PREVIEWS = [
   },
 ];
 
-function archetypeUrl(collection, slug) {
-  const path = `/archetypes/${collection}/${slug}`;
-  return ARCHETYPE_BASE_URL ? `${ARCHETYPE_BASE_URL}${path}` : path;
+function flattenArchetypeCatalog(payload) {
+  const catalog = payload?.catalog ?? payload;
+  const items = Array.isArray(catalog) ? catalog : Array.isArray(catalog?.archetypes) ? catalog.archetypes : Array.isArray(catalog?.items) ? catalog.items : Array.isArray(catalog?.data) ? catalog.data : [];
+  return items.filter(Boolean);
+}
+
+function archetypeMetadataFor(items, assessmentKey, collection, name) {
+  const targetName = normalizeText(name);
+  const targetCollection = normalizeText(collection);
+  const targetAssessment = normalizeText(assessmentKey);
+  return items.find((item) => {
+    const itemName = normalizeText(item.name || item.title || item.archetype_name || item.slug);
+    const itemCollection = normalizeText(item.collection || item.collection_slug || item.assessment_family || item.family || item.assessment_type || "");
+    const itemAssessment = normalizeText(item.assessment_key || item.assessment_id || item.assessment_family || item.family || item.assessment_type || "");
+    return itemName === targetName && (itemCollection.includes(targetCollection) || itemAssessment.includes(targetAssessment));
+  });
+}
+
+function archetypeProfileUrl(item) {
+  return item?.profile_url || item?.url || item?.canonical_url || item?.href || null;
+}
+
+function collectionUrlFor(items, assessmentKey, collection) {
+  const targetCollection = normalizeText(collection);
+  const targetAssessment = normalizeText(assessmentKey);
+  const item = items.find((entry) => {
+    const itemCollection = normalizeText(entry.collection || entry.collection_slug || entry.assessment_family || entry.family || entry.assessment_type || "");
+    const itemAssessment = normalizeText(entry.assessment_key || entry.assessment_id || entry.assessment_family || entry.family || entry.assessment_type || "");
+    return itemCollection.includes(targetCollection) || itemAssessment.includes(targetAssessment);
+  });
+  return item?.collection_url || item?.collectionUrl || null;
 }
 
 function normalizeText(value) {
@@ -177,7 +204,40 @@ function recommendedNextFor(assessment, catalog, results) {
   return nextIncomplete ? assessmentTitle(nextIncomplete) : "Review your latest results";
 }
 
+function openGarveyWithToken(response) {
+  const params = new URLSearchParams({ token: response.token, return_url: response.return_url || "https://simbawaujamaa.com/dashboard" });
+  window.location.assign(`${response.start_url}?${params.toString()}`);
+}
+
 export default function AssessmentLandingPage() {
+  const [archetypes, setArchetypes] = useState([]);
+  const [startingKey, setStartingKey] = useState(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const response = await getArchetypeCatalog();
+        if (mounted && response?.ok) setArchetypes(flattenArchetypeCatalog(response));
+      } catch {
+        if (mounted) setArchetypes([]);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
+  const enterGarvey = async (assessmentKey = null) => {
+    setStartingKey(assessmentKey || "center");
+    setError("");
+    try {
+      openGarveyWithToken(await createAssessmentTransferToken(assessmentKey, assessmentKey ? "assessment" : "center"));
+    } catch (err) {
+      setError(err.message || "We could not open Garvey right now.");
+      setStartingKey(null);
+    }
+  };
+
   return (
     <main className="admin-dashboard member-launchpad command-center-shell cosmic-readable-shell">
       <header className="mission-control member-hero dashboard-header">
@@ -186,7 +246,7 @@ export default function AssessmentLandingPage() {
         <p className="subtitle">Begin with insight before you begin the assessment. Walk through the official assessment families, preview the archetypes you may discover, and then enter the operational Assessment Center when you are ready to choose your path.</p>
         <div className="mission-status-strip"><span>Native Simba journey</span><span>Powered by the Garvey Assessment Engine</span><span>Results sync to your dashboard</span></div>
         <div className="hero-cta-row">
-          <Link to="/assessments/center" className="member-action-btn">Open Assessment Center</Link>
+          <button type="button" onClick={() => enterGarvey()} className="member-action-btn" disabled={startingKey === "center"}>{startingKey === "center" ? "Opening Garvey..." : "Enter Assessment Center"}</button>
           <Link to="/dashboard" className="member-action-btn member-action-btn--secondary">Back to Dashboard</Link>
         </div>
       </header>
@@ -198,10 +258,11 @@ export default function AssessmentLandingPage() {
       </section>
 
       <section className="cosmic-section member-hub-card member-hub-card--wide">
-        <div className="section-heading-row"><div><p className="section-kicker">Assessment previews</p><h2>Explore what you may discover</h2></div><Link to="/assessments/center" className="member-action-btn">Take Assessment</Link></div>
+        <div className="section-heading-row"><div><p className="section-kicker">Assessment previews</p><h2>Explore what you may discover</h2></div><button type="button" onClick={() => enterGarvey()} className="member-action-btn" disabled={startingKey === "center"}>{startingKey === "center" ? "Opening Garvey..." : "Take Assessment"}</button></div>
+        {error ? <p className="admin-error">⚠️ {error}</p> : null}
         <div className="builder-dashboard-grid">
           {ASSESSMENT_FAMILY_PREVIEWS.map((assessment) => {
-            const collectionUrl = archetypeUrl(assessment.archetypeCollection, "");
+            const collectionUrl = collectionUrlFor(archetypes, assessment.key, assessment.archetypeCollection);
             return (
               <article key={assessment.key} className="member-hub-card">
                 <p className="section-kicker">{assessment.estimatedTime}</p>
@@ -213,12 +274,13 @@ export default function AssessmentLandingPage() {
                 <p><strong>Archetype preview:</strong></p>
                 <div className="command-chip-list" aria-label={`${assessment.shortTitle} archetype preview`}>
                   {assessment.archetypes.map((name) => {
-                    const slug = normalizeText(name);
-                    return <a key={name} href={archetypeUrl(assessment.archetypeCollection, slug)}>{name}</a>;
+                    const meta = archetypeMetadataFor(archetypes, assessment.key, assessment.archetypeCollection, name);
+                    const url = archetypeProfileUrl(meta);
+                    return url ? <a key={name} href={url}>{name}</a> : <span key={name}>{name}</span>;
                   })}
                 </div>
-                <a href={collectionUrl} className="member-action-btn member-action-btn--secondary">View All {assessment.shortTitle} Archetypes</a>
-                <Link to={`/assessments/center?assessment=${encodeURIComponent(assessment.key)}`} className="member-action-btn">Take Assessment</Link>
+                {collectionUrl ? <a href={collectionUrl} className="member-action-btn member-action-btn--secondary">View All {assessment.shortTitle} Archetypes</a> : <p className="data-note">Garvey archetype links are not published yet, so Simba is hiding links instead of guessing.</p>}
+                <button type="button" onClick={() => enterGarvey(assessment.key)} className="member-action-btn" disabled={startingKey === assessment.key}>{startingKey === assessment.key ? "Opening Garvey..." : "Take Assessment"}</button>
               </article>
             );
           })}
@@ -229,115 +291,29 @@ export default function AssessmentLandingPage() {
 }
 
 export function AssessmentCenter() {
-  const [catalog, setCatalog] = useState([]);
-  const [results, setResults] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [startingKey, setStartingKey] = useState(null);
+  const location = useLocation();
   const [error, setError] = useState("");
 
   useEffect(() => {
-    let mounted = true;
+    const requestedAssessment = new URLSearchParams(location.search).get("assessment");
     (async () => {
       try {
-        const [catalogRes, resultsRes] = await Promise.all([getAssessmentCatalog(), getAssessmentResults()]);
-        if (!mounted) return;
-        setCatalog(normalizeCatalog(catalogRes).filter(isOfficialAssessment));
-        setResults(Array.isArray(resultsRes?.results) ? resultsRes.results : []);
+        openGarveyWithToken(await createAssessmentTransferToken(requestedAssessment, requestedAssessment ? "assessment" : "center"));
       } catch (err) {
-        if (mounted) setError(err.message || "Assessment Center is temporarily unavailable.");
-      } finally {
-        if (mounted) setLoading(false);
+        setError(err.message || "We could not open Garvey right now.");
       }
     })();
-    return () => { mounted = false; };
-  }, []);
-
-  const latestResult = useMemo(() => results[0] || null, [results]);
-  const completedCount = useMemo(() => catalog.filter((assessment) => completionFor(assessment, results)).length, [catalog, results]);
-  const primaryRecommendation = useMemo(() => catalog.find((assessment) => !completionFor(assessment, results)) || catalog[0], [catalog, results]);
-
-  const startAssessment = async (assessment) => {
-    const key = typeof assessment === "string" ? assessment : assessmentKey(assessment);
-    setStartingKey(key);
-    setError("");
-    try {
-      const response = await createAssessmentTransferToken(key);
-      const params = new URLSearchParams({ token: response.token, return_url: response.return_url || "https://simbawaujamaa.com/dashboard" });
-      window.location.assign(`${response.start_url}?${params.toString()}`);
-    } catch (err) {
-      setError(err.message || "We could not start this assessment yet.");
-      setStartingKey(null);
-    }
-  };
-
-  if (loading) return <div className="admin-loading">Loading Assessment Center...</div>;
+  }, [location.search]);
 
   return (
     <main className="admin-dashboard member-launchpad command-center-shell cosmic-readable-shell">
       <header className="mission-control member-hero dashboard-header">
-        <p className="member-kicker">Official Assessment Center</p>
-        <h1>Continue Your Journey</h1>
-        <p className="subtitle">Choose an assessment, complete the consent step in the official flow, and return to Simba when your results are ready. Powered by the Garvey Assessment Engine.</p>
-        <div className="mission-status-strip"><span>{catalog.length} assessments available</span><span>{completedCount} completed</span><span>Recommended next: {primaryRecommendation ? assessmentTitle(primaryRecommendation) : "None yet"}</span></div>
-        <div className="hero-cta-row">
-          <Link to="/assessments" className="member-action-btn member-action-btn--secondary">Explore Assessment Previews</Link>
-          <Link to="/dashboard" className="member-action-btn member-action-btn--secondary">Back to Simba Dashboard</Link>
-        </div>
+        <p className="member-kicker">Garvey Assessment Center</p>
+        <h1>Opening Garvey’s official assessment center…</h1>
+        <p className="subtitle">Simba is creating your secure transfer token and sending you directly to Garvey for consent, launch, results, and archetype pages.</p>
+        {error ? <section className="cosmic-section admin-error">⚠️ {error}</section> : null}
+        <Link to="/assessments" className="member-action-btn member-action-btn--secondary">Back to Simba Assessment Landing</Link>
       </header>
-
-      {error ? <section className="cosmic-section admin-error">⚠️ {error}</section> : null}
-
-      {latestResult ? (
-        <section className="cosmic-section member-hub-card member-hub-card--wide">
-          <p className="section-kicker">Continue Your Journey</p>
-          <h2>Latest Assessment Result</h2>
-          <p><strong>Assessment:</strong> {latestResult.assessment_name}</p>
-          <p><strong>Primary result:</strong> {typeof latestResult.primary_result === "string" ? latestResult.primary_result : latestResult.primary_result?.label || latestResult.primary_result?.name || JSON.stringify(latestResult.primary_result || "Saved")}</p>
-          <p><strong>Completed:</strong> {latestResult.completed_at ? new Date(latestResult.completed_at).toLocaleString() : "Recently"}</p>
-          {latestResult.star_reward_eligible ? <p className="star-reward-label">STAR reward eligible · processed once through Simba participation.</p> : null}
-          {latestResult.recommended_next_steps ? <pre className="data-note">{typeof latestResult.recommended_next_steps === "string" ? latestResult.recommended_next_steps : JSON.stringify(latestResult.recommended_next_steps, null, 2)}</pre> : null}
-          <Link className="member-action-btn member-action-btn--secondary" to={`/assessments/results/${encodeURIComponent(latestResult.result_id || latestResult.assessment_id || latestResult.assessment_name)}`}>View Results</Link>
-        </section>
-      ) : null}
-
-      <section className="cosmic-section member-hub-card member-hub-card--wide">
-        <div className="section-heading-row">
-          <div><p className="section-kicker">Progress</p><h2>Available Assessments</h2></div>
-          <Link to="/dashboard" className="member-action-btn member-action-btn--secondary">Back to Simba Dashboard</Link>
-        </div>
-        {catalog.length === 0 ? <p>No assessments are open right now. Check back soon.</p> : (
-          <div className="builder-dashboard-grid">
-            {catalog.map((assessment) => {
-              const key = assessmentKey(assessment);
-              const completed = completionFor(assessment, results);
-              const status = statusFor(assessment, completed);
-              const action = actionFor(status, completed);
-              const score = scoreFor(completed);
-              const recommendedNext = completed?.recommended_next_assessment?.assessment_name || recommendedNextFor(assessment, catalog, results);
-              return (
-                <article key={key} className="member-hub-card">
-                  <p className="section-kicker">{assessmentCategory(assessment)}</p>
-                  <h3>{assessmentTitle(assessment)}</h3>
-                  <p>{assessmentDescription(assessment)}</p>
-                  <p><strong>Estimated time:</strong> {assessmentTime(assessment)}</p>
-                  <p><strong>Category:</strong> {assessmentCategory(assessment)}</p>
-                  <p><strong>Difficulty:</strong> {difficultyFor(assessment)}</p>
-                  <p><strong>Status:</strong> {status === "completed" ? "✅ Completed" : status === "in_progress" ? "In Progress" : "Not Started"}</p>
-                  <p><strong>Last completed:</strong> {completed?.completed_at ? new Date(completed.completed_at).toLocaleDateString() : "Not yet"}</p>
-                  <p><strong>Current score:</strong> {score !== null ? `${score}%` : "Not scored"}</p>
-                  <p><strong>Recommended next assessment:</strong> {recommendedNext}</p>
-                  {String(assessmentTitle(assessment)).toLowerCase().includes("rite") || String(assessmentTitle(assessment)).toLowerCase().includes("k–6") || String(assessmentTitle(assessment)).toLowerCase().includes("k-6") ? <p className="data-note">Youth and K–6 assessments may ask a parent or guardian to confirm setup inside this official flow.</p> : null}
-                  {assessment.star_reward ? <strong className="star-reward-label">STAR eligible</strong> : null}
-                  {completed ? <Link className="member-action-btn member-action-btn--secondary" to={`/assessments/results/${encodeURIComponent(completed.result_id || completed.assessment_id)}`}>View Results</Link> : null}
-                  <button type="button" className="member-action-btn" onClick={() => startAssessment(assessment)} disabled={startingKey === key}>
-                    {startingKey === key ? "Opening..." : action}
-                  </button>
-                </article>
-              );
-            })}
-          </div>
-        )}
-      </section>
     </main>
   );
 }
@@ -384,7 +360,7 @@ export function AssessmentResultPage() {
           <ul>{(result?.strengths || []).map((item) => <li key={item}>{item}</li>)}</ul>
           <h2>Recommendations</h2>
           <pre className="data-note">{typeof result?.recommended_next_steps === "string" ? result.recommended_next_steps : JSON.stringify(result?.recommended_next_steps || result?.opportunities_for_growth || [], null, 2)}</pre>
-          <Link to="/assessments/center" className="member-action-btn">Retake or Continue Assessment Center</Link>
+          <Link to="/assessments/center" className="member-action-btn">Retake or Continue in Garvey</Link>
           <Link to="/dashboard" className="member-action-btn member-action-btn--secondary">Back to Simba Dashboard</Link>
         </section>
       )}

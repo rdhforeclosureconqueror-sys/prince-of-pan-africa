@@ -97,6 +97,7 @@ def _display_name(user: User, profile: MemberProfile | None) -> str:
 
 class TransferTokenPayload(BaseModel):
     redirect_assessment: str | None = Field(default=None, max_length=160)
+    destination: str | None = Field(default="assessment", max_length=80)
 
 
 class GarveyCompletionPayload(BaseModel):
@@ -108,23 +109,28 @@ class GarveyCompletionPayload(BaseModel):
     external_membership_id: str | int | None = None
     assessment_type: str | None = None
     assessment_id: str | None = None
-    assessment_name: str
+    assessment_name: str | None = None
     result_id: str | None = None
     completion_status: str = "completed"
     overall_score: float | None = None
     percentile: float | None = None
     strengths: list[str] = Field(default_factory=list)
     opportunities_for_growth: list[str] = Field(default_factory=list)
-    recommended_next_assessment: str | None = None
+    recommended_next_assessment: str | dict | None = None
     recommendation_confidence: float | None = None
     primary_result: dict | str | None = None
     recommended_next_steps: list | dict | str | None = None
+    recommendations: list | dict | str | None = None
+    result_summary: dict | str | None = None
+    result_url: str | None = None
+    archetype: dict | str | None = None
     star_reward_eligible: bool = False
     completed_at: datetime | None = None
 
     class Config:
         allow_population_by_field_name = True
         populate_by_name = True
+        extra = "allow"
 
 
 def _payload_json(payload: BaseModel) -> dict:
@@ -167,7 +173,7 @@ def _category_from_payload(payload: GarveyCompletionPayload) -> str:
         return "Youth Rite of Passage / Gates"
     if "k 6" in raw or "k6" in raw or "elementary" in raw:
         return "K–6 Assessment MVP"
-    return payload.assessment_name
+    return payload.assessment_name or payload.assessment_type or payload.assessment_id or "Garvey Assessment"
 
 
 def _blank_growth_profile() -> dict:
@@ -186,8 +192,11 @@ def _recommended_review_date(completed_at: datetime) -> str:
     return (completed_at + timedelta(days=90)).date().isoformat()
 
 
-def _next_assessment(profile: dict, fallback: str | None) -> dict:
+def _next_assessment(profile: dict, fallback: str | dict | None) -> dict:
     if fallback:
+        if isinstance(fallback, dict):
+            name = fallback.get("assessment_name") or fallback.get("name") or fallback.get("title") or fallback.get("key") or "Recommended Garvey assessment"
+            return {**fallback, "assessment_name": name, "confidence": fallback.get("confidence"), "reason": fallback.get("reason") or "Garvey recommended this from the latest result."}
         return {"assessment_name": fallback, "confidence": None, "reason": "Garvey recommended this from the latest result."}
     attempted = {name for name in GROWTH_CATEGORIES if _category_attempts(profile, name)}
     next_item = next((item for item in OFFICIAL_ASSESSMENTS if item["title"] not in attempted), OFFICIAL_ASSESSMENTS[0])
@@ -202,11 +211,12 @@ def _apply_assessment_completion(profile: dict, payload: GarveyCompletionPayload
     category = _category_from_payload(payload)
     cat = growth["categories"].setdefault(category, {"assessments": {}, "latest_score": None, "status": "not_started"})
     assessments = cat.setdefault("assessments", {})
-    assessment_id = payload.assessment_id or payload.assessment_type or payload.assessment_name
+    assessment_name = payload.assessment_name or payload.assessment_type or payload.assessment_id or "Garvey Assessment"
+    assessment_id = payload.assessment_id or payload.assessment_type or assessment_name
     current = assessments.get(assessment_id, {})
     score = payload.overall_score
     attempts = int(current.get("attempts") or 0) + 1
-    record = {**current, "assessment_id": assessment_id, "assessment_name": payload.assessment_name, "latest_score": score, "highest_score": max([v for v in [current.get("highest_score"), score] if v is not None], default=None), "completion_date": completed_at.isoformat(), "attempts": attempts, "completion_status": payload.completion_status, "recommended_review_date": _recommended_review_date(completed_at), "percentile": payload.percentile, "strengths": payload.strengths, "opportunities_for_growth": payload.opportunities_for_growth}
+    record = {**current, "assessment_id": assessment_id, "assessment_name": assessment_name, "latest_score": score, "highest_score": max([v for v in [current.get("highest_score"), score] if v is not None], default=None), "completion_date": completed_at.isoformat(), "attempts": attempts, "completion_status": payload.completion_status, "recommended_review_date": _recommended_review_date(completed_at), "percentile": payload.percentile, "strengths": payload.strengths, "opportunities_for_growth": payload.opportunities_for_growth}
     assessments[assessment_id] = record
     cat["latest_score"] = score
     cat["status"] = payload.completion_status
@@ -214,7 +224,7 @@ def _apply_assessment_completion(profile: dict, payload: GarveyCompletionPayload
     if payload.recommendation_confidence is not None:
         recommendation["confidence"] = payload.recommendation_confidence
     record["recommended_next_assessment"] = recommendation
-    growth["timeline"] = [{"assessment_id": assessment_id, "assessment_name": payload.assessment_name, "category": category, "score": score, "status": payload.completion_status, "completed_at": completed_at.isoformat()}, *[i for i in growth.get("timeline", []) if i.get("result_id") != payload.result_id]][:100]
+    growth["timeline"] = [{"assessment_id": assessment_id, "assessment_name": assessment_name, "category": category, "score": score, "status": payload.completion_status, "completed_at": completed_at.isoformat()}, *[i for i in growth.get("timeline", []) if i.get("result_id") != payload.result_id]][:100]
     completed = sum(1 for item in growth["categories"].values() if item.get("status") == "completed")
     total_attempts = sum(_category_attempts(growth, name) for name in GROWTH_CATEGORIES)
     growth["summary"] = {"overall_completion": round((completed / len(GROWTH_CATEGORIES)) * 100), "completed_assessments": completed, "total_attempts": total_attempts, "recommended_next_assessment": recommendation}
@@ -283,6 +293,26 @@ def _official_assessment_key(raw: str) -> str:
         "k-6": "k-6-assessment-mvp",
     }
     return aliases.get(normalized, raw)
+
+
+@router.get("/archetypes")
+def get_archetype_catalog(current_user: User = Depends(require_auth)):
+    base = _configured_garvey_base()
+    del current_user
+    errors: list[str] = []
+    for path in ("api/simbawajuma/archetypes", "api/simbawajuma/assessment-archetypes"):
+        try:
+            with httpx.Client(timeout=8.0) as client:
+                response = client.get(urljoin(f"{base}/", path))
+                if response.status_code == 404:
+                    errors.append(f"{path}: 404")
+                    continue
+                response.raise_for_status()
+                payload = response.json()
+                return {"ok": True, "source": path, "base_url": base, "catalog": payload}
+        except httpx.HTTPError as exc:
+            errors.append(f"{path}: {exc}")
+    return {"ok": False, "source": None, "base_url": base, "catalog": [], "detail": "Garvey archetype catalog is unavailable; Simba will hide archetype links instead of guessing.", "errors": errors}
 
 
 @router.post("/transfer-token")
@@ -356,13 +386,15 @@ def _process_garvey_assessment_callback(
     payload: GarveyCompletionPayload,
     x_garvey_callback_secret: str | None = Header(default=None, alias="X-Garvey-Callback-Secret"),
     authorization: str | None = Header(default=None),
+    x_garvey_signature: str | None = None,
+    x_garvey_timestamp: str | None = None,
     db: Session = Depends(get_db),
 ):
     expected_secret = settings.GARVEY_CALLBACK_SECRET.strip()
     bearer = authorization.removeprefix("Bearer ").strip() if authorization else None
     if not expected_secret or not hmac.compare_digest(x_garvey_callback_secret or bearer or "", expected_secret):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Garvey callback secret")
-    if payload.event != "assessment.completed":
+    if payload.event not in {"assessment.completed", "assessment.result.completed", "completed", "assessment_completion"}:
         raise HTTPException(status_code=400, detail="Unsupported Garvey assessment event")
     if settings.GARVEY_ALLOWED_ISSUER and payload.issuer and payload.issuer != settings.GARVEY_ALLOWED_ISSUER:
         raise HTTPException(status_code=403, detail="Unsupported Garvey issuer")
@@ -371,9 +403,10 @@ def _process_garvey_assessment_callback(
     if payload.external_user_id is not None:
         try:
             simba_user_id = int(payload.external_user_id)
-        except (TypeError, ValueError) as exc:
-            raise HTTPException(status_code=400, detail="Invalid Simba member id") from exc
-        user = db.query(User).filter(User.id == simba_user_id).first()
+        except (TypeError, ValueError):
+            simba_user_id = None
+        if simba_user_id is not None:
+            user = db.query(User).filter(User.id == simba_user_id).first()
     callback_email = (payload.member_email or payload.email or "").strip().lower()
     if not user and callback_email:
         user = db.query(User).filter(User.email == callback_email).first()
@@ -384,14 +417,16 @@ def _process_garvey_assessment_callback(
         return {"ok": False, "queued": True, "detail": "Simba member not found; queued for retry"}
     profile = _member_profile(db, user)
     completed_at = payload.completed_at or datetime.utcnow()
+    assessment_name = payload.assessment_name or payload.assessment_type or payload.assessment_id or "Garvey Assessment"
+    recommended_steps = payload.recommended_next_steps if payload.recommended_next_steps is not None else payload.recommendations
     attributes = dict(profile.attributes or {})
     growth_profile, assessment_record = _apply_assessment_completion(attributes.get("growth_profile", _blank_growth_profile()), payload, completed_at)
     completion = {
         "assessment_type": payload.assessment_type or _category_from_payload(payload).lower().replace(" ", "_"),
         "category": _category_from_payload(payload),
-        "assessment_id": payload.assessment_id or payload.assessment_type or payload.assessment_name,
-        "assessment_name": payload.assessment_name,
-        "result_id": payload.result_id or payload.assessment_id or payload.assessment_name,
+        "assessment_id": payload.assessment_id or payload.assessment_type or assessment_name,
+        "assessment_name": assessment_name,
+        "result_id": payload.result_id or payload.assessment_id or assessment_name,
         "completion_status": payload.completion_status,
         "overall_score": payload.overall_score,
         "percentile": payload.percentile,
@@ -399,7 +434,11 @@ def _process_garvey_assessment_callback(
         "opportunities_for_growth": payload.opportunities_for_growth,
         "recommended_next_assessment": assessment_record.get("recommended_next_assessment"),
         "primary_result": payload.primary_result,
-        "recommended_next_steps": payload.recommended_next_steps,
+        "recommended_next_steps": recommended_steps,
+        "recommendations": payload.recommendations,
+        "result_summary": payload.result_summary,
+        "result_url": payload.result_url,
+        "archetype": payload.archetype,
         "star_reward_eligible": payload.star_reward_eligible,
         "completed_at": completed_at.isoformat(),
     }
@@ -418,14 +457,19 @@ def _process_garvey_assessment_callback(
         metadata = {"result_id": payload.result_id, "assessment_type": payload.assessment_type, "completion_key": f"garvey:{payload.result_id}"}
         duplicate = find_duplicate_activity(db, user=user, guest_session_id=None, activity_type_name="quiz_completed", source_module="assessment_center", metadata=metadata)
         activity = submit_activity(db, user=user, guest_session_id=None, activity_type_name="quiz_completed", source_module="assessment_center", metadata=metadata)
-    db.add(GarveySyncEvent(event_type=payload.event, external_user_id=external_id, payload=_sync_event_payload(payload, signature_valid=True, synced_member_email=user.email), status="processed", retry_count=0))
+    event_payload = _sync_event_payload(payload, signature_valid=True, synced_member_email=user.email)
+    event_payload["sync_diagnostics"]["garvey_signature_header_present"] = bool(x_garvey_signature)
+    event_payload["sync_diagnostics"]["garvey_timestamp_header_present"] = bool(x_garvey_timestamp)
+    missing = [key for key, value in {"member_email": callback_email, "result_id": payload.result_id, "result_url": payload.result_url, "assessment_id": payload.assessment_id}.items() if not value]
+    event_payload["sync_diagnostics"]["missing_optional_fields"] = missing
+    db.add(GarveySyncEvent(event_type=payload.event, external_user_id=external_id, payload=event_payload, status="processed", retry_count=0))
     db.commit()
     return {"ok": True, "stored": completion, "growth_profile": growth_profile, "star_awarded": bool(activity and not duplicate), "activity_id": activity.id if activity else None}
 
 
 @legacy_callback_router.post("/assessment-callback")
-def garvey_legacy_assessment_callback(payload: GarveyCompletionPayload, x_garvey_callback_secret: str | None = Header(default=None, alias="X-Garvey-Callback-Secret"), authorization: str | None = Header(default=None), db: Session = Depends(get_db)):
-    return _process_garvey_assessment_callback(payload, x_garvey_callback_secret, authorization, db)
+def garvey_legacy_assessment_callback(payload: GarveyCompletionPayload, x_garvey_callback_secret: str | None = Header(default=None, alias="X-Garvey-Callback-Secret"), authorization: str | None = Header(default=None), x_garvey_signature: str | None = Header(default=None, alias="X-Garvey-Signature"), x_garvey_timestamp: str | None = Header(default=None, alias="X-Garvey-Timestamp"), db: Session = Depends(get_db)):
+    return _process_garvey_assessment_callback(payload, x_garvey_callback_secret, authorization, x_garvey_signature, x_garvey_timestamp, db)
 
 
 @callback_router.get("/garvey/callback")
@@ -439,10 +483,10 @@ def api_garvey_callback_status():
 
 
 @callback_router.post("/garvey/callback")
-def garvey_callback(payload: GarveyCompletionPayload, x_garvey_callback_secret: str | None = Header(default=None, alias="X-Garvey-Callback-Secret"), authorization: str | None = Header(default=None), db: Session = Depends(get_db)):
-    return _process_garvey_assessment_callback(payload, x_garvey_callback_secret, authorization, db)
+def garvey_callback(payload: GarveyCompletionPayload, x_garvey_callback_secret: str | None = Header(default=None, alias="X-Garvey-Callback-Secret"), authorization: str | None = Header(default=None), x_garvey_signature: str | None = Header(default=None, alias="X-Garvey-Signature"), x_garvey_timestamp: str | None = Header(default=None, alias="X-Garvey-Timestamp"), db: Session = Depends(get_db)):
+    return _process_garvey_assessment_callback(payload, x_garvey_callback_secret, authorization, x_garvey_signature, x_garvey_timestamp, db)
 
 
 @callback_router.post("/api/garvey/callback")
-def api_garvey_callback(payload: GarveyCompletionPayload, x_garvey_callback_secret: str | None = Header(default=None, alias="X-Garvey-Callback-Secret"), authorization: str | None = Header(default=None), db: Session = Depends(get_db)):
-    return _process_garvey_assessment_callback(payload, x_garvey_callback_secret, authorization, db)
+def api_garvey_callback(payload: GarveyCompletionPayload, x_garvey_callback_secret: str | None = Header(default=None, alias="X-Garvey-Callback-Secret"), authorization: str | None = Header(default=None), x_garvey_signature: str | None = Header(default=None, alias="X-Garvey-Signature"), x_garvey_timestamp: str | None = Header(default=None, alias="X-Garvey-Timestamp"), db: Session = Depends(get_db)):
+    return _process_garvey_assessment_callback(payload, x_garvey_callback_secret, authorization, x_garvey_signature, x_garvey_timestamp, db)
