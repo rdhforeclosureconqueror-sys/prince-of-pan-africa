@@ -78,9 +78,48 @@ class GarveyGrowthSyncTests(unittest.TestCase):
         growth = self.client.get("/member/assessments/growth-profile", cookies=session_cookie(self.member_id))
         self.assertEqual(growth.status_code, 200)
         profile = growth.json()["growth_profile"]
-        self.assertEqual(profile["categories"]["Leadership"]["latest_score"], 82)
-        self.assertEqual(profile["categories"]["Leadership"]["assessments"]["leadership-core"]["attempts"], 1)
+        self.assertEqual(profile["categories"]["Leadership Archetype Engine"]["latest_score"], 82)
+        self.assertEqual(profile["categories"]["Leadership Archetype Engine"]["assessments"]["leadership-core"]["attempts"], 1)
         self.assertIn("First Assessment", [badge["label"] for badge in profile["badges"]])
+
+    def test_signed_garvey_callback_saves_result_for_member_by_email(self):
+        response = self.client.post(
+            "/garvey/callback",
+            headers={"X-Garvey-Callback-Secret": "callback-secret"},
+            json={
+                "event": "assessment.completed",
+                "issuer": "simba_wajuma",
+                "member_email": "growth-member@example.com",
+                "assessment_id": "voice-of-customer",
+                "assessment_type": "voice-of-customer",
+                "assessment_name": "Voice of Customer",
+                "result_id": "garvey-email-result-1",
+                "completion_status": "completed",
+                "overall_score": 91,
+                "primary_result": {"label": "Community Listener"},
+                "completed_at": "2026-06-19T13:00:00Z",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["ok"])
+
+        results = self.client.get("/member/assessments/results", cookies=session_cookie(self.member_id))
+        self.assertEqual(results.status_code, 200)
+        saved = results.json()["results"][0]
+        self.assertEqual(saved["result_id"], "garvey-email-result-1")
+        self.assertEqual(saved["assessment_name"], "Voice of Customer")
+        self.assertEqual(saved["primary_result"]["label"], "Community Listener")
+
+    def test_callback_routes_are_registered(self):
+        from app.main import app
+
+        post_routes = {route.path for route in app.routes if "POST" in getattr(route, "methods", set())}
+        get_routes = {route.path for route in app.routes if "GET" in getattr(route, "methods", set())}
+        self.assertIn("/garvey/callback", post_routes)
+        self.assertIn("/api/garvey/callback", post_routes)
+        self.assertIn("/api/simbawajuma/assessment-callback", post_routes)
+        self.assertIn("/garvey/callback", get_routes)
+        self.assertIn("/api/garvey/callback", get_routes)
 
     def test_unknown_member_callback_is_queued_for_retry(self):
         response = self.client.post(
