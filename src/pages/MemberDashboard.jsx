@@ -369,6 +369,7 @@ export default function MemberDashboard() {
   const weeklySpotlight = communityFeed?.spotlight || { type: "Language Spotlight", title: swahiliWord ? swahiliWord.swahili : "Swahili Foundations", body: "Practice one word today and build cultural continuity without rushing.", href: "/languages/swahili.html" };
   const energyMeter = communityFeed?.energy_meter || { label: heartbeatFeed.length > 8 ? "Active" : heartbeatFeed.length > 2 ? "Growing" : "Quiet", basis: "Based only on visible recorded activity." };
   const futureSections = ["Local Meetups", "Study Circles", "Business Collaborations", "Investment Circles", "Mentorship", "Cooperative Purchasing", "Mutual Aid", "Community Funding"];
+  const operationsApplications = SIMBA_APPLICATIONS.filter((application) => application.category === "Community Operations");
   const recentlyUsedApplications = SIMBA_APPLICATIONS.filter((application) => ["member-home", "community", "library"].includes(application.id));
   const recommendedApplications = SIMBA_APPLICATIONS.filter((application) => ["assessments", "languages", "star-rewards"].includes(application.id));
 
@@ -443,6 +444,12 @@ export default function MemberDashboard() {
         <section className="cosmic-section member-hub-card member-hub-card--wide living-section continue-journey-apps-card">
           <div className="section-heading-row"><div><p className="section-kicker">Recommended Applications</p><h2>Continue Your Journey</h2></div><span className="trust-badge">Favorites & pinned apps coming soon</span></div>
           <div className="dashboard-application-grid">{recommendedApplications.map((application) => <ApplicationCard key={application.id} application={application} compact />)}</div>
+        </section>
+
+        <section className="cosmic-section member-hub-card member-hub-card--wide living-section application-launcher-card member-home-priority">
+          <div className="section-heading-row"><div><p className="section-kicker">Community Operations</p><h2>Practice Unity Through Action</h2></div><Link to="/community/preparedness" className="member-action-btn member-action-btn--secondary">Continue Preparedness</Link></div>
+          <p className="heartbeat-intro">Preparedness is the first live operations module. Future modules will coordinate projects, mutual aid, food, chapters, care, funding, and response without duplicating the architecture.</p>
+          <div className="dashboard-application-grid">{operationsApplications.slice(0, 3).map((application) => <ApplicationCard key={application.id} application={application} compact />)}</div>
         </section>
 
         <section className="cosmic-section member-hub-card member-hub-card--wide living-section community-heartbeat-card member-home-priority" id="community-feed">
