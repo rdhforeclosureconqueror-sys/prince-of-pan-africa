@@ -14,8 +14,10 @@ from app.models import (
     ActivityType,
     CommunityReputation,
     GuestSession,
+    LeadershipAssessment,
     ParticipationPoint,
     StarTransaction,
+    Subscription,
     User,
     VerificationRecord,
 )
@@ -114,6 +116,73 @@ def _member_display_name(user: User | None) -> str:
     return local.split()[0].title() if local else "Member"
 
 
+
+def _member_allows_activity_sharing(user: User | None) -> bool:
+    """Respect profile privacy before placing a member name in community feed copy."""
+    if not user:
+        return False
+    attrs = getattr(getattr(user, "profile", None), "attributes", {}) or {}
+    privacy = attrs.get("privacy") if isinstance(attrs.get("privacy"), dict) else {}
+    if privacy.get("share_achievements") is False or attrs.get("share_achievements") is False:
+        return False
+    if privacy.get("show_in_activity_feed") is False or attrs.get("show_in_activity_feed") is False:
+        return False
+    return True
+
+
+def _public_member_display_name(user: User | None) -> str:
+    return _member_display_name(user) if _member_allows_activity_sharing(user) else "A member"
+
+
+def _progress(current: int, target: int) -> dict:
+    safe_target = max(int(target or 1), 1)
+    safe_current = max(int(current or 0), 0)
+    return {"current": safe_current, "target": safe_target, "percent": min(100, round((safe_current / safe_target) * 100))}
+
+
+def community_feed_summary(db: Session, *, limit: int = 20) -> dict:
+    """Build a non-social community heartbeat from existing activity data only."""
+    now = datetime.utcnow()
+    week_ago = now - timedelta(days=7)
+    total_members = db.query(User).count()
+    new_members_week = db.query(User).filter(User.created_at >= week_ago).count()
+    total_activities = db.query(Activity).count()
+    week_activities = db.query(Activity).filter(Activity.timestamp >= week_ago).count()
+    total_star = int(db.query(func.coalesce(func.sum(Activity.star_award), 0)).scalar() or 0)
+    books_read = db.query(Activity).filter(Activity.activity_type.in_(["book_read", "chapter_read", "audiobook_listen"])).count()
+    language_lessons = db.query(Activity).filter(Activity.activity_type.in_(["language_lesson", "swahili_lesson_completed", "yoruba_lesson_completed", "language_match_completed"])).count()
+    assessments = db.query(LeadershipAssessment).count()
+    businesses = db.query(Subscription).filter(Subscription.tier.ilike("%business%")).count()
+
+    energy = "Quiet"
+    if week_activities >= 100:
+        energy = "Thriving"
+    elif week_activities >= 30:
+        energy = "Active"
+    elif week_activities >= 5 or new_members_week >= 3:
+        energy = "Growing"
+
+    return {
+        "announcements": [
+            {"id": "welcome-heartbeat", "title": "Community Activity Feed is live", "body": "Celebrate learning, service, STAR progress, and opportunities without turning Simba into social media.", "category": "Community Update"},
+            {"id": "volunteer-review", "title": "Volunteer reviewers needed", "body": "Help confirm community contributions when verification requests appear.", "category": "Volunteer Request"},
+        ],
+        "today_challenge": {"title": "Read 10 pages", "action": "Open the library, read with intention, and record one useful insight.", "href": "/library"},
+        "weekly_goal": {"title": "Earn 5,000 STAR together", **_progress(total_star, 5000)},
+        "energy_meter": {"label": energy, "week_activity_count": week_activities, "basis": "Based only on recorded activity from the last 7 days."},
+        "milestones": [
+            {"title": "100 Members", **_progress(total_members, 100)},
+            {"title": "500 Books Read", **_progress(books_read, 500)},
+            {"title": "10,000 STAR Earned", **_progress(total_star, 10000)},
+            {"title": "1,000 Language Lessons", **_progress(language_lessons, 1000)},
+            {"title": "500 Assessments", **_progress(assessments, 500)},
+            {"title": "250 Businesses Joined", **_progress(businesses, 250)},
+        ],
+        "spotlight": {"type": "Book Spotlight", "title": "Start with one foundational reading", "body": "Choose a book from the library and bring one insight back to your next community action.", "href": "/library"},
+        "feed": recent_community_activity(db, limit=limit),
+        "totals": {"members": total_members, "new_members_week": new_members_week, "activities": total_activities, "star": total_star},
+    }
+
 def community_trust_summary(db: Session, *, user_id: int) -> dict:
     reputation = get_or_create_reputation(db, user_id)
     participation = participation_summary(db, user_id=user_id)
@@ -172,7 +241,7 @@ def recent_community_activity(db: Session, *, limit: int = 12) -> list[dict]:
     users = {u.id: u for u in db.query(User).filter(User.id.in_([a.user_id for a in activities if a.user_id])).all()} if activities else {}
     feed = []
     for activity in activities:
-        name = _member_display_name(users.get(activity.user_id))
+        name = _public_member_display_name(users.get(activity.user_id))
         action = activity.activity_type.replace("_", " ")
         if activity.activity_type == "community_verification":
             message = f"{name} earned STAR for helping verify community work."

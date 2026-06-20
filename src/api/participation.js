@@ -45,3 +45,7 @@ export function getOpenVerificationRequests() {
 export function getRecentCommunityActivity() {
   return api("/participation/community-activity/recent", { method: "GET" });
 }
+
+export function getCommunityActivityFeed() {
+  return api("/participation/community-feed", { method: "GET" });
+}

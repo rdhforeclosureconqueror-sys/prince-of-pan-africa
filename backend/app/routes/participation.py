@@ -13,6 +13,7 @@ from app.services.participation import (
     available_opportunities,
     available_rewards,
     community_leaderboards,
+    community_feed_summary,
     community_trust_summary,
     create_labor_verification_request,
     find_duplicate_activity,
@@ -297,3 +298,8 @@ def get_open_verification_requests(limit: int = 10, db: Session = Depends(get_db
 @router.get("/community-activity/recent")
 def get_recent_community_labor_activity(limit: int = 12, db: Session = Depends(get_db), current_user=Depends(require_auth)):
     return {"ok": True, "activity": recent_community_activity(db, limit=limit)}
+
+
+@router.get("/community-feed")
+def get_community_activity_feed(limit: int = 20, db: Session = Depends(get_db), current_user=Depends(require_auth)):
+    return {"ok": True, **community_feed_summary(db, limit=limit)}
