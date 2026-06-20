@@ -1300,3 +1300,236 @@ body {
     gap: 0.8rem;
   }
 }
+
+/* Phase 3 — Member Home emotional presentation */
+.member-home-briefing {
+  display: grid;
+  grid-template-columns: minmax(0, 0.92fr) minmax(320px, 1.08fr);
+  gap: clamp(1.4rem, 4vw, 3rem);
+  align-items: stretch;
+}
+
+.member-home-briefing .briefing-copy {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.briefing-panel {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 0.9rem;
+  padding: clamp(1rem, 2vw, 1.25rem);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 28px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.045));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 24px 60px rgba(0, 0, 0, 0.24);
+  backdrop-filter: blur(18px);
+}
+
+.briefing-panel article,
+.snapshot-grid article,
+.achievement-gallery article,
+.journey-phase-list li {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 20px;
+  background: rgba(4, 12, 28, 0.5);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+.briefing-panel article {
+  padding: 1rem;
+}
+
+.briefing-panel span,
+.snapshot-grid span {
+  display: block;
+  color: #f7d98f;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.briefing-panel strong,
+.snapshot-grid strong {
+  display: block;
+  color: #fff8dc;
+  font-size: clamp(1.2rem, 2.4vw, 1.8rem);
+  line-height: 1.08;
+  margin-top: 0.35rem;
+}
+
+.briefing-panel small {
+  display: block;
+  color: rgba(255, 255, 255, 0.72);
+  margin-top: 0.55rem;
+}
+
+.briefing-mission ul {
+  margin: 0.55rem 0 0;
+  padding-left: 1.1rem;
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.member-home-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.member-home-priority {
+  background:
+    radial-gradient(circle at 15% 0%, rgba(255, 215, 0, 0.14), transparent 34%),
+    linear-gradient(135deg, rgba(17, 24, 39, 0.88), rgba(24, 13, 6, 0.62));
+}
+
+.resume-journey-card p,
+.achievement-spotlight-card p,
+.weekly-reflection-card p,
+.upcoming-journey-card p {
+  color: rgba(255, 255, 255, 0.76);
+}
+
+.journey-ring-layout {
+  display: grid;
+  grid-template-columns: minmax(190px, 260px) 1fr;
+  gap: clamp(1.2rem, 4vw, 2.5rem);
+  align-items: center;
+  margin-top: 1rem;
+}
+
+.journey-ring {
+  width: min(100%, 250px);
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  margin: 0 auto;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at center, rgba(4, 12, 28, 0.95) 0 58%, transparent 59%),
+    conic-gradient(from -90deg, #ffd700 var(--journey-progress), rgba(255, 255, 255, 0.12) 0);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28), 0 0 42px rgba(255, 215, 0, 0.12);
+}
+
+.journey-ring span {
+  color: #fff8dc;
+  font-size: clamp(2rem, 7vw, 3.8rem);
+  font-weight: 900;
+}
+
+.journey-ring small {
+  margin-top: 4.8rem;
+  position: absolute;
+  color: rgba(255, 255, 255, 0.66);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.journey-phase-list,
+.achievement-gallery,
+.snapshot-grid {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.journey-phase-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.journey-phase-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.85rem 1rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.journey-phase-list li span {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #f7d98f;
+  font-weight: 900;
+}
+
+.journey-phase-list li.is-active {
+  border-color: rgba(255, 215, 0, 0.28);
+  color: #fff8dc;
+  background: linear-gradient(135deg, rgba(255, 215, 0, 0.13), rgba(46, 204, 113, 0.08));
+}
+
+.journey-phase-list li.is-active span {
+  color: #111827;
+  background: linear-gradient(135deg, #ffd700, #2ecc71);
+}
+
+.snapshot-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 1rem;
+}
+
+.snapshot-grid article {
+  padding: 1rem;
+  min-height: 105px;
+}
+
+.achievement-gallery {
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  margin-top: 1rem;
+}
+
+.achievement-gallery article {
+  min-height: 150px;
+  padding: 1rem;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.035));
+}
+
+.achievement-gallery article span {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-bottom: 0.75rem;
+  border-radius: 16px;
+  background: rgba(255, 215, 0, 0.14);
+}
+
+.achievement-gallery strong {
+  display: block;
+  color: #fff8dc;
+}
+
+.achievement-gallery small {
+  display: block;
+  margin-top: 0.45rem;
+  color: rgba(255, 255, 255, 0.67);
+}
+
+.weekly-reflection-card blockquote {
+  margin: 1rem 0 0;
+  padding: 1rem;
+  border-left: 3px solid #ffd700;
+  border-radius: 16px;
+  color: #fff8dc;
+  background: rgba(255, 215, 0, 0.08);
+}
+
+.upcoming-journey-card {
+  border-color: rgba(46, 204, 113, 0.24);
+}
+
+@media (max-width: 900px) {
+  .member-home-briefing,
+  .member-home-grid,
+  .journey-ring-layout,
+  .snapshot-grid {
+    grid-template-columns: 1fr;
+  }
+}

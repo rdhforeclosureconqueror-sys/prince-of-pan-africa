@@ -37,5 +37,5 @@ export function canAccessMemberDashboard(user, rbac) {
 }
 
 export function getDashboardLabel(user, rbac) {
-  return isAdminUser(user, rbac) ? "Operations Deck" : "Member Dashboard";
+  return isAdminUser(user, rbac) ? "Operations Deck" : "Member Home";
 }
