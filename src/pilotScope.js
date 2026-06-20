@@ -17,6 +17,7 @@ export const PILOT_INCLUDED_ROUTES = [
   "/membership",
   "/membership/community",
   "/membership/builder",
+  "/community/directory",
 ];
 
 export const PILOT_DEFERRED_ROUTES = [
@@ -35,6 +36,7 @@ export const PILOT_NAV_LINKS = [
   { label: "Languages Hub", to: "/languages" },
   { label: "Library", to: "/library" },
   { label: "Membership", to: "/membership" },
+  { label: "Community", to: "/community/directory" },
   { label: "Assessments", to: "/assessments" },
   { label: "Audiobooks", to: "/study" },
   { label: "Brain Training", to: "/brain-training" },
