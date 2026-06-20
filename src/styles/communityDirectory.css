@@ -1,0 +1,19 @@
+.community-directory { text-align: left; }
+.community-directory__hero { text-align: center; max-width: 980px; margin: 0 auto 2rem; }
+.community-directory__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; max-width: 1180px; margin: 0 auto; }
+.community-card { background: rgba(6, 14, 34, 0.72); border: 1px solid rgba(255, 215, 0, 0.18); border-radius: 24px; padding: 1.25rem; box-shadow: 0 20px 60px rgba(0,0,0,.28); }
+.community-card--wide { grid-column: 1 / -1; }
+.profile-form-grid, .directory-filters, .privacy-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: .75rem; }
+.profile-form-grid label, .directory-filters label, .privacy-grid label { color: rgba(255,255,255,.78); font-weight: 700; text-transform: capitalize; }
+.profile-form-grid input, .directory-filters input { width: 100%; margin-top: .35rem; border: 1px solid rgba(255,255,255,.16); border-radius: 12px; background: rgba(255,255,255,.08); color: #fff; padding: .75rem; box-sizing: border-box; }
+.skill-picker { margin: 1rem 0; }
+.skill-picker button { margin: .25rem; border: 1px solid rgba(46,204,113,.24); border-radius: 999px; background: rgba(46,204,113,.08); color: #d1fae5; padding: .55rem .8rem; cursor: pointer; }
+.skill-picker button.is-selected { background: linear-gradient(135deg, #ffd700, #2ecc71); color: #111827; font-weight: 900; }
+.contribution-list { line-height: 1.8; padding-left: 1.2rem; color: rgba(255,255,255,.82); }
+.member-results { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 1rem; margin-top: 1rem; }
+.member-result-card { border: 1px solid rgba(125,211,252,.2); border-radius: 18px; background: rgba(125,211,252,.08); padding: 1rem; }
+.member-result-card strong, .member-result-card span, .member-result-card small { display: block; }
+.member-result-card strong { color: #fff8dc; font-size: 1.1rem; }
+.member-result-card span, .member-result-card small, .community-card p { color: rgba(255,255,255,.75); }
+.member-result-card p { color: rgba(255,255,255,.86); }
+@media (max-width: 760px) { .community-directory__grid { grid-template-columns: 1fr; } }
