@@ -22,6 +22,7 @@ import { BillingCancelPage, BillingSuccessPage } from "./pages/BillingStatusPage
 import BuilderOnboardingPage from "./pages/BuilderOnboardingPage";
 import CommunityOnboardingPage from "./pages/CommunityOnboardingPage";
 import CommunityDirectoryPage from "./pages/CommunityDirectoryPage";
+import CommunityPreparednessPage from "./pages/CommunityPreparednessPage";
 import { getBackgroundForPath } from "./utils/backgroundSystem";
 import { API_DEBUG, AUTH_DEBUG, ENABLE_TEXT_BOOK_ORGANIZER } from "./config";
 import { api } from "./api/api";
@@ -187,6 +188,7 @@ function AppRoutes({ user, rbac, isAdmin, canAccessOrganizer, authChecked, refre
         <Route path="/builder/onboarding" element={<BuilderOnboardingPage />} />
         <Route path="/community/onboarding" element={<CommunityOnboardingPage />} />
         <Route path="/community/directory" element={<CommunityDirectoryPage />} />
+        <Route path="/preparedness" element={<CommunityPreparednessPage />} />
         <Route path="/billing/cancel" element={<BillingCancelPage />} />
         <Route path="/assessments" element={<AssessmentLandingPage />} />
         <Route path="/assessments/center" element={<AssessmentCenter />} />

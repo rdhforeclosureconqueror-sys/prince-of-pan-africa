@@ -1,0 +1,29 @@
+.preparedness-shell { padding: 8rem 3vw 6rem; position: relative; z-index: 2; }
+.preparedness-hero, .preparedness-command, .preparedness-grid-two, .preparedness-notice { max-width: 1180px; margin: 0 auto 1.5rem; }
+.preparedness-hero { background: linear-gradient(135deg, rgba(4, 12, 28, 0.86), rgba(21, 128, 61, 0.34)); border: 1px solid rgba(187, 247, 208, 0.28); border-radius: 30px; padding: 3rem 2rem; text-align: center; box-shadow: 0 22px 55px rgba(0, 0, 0, 0.38); }
+.preparedness-hero h1 { color: #fde68a; font-size: clamp(2.4rem, 6vw, 5rem); margin: .25rem 0 1rem; }
+.preparedness-hero p { color: rgba(255,255,255,.84); line-height: 1.7; max-width: 860px; margin: 0 auto 1rem; }
+.preparedness-hero strong, .preparedness-profile-score strong { color: #bbf7d0; }
+.preparedness-notice { background: rgba(250, 204, 21, .14); border: 1px solid rgba(250, 204, 21, .32); border-radius: 18px; color: #fef3c7; padding: 1rem 1.2rem; }
+.preparedness-command { display: grid; grid-template-columns: 1.4fr repeat(3, 1fr); gap: 1rem; }
+.preparedness-grid-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.preparedness-card, .preparedness-score-card { background: rgba(4, 12, 28, .74); border: 1px solid rgba(187, 247, 208, .18); border-radius: 24px; padding: 1.25rem; box-shadow: inset 0 0 18px rgba(255,255,255,.025); }
+.preparedness-score-card { background: radial-gradient(circle at top left, rgba(250, 204, 21, .2), rgba(4, 12, 28, .84)); }
+.preparedness-score-card strong { color: #facc15; display: block; font-size: 4rem; line-height: 1; }
+.preparedness-score-card span, .preparedness-metric span { color: #bbf7d0; display: block; font-weight: 900; text-transform: uppercase; letter-spacing: .08em; }
+.preparedness-metric strong { color: #fff7cc; display: block; font-size: 2.4rem; margin: .5rem 0; }
+.preparedness-card h2 { color: #fef3c7; margin: .2rem 0 1rem; }
+.preparedness-card p, .preparedness-card li { color: rgba(255,255,255,.78); line-height: 1.6; }
+.preparedness-radar-row { align-items: center; display: grid; grid-template-columns: 130px 1fr 48px; gap: .75rem; margin: .8rem 0; color: #fff; }
+.preparedness-progress { background: rgba(148, 163, 184, .22); border-radius: 999px; display: block; height: .7rem; overflow: hidden; }
+.preparedness-progress span { background: linear-gradient(90deg, #22c55e, #facc15); display: block; height: 100%; }
+.preparedness-form { display: flex; flex-direction: column; gap: .8rem; }
+.preparedness-form label { color: #d1fae5; display: flex; flex-direction: column; font-size: .82rem; font-weight: 900; gap: .35rem; text-transform: uppercase; letter-spacing: .06em; }
+.preparedness-form input, .preparedness-form select { background: rgba(15, 23, 42, .82); border: 1px solid rgba(187, 247, 208, .22); border-radius: 14px; color: #fff; padding: .8rem; }
+.preparedness-form-row { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: .8rem; }
+.preparedness-form button { align-self: flex-start; background: linear-gradient(135deg, #facc15, #22c55e); border: 0; border-radius: 999px; color: #111827; cursor: pointer; font-weight: 900; padding: .85rem 1.1rem; }
+.preparedness-inventory-list, .preparedness-activity { display: grid; gap: .8rem; margin-top: .5rem; }
+.preparedness-inventory-list div, .preparedness-activity div { background: rgba(255,255,255,.055); border: 1px solid rgba(255,255,255,.1); border-radius: 16px; padding: .75rem; }
+.preparedness-activity strong { color: #bbf7d0; display: block; }
+.preparedness-activity span { color: rgba(255,255,255,.62); font-size: .85rem; }
+@media (max-width: 900px) { .preparedness-command, .preparedness-grid-two { grid-template-columns: 1fr; } .preparedness-radar-row { grid-template-columns: 1fr; } }

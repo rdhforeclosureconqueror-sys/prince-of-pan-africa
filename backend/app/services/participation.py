@@ -44,6 +44,11 @@ DEFAULT_ACTIVITY_TYPES = {
     "builder_onboarding_completed": {"points": 20, "star": 20},
     "share_verified": {"points": 12, "star": 12},
     "community_verification": {"points": 3, "star": 3},
+    "preparedness_profile_completed": {"points": 12, "star": 12},
+    "preparedness_volunteer_joined": {"points": 15, "star": 15},
+    "preparedness_supplies_logged": {"points": 10, "star": 10},
+    "preparedness_training_attended": {"points": 12, "star": 12},
+    "preparedness_household_supported": {"points": 12, "star": 12},
 }
 
 LABOR_CATEGORIES = {
@@ -75,6 +80,9 @@ STAR_OPPORTUNITIES = [
     {"activity_type": "content_shared", "source_module": "community", "title": "Share community content", "star": 4, "href": "#community-feed"},
     {"activity_type": "event_attended", "source_module": "events", "title": "Attend an event", "star": 12, "href": "/calendar"},
     {"activity_type": "member_referred", "source_module": "referrals", "title": "Refer a member", "star": 20, "href": "/membership"},
+    {"activity_type": "preparedness_profile_completed", "source_module": "preparedness", "title": "Complete Preparedness Profile", "star": 12, "href": "/preparedness"},
+    {"activity_type": "preparedness_volunteer_joined", "source_module": "preparedness", "title": "Volunteer for Preparedness", "star": 15, "href": "/preparedness"},
+    {"activity_type": "preparedness_supplies_logged", "source_module": "preparedness", "title": "Log Community Supplies", "star": 10, "href": "/preparedness"},
 ]
 
 logger = logging.getLogger("simba.participation")
