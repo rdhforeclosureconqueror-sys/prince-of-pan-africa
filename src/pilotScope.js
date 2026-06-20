@@ -1,6 +1,7 @@
 export const PILOT_INCLUDED_ROUTES = [
   "/",
   "/dashboard",
+  "/applications",
   "/timeline",
   "/history",
   "/languages",
@@ -32,6 +33,7 @@ export const PILOT_DEFERRED_ROUTES = [
 export const PILOT_NAV_LINKS = [
   { label: "Home", to: "/" },
   { label: "Operations Deck", to: "/dashboard" },
+  { label: "Applications", to: "/applications" },
   { label: "Timeline", to: "/timeline" },
   { label: "Languages Hub", to: "/languages" },
   { label: "Library", to: "/library" },
