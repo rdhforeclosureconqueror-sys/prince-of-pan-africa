@@ -1119,3 +1119,184 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+/* Living Community Journey evolution */
+.living-dashboard-grid {
+  gap: clamp(1rem, 2.4vw, 1.7rem);
+}
+
+.living-section,
+.living-hero-grid article,
+.journey-summary-grid article,
+.placeholder-card-grid article,
+.learning-hub-grid a {
+  transition: transform 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease;
+}
+
+.living-section:hover,
+.living-hero-grid article:hover,
+.journey-summary-grid article:hover,
+.placeholder-card-grid article:hover,
+.learning-hub-grid a:hover {
+  transform: translateY(-3px);
+  border-color: rgba(255, 215, 0, 0.28);
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.living-journey-timeline {
+  list-style: none;
+  margin: clamp(1.5rem, 3vw, 2.5rem) 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0;
+}
+
+.journey-timeline-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1rem;
+  padding: 0 0 1.35rem;
+}
+
+.journey-timeline-item:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  left: 18px;
+  top: 38px;
+  bottom: 0;
+  width: 2px;
+  background: linear-gradient(180deg, rgba(255, 215, 0, 0.8), rgba(210, 35, 42, 0.42), rgba(46, 204, 113, 0.25));
+}
+
+.journey-node {
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  color: #111827;
+  font-weight: 900;
+  background: linear-gradient(135deg, #ffd700, #2ecc71);
+  box-shadow: 0 0 0 6px rgba(255, 215, 0, 0.08);
+}
+
+.journey-timeline-item--current .journey-node {
+  color: #fff8dc;
+  background: linear-gradient(135deg, #d2232a, #111827);
+}
+
+.journey-timeline-item--future .journey-node {
+  color: #f7d98f;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 215, 0, 0.2);
+}
+
+.journey-timeline-item strong {
+  color: #fff8dc;
+  font-size: 1.05rem;
+}
+
+.journey-timeline-item p {
+  margin: 0.25rem 0 0;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.current-focus-card,
+.todays-mission-card,
+.recent-growth-card,
+.community-vision-banner {
+  background:
+    radial-gradient(circle at 10% 0%, rgba(255, 215, 0, 0.16), transparent 32%),
+    linear-gradient(135deg, rgba(17, 24, 39, 0.86), rgba(5, 46, 22, 0.56));
+}
+
+.current-focus-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.2rem;
+}
+
+.current-focus-card p,
+.community-vision-banner p {
+  max-width: 760px;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.mission-list,
+.recent-growth-list {
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.8rem;
+}
+
+.mission-list li,
+.recent-growth-list li {
+  display: flex;
+  gap: 0.7rem;
+  align-items: flex-start;
+  padding: 0.85rem 0.95rem;
+  border-radius: 16px;
+  color: rgba(255, 255, 255, 0.84);
+  background: rgba(255, 255, 255, 0.065);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.mission-list span {
+  color: #ffd700;
+}
+
+.coming-soon-section {
+  background:
+    radial-gradient(circle at 100% 0%, rgba(210, 35, 42, 0.12), transparent 30%),
+    linear-gradient(135deg, rgba(15, 23, 42, 0.82), rgba(4, 12, 28, 0.74));
+}
+
+.coming-soon-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.55rem 0.85rem;
+  border-radius: 999px;
+  color: #111827;
+  background: linear-gradient(135deg, #ffd700, #f7d98f);
+  box-shadow: 0 12px 28px rgba(255, 215, 0, 0.14);
+  white-space: nowrap;
+}
+
+.coming-soon-note {
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 0.95rem;
+}
+
+.community-vision-banner {
+  text-align: center;
+  padding: clamp(1.8rem, 4vw, 3rem);
+  border-color: rgba(46, 204, 113, 0.28);
+}
+
+.community-vision-banner p {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.community-vision-banner strong {
+  display: block;
+  color: #ffd700;
+  font-size: clamp(1.1rem, 2vw, 1.45rem);
+}
+
+@media (max-width: 720px) {
+  .current-focus-card,
+  .section-heading-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .journey-timeline-item {
+    gap: 0.8rem;
+  }
+}

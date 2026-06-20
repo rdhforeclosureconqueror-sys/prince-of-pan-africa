@@ -250,7 +250,34 @@ export default function MemberDashboard() {
   const recommendedAssessment = growthSummary.recommended_next_assessment?.assessment_name || latestAssessment?.recommended_next_assessment?.assessment_name || "Open the Assessment Center";
   const currentStage = growthSummary.completed_assessments > 0 ? `${growthSummary.completed_assessments} assessment${growthSummary.completed_assessments === 1 ? "" : "s"} completed` : completedAssessments.length ? `${completedAssessments.length} assessment${completedAssessments.length === 1 ? "" : "s"} completed` : "Beginning the journey";
   const currentGrowthFocus = latestAssessment?.opportunities_for_growth?.[0] || latestAssessment?.category || growthSummary.recommended_next_assessment?.reason || "Complete your next Garvey assessment to reveal your focus.";
+  const currentFocusTitle = completedAssessments.length ? "Developing Leadership Through Self-Awareness" : "Beginning Your Growth Journey";
+  const currentFocusDescription = completedAssessments.length
+    ? `Based on your most recent assessment, continue strengthening your leadership style by completing ${recommendedAssessment}.`
+    : "Start with one Garvey assessment so Simba can reflect your progress back to you without inventing new scores.";
   const recentAchievement = growthBadges[0]?.label || (completedAssessments.length ? `Completed ${latestAssessmentName}` : "Your first achievement will appear after your first completed assessment.");
+  const missionItems = [
+    learningPath ? `Read or study one section from ${learningPath.title}.` : "Read one chapter from the community library.",
+    swahiliWord ? `Practice today's Swahili word: ${swahiliWord.swahili}.` : "Complete one learning activity.",
+    todayChallenge?.action || "Invite one community member into a constructive conversation.",
+    `Earn ${starOpportunities[0]?.star || 25} STAR through one meaningful action today.`,
+  ];
+  const recentGrowthItems = [
+    completedAssessments.length ? `Completed ${latestAssessmentName}` : "Assessment journey ready to begin",
+    currentStar ? `Earned ${currentStar} total STAR` : "STAR rewards ready for your first action",
+    growthBadges[0]?.label ? `New badge earned: ${growthBadges[0].label}` : "Badge path prepared",
+    completedAssessments.length ? "Assessment synced" : "Garvey sync ready",
+    "Growth journey updated",
+  ];
+  const journeyTimelineItems = [
+    { label: "Joined Simba", detail: membershipStatusLabel, state: "complete" },
+    ...completedAssessments.slice().reverse().map((item) => ({ label: `Completed ${item.assessment_name || item.title || "Garvey Assessment"}`, detail: resultLabel(item), state: "complete" })),
+    currentStar > 0 ? { label: "Earned First STAR Reward", detail: `${currentStar} STAR currently available`, state: "complete" } : { label: "Earn First STAR Reward", detail: "Complete one daily mission or community action", state: "next" },
+    { label: "Current Growth Focus", detail: currentFocusTitle, state: "current" },
+    { label: "Next Recommended Assessment", detail: recommendedAssessment, state: "next" },
+    { label: "Future Community Characteristics", detail: "Coming soon", state: "future" },
+    { label: "Future Community Archetypes", detail: "Coming soon", state: "future" },
+    { label: "Future Community Contribution", detail: "Coming soon", state: "future" },
+  ];
   const latestReward = starRewards.find((reward) => reward.unlocked)?.title || starHistory[0]?.title || starHistory[0]?.activity_type?.replaceAll("_", " ") || "No reward unlocked yet";
   const nextReward = starRewards.find((reward) => !reward.unlocked);
   const nextRewardGoal = nextReward ? `${nextReward.title} · ${nextReward.star_needed} STAR needed` : rankProgress.next_rank ? `${rankProgress.next_rank} · ${rankProgress.star_to_next_rank ?? 0} STAR to go` : "Keep participating to unlock the next milestone";
@@ -285,29 +312,55 @@ export default function MemberDashboard() {
       <main className="member-hub-grid living-dashboard-grid command-grid">
         <section className="cosmic-section member-hub-card member-hub-card--wide living-section growth-journey-card">
           <div className="section-heading-row">
-            <div><p className="section-kicker">Your Growth Journey</p><h2>Where you are becoming stronger</h2></div>
+            <div><p className="section-kicker">Your Growth Journey</p><h2>Where you are and where you are going</h2></div>
             <Link to="/assessments" className="member-action-btn member-action-btn--secondary">Open Assessment Center</Link>
           </div>
           <div className="journey-summary-grid">
-            <article><span>Completed Assessments</span><strong>{completedAssessments.length}</strong><small>Synced from Garvey</small></article>
-            <article><span>Current Community Development Stage</span><strong>{currentStage}</strong><small>Based on existing assessment completion</small></article>
-            <article><span>Latest Assessment</span><strong>{latestAssessmentName}</strong><small>{latestAssessmentDate ? new Date(latestAssessmentDate).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "Complete one to begin"}</small></article>
-            <article><span>Current Growth Focus</span><strong>{currentGrowthFocus}</strong><small>No invented scores</small></article>
-            <article><span>Suggested Next Assessment</span><strong>{recommendedAssessment}</strong><small>{growthSummary.recommended_next_assessment?.reason || "Continue the official Garvey path"}</small></article>
-            <article><span>Recent Achievement</span><strong>{recentAchievement}</strong><small>{growthBadges.length ? "Badge unlocked" : "Achievement history"}</small></article>
+            <article><span>Where You Are</span><strong>{currentStage}</strong><small>{membership?.label || "Member journey"}</small></article>
+            <article><span>What You’ve Accomplished</span><strong>{recentAchievement}</strong><small>{completedAssessments.length} assessment milestone{completedAssessments.length === 1 ? "" : "s"}</small></article>
+            <article><span>What Comes Next</span><strong>{recommendedAssessment}</strong><small>Continue the official Garvey path</small></article>
           </div>
+          <ol className="living-journey-timeline" aria-label="Living community journey timeline">
+            {journeyTimelineItems.map((item, index) => <li key={`${item.label}-${index}`} className={`journey-timeline-item journey-timeline-item--${item.state}`}><span className="journey-node">{item.state === "complete" ? "✓" : item.state === "current" ? "●" : "→"}</span><div><strong>{item.label}</strong><p>{item.detail}</p></div></li>)}
+          </ol>
         </section>
 
-        <section className="cosmic-section member-hub-card member-hub-card--wide living-section future-hook-section">
-          <p className="section-kicker">Community Characteristics</p><h2>Coming Soon</h2>
-          <p>These future indicators will help members understand how they contribute to collective life. Scoring is not active yet.</p>
+        <section className="cosmic-section member-hub-card member-hub-card--wide living-section current-focus-card">
+          <div>
+            <p className="section-kicker">Current Focus</p>
+            <h2>{currentFocusTitle}</h2>
+            <p>{currentFocusDescription}</p>
+          </div>
+          <Link to="/assessments" className="member-action-btn">Continue Journey</Link>
+        </section>
+
+        <section className="cosmic-section member-hub-card living-section todays-mission-card">
+          <p className="section-kicker">Today’s Mission</p><h2>One day. One practice. One contribution.</h2>
+          <ul className="mission-list">{missionItems.map((item) => <li key={item}><span>✦</span>{item}</li>)}</ul>
+        </section>
+
+        <section className="cosmic-section member-hub-card living-section recent-growth-card">
+          <p className="section-kicker">Recent Growth</p><h2>Momentum is building</h2>
+          <ul className="recent-growth-list">{recentGrowthItems.map((item) => <li key={item}>✓ {item}</li>)}</ul>
+        </section>
+
+        <section className="cosmic-section member-hub-card member-hub-card--wide living-section future-hook-section coming-soon-section">
+          <div className="section-heading-row"><div><p className="section-kicker">Community Characteristics</p><h2>Strengths you can intentionally develop</h2></div><strong className="coming-soon-badge">Coming Soon</strong></div>
+          <p>Your assessment history will soon reveal the strengths you consistently demonstrate and the characteristics you can intentionally develop.</p>
+          <p className="coming-soon-note">This feature is currently being built. No characteristic scoring is active.</p>
           <div className="placeholder-card-grid">{["Cooperation", "Leadership", "Stewardship", "Initiative", "Integrity", "Communication"].map((item) => <article key={item}><span>✦</span><strong>{item}</strong><small>Coming Soon</small></article>)}</div>
         </section>
 
-        <section className="cosmic-section member-hub-card member-hub-card--wide living-section future-hook-section archetype-section">
-          <p className="section-kicker">Your Community Archetypes</p><h2>Archetype insights are being prepared</h2>
-          <p>These will be generated from your assessment history as you continue your journey.</p>
-          <div className="placeholder-card-grid placeholder-card-grid--three">{["Builder", "Steward", "Organizer"].map((item) => <article key={item}><span>◌</span><strong>{item}</strong><small>Future pathway hook</small></article>)}</div>
+        <section className="cosmic-section member-hub-card member-hub-card--wide living-section future-hook-section archetype-section coming-soon-section">
+          <div className="section-heading-row"><div><p className="section-kicker">Community Archetypes</p><h2>Future community roles and pathways</h2></div><strong className="coming-soon-badge">Coming Soon</strong></div>
+          <p>Discover the community roles that best match your strengths and learn how to intentionally grow toward new roles.</p>
+          <div className="placeholder-card-grid placeholder-card-grid--three">{["Builder", "Steward", "Organizer"].map((item) => <article key={item}><span>◌</span><strong>{item}</strong><small>Coming Soon</small></article>)}</div>
+        </section>
+
+        <section className="cosmic-section member-hub-card member-hub-card--wide living-section community-placeholder-card coming-soon-section">
+          <div className="section-heading-row"><div><p className="section-kicker">Community Opportunities</p><h2>Personalized ways to contribute</h2></div><strong className="coming-soon-badge">Coming Soon</strong></div>
+          <p>Receive personalized opportunities to contribute your talents to the community.</p>
+          <div className="placeholder-card-grid">{["Upcoming Activities", "Volunteer Opportunities", "Business Opportunities", "Discussion Groups", "Study Circles"].map((item) => <article key={item}><span>✺</span><strong>{item}</strong><small>Coming Soon</small></article>)}</div>
         </section>
 
         <section className="cosmic-section member-hub-card member-hub-card--wide living-section continue-journey-card">
@@ -321,10 +374,6 @@ export default function MemberDashboard() {
           <div className="learning-hub-grid"><Link to="/library"><strong>Books</strong><span>Continue Reading</span></Link><Link to="/study"><strong>Audiobooks</strong><span>Listen and study</span></Link><a href="/languages/swahili.html"><strong>Swahili</strong><span>{swahiliWord ? `Today: ${swahiliWord.swahili}` : "Practice language"}</span></a><a href="/languages/yoruba.html"><strong>Yoruba</strong><span>Continue Learning</span></a><Link to="/brain-training"><strong>Adaptive Learning</strong><span>Train memory and focus</span></Link><Link to="/timeline"><strong>Historical Study</strong><span>{historicalSpotlightTitle}</span></Link></div>
         </section>
 
-        <section className="cosmic-section member-hub-card member-hub-card--wide living-section community-placeholder-card">
-          <p className="section-kicker">Community</p><h2>Connect learning to collective work</h2>
-          <div className="placeholder-card-grid">{["Upcoming Community Activities", "Volunteer Opportunities", "Business Opportunities", "Discussion Groups", "Study Circles"].map((item) => <article key={item}><span>✺</span><strong>{item}</strong><small>Coming Soon</small></article>)}</div>
-        </section>
 
         <section className="cosmic-section member-hub-card member-hub-card--wide living-section star-rewards-card">
           <div className="section-heading-row"><div><p className="section-kicker">STAR Rewards</p><h2>Recognition for participation</h2></div><strong className="trust-badge">{currentStar} STAR</strong></div>
@@ -356,6 +405,13 @@ export default function MemberDashboard() {
         <section className="cosmic-section member-hub-card member-hub-card--wide living-section star-leaderboard-card">
           <p className="section-kicker">Celebration Board</p><h2>Community Leaderboards</h2>
           <div className="star-leaderboard-grid">{Object.entries(leaderboards).map(([name, rows]) => <article key={name}><h3>{name.replaceAll("_", " ")}</h3>{rows?.length ? rows.slice(0, 3).map((row, idx) => <p key={`${name}-${row.user_id}`}>#{idx + 1} Member {row.user_id}: {row.star} STAR</p>) : <p>Be the first this week.</p>}</article>)}</div>
+        </section>
+
+        <section className="cosmic-section member-hub-card member-hub-card--wide living-section community-vision-banner">
+          <p className="section-kicker">Remember Why You’re Here</p>
+          <h2>Every step strengthens both you and the community.</h2>
+          <p>Every lesson completed. Every assessment taken. Every STAR earned. Every book read. Every act of service.</p>
+          <strong>Together we are building a thriving, self-sufficient community.</strong>
         </section>
       </main>
 
