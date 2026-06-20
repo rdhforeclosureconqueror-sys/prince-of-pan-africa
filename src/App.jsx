@@ -188,7 +188,8 @@ function AppRoutes({ user, rbac, isAdmin, canAccessOrganizer, authChecked, refre
         <Route path="/builder/onboarding" element={<BuilderOnboardingPage />} />
         <Route path="/community/onboarding" element={<CommunityOnboardingPage />} />
         <Route path="/community/directory" element={<CommunityDirectoryPage />} />
-        <Route path="/preparedness" element={<CommunityPreparednessPage />} />
+        <Route path="/community/preparedness" element={<CommunityPreparednessPage />} />
+        <Route path="/preparedness" element={<Navigate to="/community/preparedness" replace />} />
         <Route path="/billing/cancel" element={<BillingCancelPage />} />
         <Route path="/assessments" element={<AssessmentLandingPage />} />
         <Route path="/assessments/center" element={<AssessmentCenter />} />
