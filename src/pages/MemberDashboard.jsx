@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import { api } from "../api/api";
 import { getAssessmentResults, getGrowthProfile } from "../api/assessments";
 import { getCommunityTrustExperience, getOpenVerificationRequests, getRecentCommunityActivity, getStarExperience } from "../api/participation";
+import { firstSevenDaysPathway, memberOnboardingSettings } from "../onboarding/memberOnboardingConfig";
+import { completeMemberOnboardingStep, getMemberOnboardingState, mergeDetectedOnboardingSteps, saveMemberOnboardingState, startMemberOnboarding } from "../onboarding/memberOnboardingStorage";
 import { getDailyHistoricalSpotlight } from "../data/dailyHistoricalSpotlights";
 import { TIMELINE_A_AFRICA_ORIGINS } from "../data/timelineA_africaOrigins";
 import swahiliLessons from "../../public/languages/swahili_30days.json";
@@ -131,6 +133,7 @@ export default function MemberDashboard() {
   const [growthProfile, setGrowthProfile] = useState(null);
   const [assessmentResults, setAssessmentResults] = useState([]);
   const [latestAssessmentResults, setLatestAssessmentResults] = useState([]);
+  const [onboardingState, setOnboardingState] = useState(null);
 
   useEffect(() => {
     let mounted = true;
@@ -210,6 +213,7 @@ export default function MemberDashboard() {
   const builderActivation = builder?.activation || {};
   const isBuilder = Boolean(builder?.is_builder || membership?.type === "builder_member");
   const memberName = overview?.profile?.name || overview?.user?.name || overview?.user?.email || overview?.email || "Member";
+  const memberId = overview?.user?.id || overview?.profile?.id || overview?.user?.email || overview?.email || memberName;
   const swahiliDays = Array.isArray(swahiliLessons?.days) ? swahiliLessons.days : [];
   const swahiliLesson = swahiliDays.length ? swahiliDays[(dayOfYear - 1) % swahiliDays.length] : null;
   const swahiliWord = swahiliLesson?.words?.[0] || null;
@@ -322,6 +326,31 @@ export default function MemberDashboard() {
     summary?.lessons_completed ? `Completed ${summary.lessons_completed} lesson${summary.lessons_completed === 1 ? "" : "s"}` : null,
   ].filter(Boolean).slice(0, 4);
 
+
+  const detectedOnboardingSteps = [
+    "mission",
+    completedAssessments.length ? "assessment" : null,
+    currentStar > 0 ? "starAction" : null,
+    (summary?.books_completed || summary?.books_previewed || summary?.audiobooks_started) ? "library" : null,
+    (summary?.lessons_completed || summary?.language_lessons_completed) ? "language" : null,
+    starHistory.some((item) => String(item?.activity_type || "").includes("brain_game")) ? "brainTraining" : null,
+  ].filter(Boolean);
+  const baseOnboardingState = onboardingState || getMemberOnboardingState(memberId);
+  const activeOnboardingState = mergeDetectedOnboardingSteps(baseOnboardingState, detectedOnboardingSteps);
+  const completedOnboardingSteps = new Set(activeOnboardingState.completed_steps || []);
+  const onboardingComplete = Boolean(activeOnboardingState.onboarding_completed_at);
+  const currentOnboardingStep = firstSevenDaysPathway.find((step) => step.key === activeOnboardingState.current_step) || firstSevenDaysPathway.find((step) => !completedOnboardingSteps.has(step.key)) || firstSevenDaysPathway[0];
+  const onboardingProgress = firstSevenDaysPathway.length ? Math.round((completedOnboardingSteps.size / firstSevenDaysPathway.length) * 100) : 100;
+  const showFirstTimeWelcome = !activeOnboardingState.onboarding_started_at && !onboardingComplete;
+  const discordInviteUrl = memberOnboardingSettings.discordInviteUrl;
+
+  const persistOnboarding = (nextState) => {
+    const saved = saveMemberOnboardingState(memberId, nextState);
+    setOnboardingState(saved);
+  };
+  const startOnboarding = () => persistOnboarding(startMemberOnboarding(activeOnboardingState));
+  const markOnboardingStepComplete = (stepKey) => persistOnboarding(completeMemberOnboardingStep(activeOnboardingState, stepKey));
+
   const impactStats = [
     ["Businesses Supported This Month", summary?.businesses_supported_month ?? 0],
     ["Books Completed", summary?.books_completed ?? 0],
@@ -350,6 +379,33 @@ export default function MemberDashboard() {
       </header>
 
       <main className="member-hub-grid living-dashboard-grid command-grid member-home-grid">
+
+        {showFirstTimeWelcome ? (
+          <section className="cosmic-section member-hub-card member-hub-card--wide living-section onboarding-welcome-card">
+            <p className="section-kicker">First-Time Member Welcome</p>
+            <h2>Welcome to Simba wa Ujamaa.</h2>
+            <p>You are entering a Pan-African learning community built around books, language, history, assessments, STAR participation, and cooperative growth.</p>
+            <div className="onboarding-action-row">
+              <button type="button" className="member-action-btn" onClick={startOnboarding}>Start My First 7 Days</button>
+              <button type="button" className="member-action-btn member-action-btn--secondary" onClick={() => markOnboardingStepComplete("mission")}>Explore Member Home</button>
+            </div>
+          </section>
+        ) : null}
+
+        {!onboardingComplete && !showFirstTimeWelcome ? (
+          <section className="cosmic-section member-hub-card member-hub-card--wide living-section onboarding-progress-card">
+            <div className="section-heading-row"><div><p className="section-kicker">First 7 Days</p><h2>{currentOnboardingStep ? `Day ${currentOnboardingStep.day} — ${currentOnboardingStep.title}` : "Onboarding Complete"}</h2></div><strong className="trust-badge">{onboardingProgress}% Complete</strong></div>
+            <div className="onboarding-progress-bar" aria-label={`Onboarding is ${onboardingProgress}% complete`}><span style={{ width: `${onboardingProgress}%` }} /></div>
+            <p>{currentOnboardingStep?.nextAction || "Choose your next Simba journey."}</p>
+            {currentOnboardingStep?.key === "mission" ? <p className="onboarding-mission-copy">Simba wa Ujamaa exists to strengthen people and community through disciplined learning, cooperative economics, cultural memory, language, and daily participation.</p> : null}
+            {currentOnboardingStep?.key === "discord" || currentOnboardingStep?.key === "mission" ? <div className="discord-onboarding-box"><strong>Join the Simba Discord Community</strong><p>Introduce yourself, rep your state or region, join daily discussions, and prepare for community verification later.</p>{discordInviteUrl ? <a className="member-action-btn member-action-btn--secondary" href={discordInviteUrl} target="_blank" rel="noreferrer">Open Discord Invite</a> : <small>Admin note: add VITE_SIMBA_DISCORD_INVITE_URL or VITE_DISCORD_INVITE_URL to show the live invite.</small>}</div> : null}
+            <div className="onboarding-action-row">
+              {currentOnboardingStep?.href ? <Link to={currentOnboardingStep.href} className="member-action-btn">Continue</Link> : null}
+              {currentOnboardingStep ? <button type="button" className="member-action-btn member-action-btn--secondary" onClick={() => markOnboardingStepComplete(currentOnboardingStep.key)}>Mark Step Complete</button> : null}
+            </div>
+            <ol className="onboarding-checklist">{firstSevenDaysPathway.map((step) => <li key={step.key} className={completedOnboardingSteps.has(step.key) ? "is-complete" : step.key === currentOnboardingStep?.key ? "is-current" : ""}><button type="button" onClick={() => markOnboardingStepComplete(step.key)} aria-label={`Mark ${step.title} complete`}>{completedOnboardingSteps.has(step.key) ? "✓" : step.day}</button><div><strong>Day {step.day} — {step.title}</strong><span>{step.tasks.join(" · ")}</span></div></li>)}</ol>
+          </section>
+        ) : null}
         <section className="cosmic-section member-hub-card living-section resume-journey-card member-home-priority">
           <p className="section-kicker">Continue Where You Left Off</p>
           <h2>Resume Journey</h2>

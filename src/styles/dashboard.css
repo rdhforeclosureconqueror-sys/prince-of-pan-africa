@@ -1533,3 +1533,137 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+/* First 7 Days Member Onboarding */
+.onboarding-welcome-card,
+.onboarding-progress-card {
+  border-color: rgba(255, 215, 0, 0.28);
+  background:
+    radial-gradient(circle at 10% 0%, rgba(255, 215, 0, 0.18), transparent 32%),
+    radial-gradient(circle at 92% 12%, rgba(46, 204, 113, 0.16), transparent 30%),
+    linear-gradient(135deg, rgba(17, 24, 39, 0.94), rgba(41, 20, 8, 0.7));
+}
+
+.onboarding-welcome-card h2,
+.onboarding-progress-card h2 {
+  color: #fff8dc;
+}
+
+.onboarding-welcome-card p,
+.onboarding-progress-card p,
+.discord-onboarding-box p {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.onboarding-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.onboarding-progress-bar {
+  height: 12px;
+  overflow: hidden;
+  margin: 1rem 0;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.onboarding-progress-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #ce1126, #ffd700 52%, #2ecc71);
+  box-shadow: 0 0 22px rgba(255, 215, 0, 0.26);
+}
+
+.onboarding-mission-copy,
+.discord-onboarding-box {
+  padding: 1rem;
+  border: 1px solid rgba(255, 215, 0, 0.18);
+  border-radius: 18px;
+  background: rgba(255, 215, 0, 0.08);
+}
+
+.discord-onboarding-box {
+  margin-top: 1rem;
+  border-color: rgba(46, 204, 113, 0.24);
+  background: rgba(46, 204, 113, 0.08);
+}
+
+.discord-onboarding-box strong {
+  display: block;
+  color: #fff8dc;
+  font-size: 1.05rem;
+}
+
+.discord-onboarding-box small {
+  display: block;
+  color: #f7d98f;
+  margin-top: 0.65rem;
+}
+
+.onboarding-checklist {
+  display: grid;
+  gap: 0.75rem;
+  margin: 1.25rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.onboarding-checklist li {
+  display: flex;
+  gap: 0.85rem;
+  align-items: flex-start;
+  padding: 0.9rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 18px;
+  background: rgba(4, 12, 28, 0.46);
+}
+
+.onboarding-checklist li.is-current {
+  border-color: rgba(255, 215, 0, 0.34);
+  background: rgba(255, 215, 0, 0.08);
+}
+
+.onboarding-checklist li.is-complete {
+  border-color: rgba(46, 204, 113, 0.34);
+}
+
+.onboarding-checklist button {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 999px;
+  color: #111827;
+  background: linear-gradient(135deg, #ffd700, #2ecc71);
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.onboarding-checklist strong,
+.onboarding-checklist span {
+  display: block;
+}
+
+.onboarding-checklist strong {
+  color: #fff8dc;
+}
+
+.onboarding-checklist span {
+  margin-top: 0.25rem;
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 0.92rem;
+}
+
+@media (max-width: 640px) {
+  .onboarding-action-row .member-action-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
