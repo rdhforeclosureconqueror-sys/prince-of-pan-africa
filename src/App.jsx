@@ -10,6 +10,7 @@ import PortalDecolonize from "./pages/PortalDecolonize";
 import LibraryOrganizer from "./pages/LibraryOrganizer";
 import TimelinePage from "./pages/TimelinePage";
 import MemberDashboard from "./pages/MemberDashboard";
+import ApplicationsPage from "./pages/ApplicationsPage";
 import SystemVerificationPage from "./pages/SystemVerificationPage";
 import AuthDebugPage from "./pages/AuthDebugPage";
 import AssessmentLandingPage, { AssessmentCenter, AssessmentResultPage } from "./pages/AssessmentCenter";
@@ -152,6 +153,7 @@ function AppRoutes({ user, rbac, isAdmin, canAccessOrganizer, authChecked, refre
       <Routes>
         <Route path="/" element={<Home user={user} isAdmin={isAdmin} canAccessOrganizer={canAccessOrganizer} authChecked={authChecked} onAuthChange={refreshAuth} />} />
         <Route path="/dashboard" element={<DashboardRoute authChecked={authChecked} user={user} rbac={rbac} isAdmin={isAdmin} />} />
+        <Route path="/applications" element={<ApplicationsPage />} />
         <Route path="/admin" element={<Navigate to="/dashboard" replace />} />
         <Route path="/admin-legacy" element={<Navigate to="/dashboard" replace />} />
         <Route

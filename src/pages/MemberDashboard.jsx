@@ -6,9 +6,12 @@ import { getCommunityTrustExperience, getOpenVerificationRequests, getRecentComm
 import { firstSevenDaysPathway, memberOnboardingSettings } from "../onboarding/memberOnboardingConfig";
 import { completeMemberOnboardingStep, getMemberOnboardingState, mergeDetectedOnboardingSteps, saveMemberOnboardingState, startMemberOnboarding } from "../onboarding/memberOnboardingStorage";
 import { getDailyHistoricalSpotlight } from "../data/dailyHistoricalSpotlights";
+import ApplicationCard from "../components/ApplicationCard";
+import { SIMBA_APPLICATIONS } from "../data/applications";
 import { TIMELINE_A_AFRICA_ORIGINS } from "../data/timelineA_africaOrigins";
 import swahiliLessons from "../../public/languages/swahili_30days.json";
 import "../styles/dashboard.css";
+import "../styles/applications.css";
 
 const COMMUNITY_CHALLENGES = [
   {
@@ -366,6 +369,8 @@ export default function MemberDashboard() {
   const weeklySpotlight = communityFeed?.spotlight || { type: "Language Spotlight", title: swahiliWord ? swahiliWord.swahili : "Swahili Foundations", body: "Practice one word today and build cultural continuity without rushing.", href: "/languages/swahili.html" };
   const energyMeter = communityFeed?.energy_meter || { label: heartbeatFeed.length > 8 ? "Active" : heartbeatFeed.length > 2 ? "Growing" : "Quiet", basis: "Based only on visible recorded activity." };
   const futureSections = ["Local Meetups", "Study Circles", "Business Collaborations", "Investment Circles", "Mentorship", "Cooperative Purchasing", "Mutual Aid", "Community Funding"];
+  const recentlyUsedApplications = SIMBA_APPLICATIONS.filter((application) => ["member-home", "community", "library"].includes(application.id));
+  const recommendedApplications = SIMBA_APPLICATIONS.filter((application) => ["assessments", "languages", "star-rewards"].includes(application.id));
 
   const impactStats = [
     ["Businesses Supported This Month", summary?.businesses_supported_month ?? 0],
@@ -427,6 +432,17 @@ export default function MemberDashboard() {
           <h2>Resume Journey</h2>
           <p>{resumeJourney.detail}</p>
           <Link to={resumeJourney.to} className="member-action-btn">{resumeJourney.label}</Link>
+        </section>
+
+        <section className="cosmic-section member-hub-card member-hub-card--wide living-section application-launcher-card member-home-priority">
+          <div className="section-heading-row"><div><p className="section-kicker">Application Launcher</p><h2>Open your Community Operating System</h2></div><Link to="/applications" className="member-action-btn member-action-btn--secondary">View All Applications</Link></div>
+          <p className="heartbeat-intro">Simba organizes your tools as applications: growth, learning, culture, community coordination, and connected external platforms.</p>
+          <div className="dashboard-application-grid">{recentlyUsedApplications.map((application) => <ApplicationCard key={application.id} application={application} compact />)}</div>
+        </section>
+
+        <section className="cosmic-section member-hub-card member-hub-card--wide living-section continue-journey-apps-card">
+          <div className="section-heading-row"><div><p className="section-kicker">Recommended Applications</p><h2>Continue Your Journey</h2></div><span className="trust-badge">Favorites & pinned apps coming soon</span></div>
+          <div className="dashboard-application-grid">{recommendedApplications.map((application) => <ApplicationCard key={application.id} application={application} compact />)}</div>
         </section>
 
         <section className="cosmic-section member-hub-card member-hub-card--wide living-section community-heartbeat-card member-home-priority" id="community-feed">
