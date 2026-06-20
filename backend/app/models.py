@@ -491,3 +491,51 @@ class CommunityReputation(Base):
     leadership_level: Mapped[str] = mapped_column(String(64), nullable=False, default="Emerging Steward")
     consistency_streak: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+class PreparednessHouseholdProfile(Base):
+    __tablename__ = "preparedness_household_profiles"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, unique=True, index=True)
+    household_size: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    neighborhood: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    water_days: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    food_days: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    medical_status: Mapped[str] = mapped_column(String(64), nullable=False, default="getting_started")
+    power_status: Mapped[str] = mapped_column(String(64), nullable=False, default="getting_started")
+    communication_status: Mapped[str] = mapped_column(String(64), nullable=False, default="getting_started")
+    skills: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, onupdate=datetime.utcnow)
+
+
+class PreparednessInventoryItem(Base):
+    __tablename__ = "preparedness_inventory_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    item_name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    category: Mapped[str] = mapped_column(String(64), nullable=False, default="general", index=True)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    unit: Mapped[str] = mapped_column(String(64), nullable=False, default="units")
+    target_quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    storage_location: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, onupdate=datetime.utcnow)
+
+
+class PreparednessVolunteer(Base):
+    __tablename__ = "preparedness_volunteers"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, unique=True, index=True)
+    role: Mapped[str] = mapped_column(String(64), nullable=False, default="neighbor_support", index=True)
+    availability: Mapped[str] = mapped_column(String(64), nullable=False, default="as_available")
+    neighborhood: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    skills: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, onupdate=datetime.utcnow)
+
