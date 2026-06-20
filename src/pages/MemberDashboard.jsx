@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api/api";
 import { getAssessmentResults, getGrowthProfile } from "../api/assessments";
-import { getCommunityTrustExperience, getOpenVerificationRequests, getRecentCommunityActivity, getStarExperience } from "../api/participation";
+import { getCommunityTrustExperience, getOpenVerificationRequests, getRecentCommunityActivity, getCommunityActivityFeed, getStarExperience } from "../api/participation";
 import { firstSevenDaysPathway, memberOnboardingSettings } from "../onboarding/memberOnboardingConfig";
 import { completeMemberOnboardingStep, getMemberOnboardingState, mergeDetectedOnboardingSteps, saveMemberOnboardingState, startMemberOnboarding } from "../onboarding/memberOnboardingStorage";
 import { getDailyHistoricalSpotlight } from "../data/dailyHistoricalSpotlights";
@@ -128,6 +128,7 @@ export default function MemberDashboard() {
   const [communityTrust, setCommunityTrust] = useState(null);
   const [verificationRequests, setVerificationRequests] = useState([]);
   const [communityActivity, setCommunityActivity] = useState([]);
+  const [communityFeed, setCommunityFeed] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [growthProfile, setGrowthProfile] = useState(null);
@@ -155,13 +156,14 @@ export default function MemberDashboard() {
     window.addEventListener("simba:participation-updated", onParticipationUpdated);
     (async () => {
       try {
-        const [overviewRes, activityRes, starRes, trustRes, verificationRes, communityActivityRes, growthRes, assessmentResultsRes] = await Promise.all([
+        const [overviewRes, activityRes, starRes, trustRes, verificationRes, communityActivityRes, communityFeedRes, growthRes, assessmentResultsRes] = await Promise.all([
           api("/member/overview", { method: "GET" }),
           api("/member/activity", { method: "GET" }),
           getStarExperience(),
           getCommunityTrustExperience(),
           getOpenVerificationRequests(),
           getRecentCommunityActivity(),
+          getCommunityActivityFeed(),
           getGrowthProfile(),
           getAssessmentResults(),
         ]);
@@ -173,6 +175,7 @@ export default function MemberDashboard() {
         setCommunityTrust(trustRes?.community_trust || null);
         setVerificationRequests(verificationRes?.verification_requests || []);
         setCommunityActivity(communityActivityRes?.activity || []);
+        setCommunityFeed(communityFeedRes || null);
         setGrowthProfile(growthRes?.growth_profile || null);
         const allResults = Array.isArray(assessmentResultsRes?.results) ? assessmentResultsRes.results : [];
         setAssessmentResults(allResults);
@@ -351,6 +354,19 @@ export default function MemberDashboard() {
   const startOnboarding = () => persistOnboarding(startMemberOnboarding(activeOnboardingState));
   const markOnboardingStepComplete = (stepKey) => persistOnboarding(completeMemberOnboardingStep(activeOnboardingState, stepKey));
 
+  const heartbeatFeed = communityFeed?.feed?.length ? communityFeed.feed : recentCommunityActivity;
+  const announcements = communityFeed?.announcements || [];
+  const dailyCommunityChallenge = communityFeed?.today_challenge || { title: "Learn one Swahili word", action: swahiliWord ? `Practice ${swahiliWord.swahili} and use it in one sentence.` : "Practice one language word and share it in your notes.", href: "/languages" };
+  const weeklyCommunityGoal = communityFeed?.weekly_goal || { title: "Earn 5,000 STAR together", current: currentStar, target: 5000, percent: Math.min(100, Math.round((currentStar / 5000) * 100)) };
+  const communityMilestones = communityFeed?.milestones || [
+    { title: "100 Members", current: summary?.members_participating ?? 0, target: 100, percent: Math.min(100, Math.round(((summary?.members_participating ?? 0) / 100) * 100)) },
+    { title: "500 Books Read", current: summary?.books_completed ?? 0, target: 500, percent: Math.min(100, Math.round(((summary?.books_completed ?? 0) / 500) * 100)) },
+    { title: "10,000 STAR Earned", current: currentStar, target: 10000, percent: Math.min(100, Math.round((currentStar / 10000) * 100)) },
+  ];
+  const weeklySpotlight = communityFeed?.spotlight || { type: "Language Spotlight", title: swahiliWord ? swahiliWord.swahili : "Swahili Foundations", body: "Practice one word today and build cultural continuity without rushing.", href: "/languages/swahili.html" };
+  const energyMeter = communityFeed?.energy_meter || { label: heartbeatFeed.length > 8 ? "Active" : heartbeatFeed.length > 2 ? "Growing" : "Quiet", basis: "Based only on visible recorded activity." };
+  const futureSections = ["Local Meetups", "Study Circles", "Business Collaborations", "Investment Circles", "Mentorship", "Cooperative Purchasing", "Mutual Aid", "Community Funding"];
+
   const impactStats = [
     ["Businesses Supported This Month", summary?.businesses_supported_month ?? 0],
     ["Books Completed", summary?.books_completed ?? 0],
@@ -413,6 +429,20 @@ export default function MemberDashboard() {
           <Link to={resumeJourney.to} className="member-action-btn">{resumeJourney.label}</Link>
         </section>
 
+        <section className="cosmic-section member-hub-card member-hub-card--wide living-section community-heartbeat-card member-home-priority" id="community-feed">
+          <div className="section-heading-row"><div><p className="section-kicker">Community Activity Feed</p><h2>The Heartbeat of Simba</h2></div><strong className={`energy-meter energy-meter--${String(energyMeter.label).toLowerCase()}`}>{energyMeter.label}</strong></div>
+          <p className="heartbeat-intro">A cooperative feed for learning, contribution, service, and progress — not another social media timeline.</p>
+          {announcements.length ? <div className="announcement-stack">{announcements.map((item) => <article key={item.id || item.title} className="activity-card activity-card--announcement"><span>{item.category || "Announcement"}</span><strong>{item.title}</strong><p>{item.body}</p></article>)}</div> : null}
+          <div className="heartbeat-focus-grid">
+            <article className="activity-card activity-card--challenge"><span>Today’s Challenge</span><strong>{dailyCommunityChallenge.title}</strong><p>{dailyCommunityChallenge.action}</p>{dailyCommunityChallenge.href ? <Link to={dailyCommunityChallenge.href} className="text-link">Begin mission</Link> : null}</article>
+            <article className="activity-card activity-card--goal"><span>Weekly Community Goal</span><strong>{weeklyCommunityGoal.title}</strong><div className="community-progress"><span style={{ width: `${weeklyCommunityGoal.percent || 0}%` }} /></div><small>{weeklyCommunityGoal.current || 0} / {weeklyCommunityGoal.target || 0}</small></article>
+            <article className="activity-card activity-card--spotlight"><span>{weeklySpotlight.type}</span><strong>{weeklySpotlight.title}</strong><p>{weeklySpotlight.body}</p>{weeklySpotlight.href ? <Link to={weeklySpotlight.href} className="text-link">Explore</Link> : null}</article>
+          </div>
+          <div className="activity-scroll" aria-label="Recent cooperative activity">{heartbeatFeed.length ? heartbeatFeed.map((item) => <article key={item.id || item.message} className="activity-card activity-card--feed"><span>{item.activity_type?.replaceAll("_", " ") || "Community"}</span><strong>{item.message}</strong>{item.star_award ? <small>+{item.star_award} STAR</small> : null}</article>) : <article className="activity-card activity-card--feed"><strong>A new member joined.</strong><p>Community activity will appear here as members learn, serve, and contribute.</p></article>}</div>
+          <div className="milestone-grid">{communityMilestones.map((item) => <article key={item.title} className="milestone-card"><strong>{item.title}</strong><div className="community-progress"><span style={{ width: `${item.percent || 0}%` }} /></div><small>{item.current || 0} / {item.target || 0}</small></article>)}</div>
+          <p className="energy-note">{energyMeter.basis}</p>
+        </section>
+
         <section className="cosmic-section member-hub-card living-section achievement-spotlight-card member-home-priority">
           <p className="section-kicker">Recent Achievement</p>
           <h2>{recentAchievement}</h2>
@@ -451,7 +481,7 @@ export default function MemberDashboard() {
         <section className="cosmic-section member-hub-card member-hub-card--wide living-section upcoming-journey-card coming-soon-section">
           <div className="section-heading-row"><div><p className="section-kicker">Upcoming Journey</p><h2>Coming Soon</h2></div><strong className="coming-soon-badge">Expanding Pathways</strong></div>
           <p>These pathways are presented as an exciting preview only. No new characteristic scoring or archetype assignment is active here.</p>
-          <div className="placeholder-card-grid">{["Community Characteristics", "Community Archetypes", "Community Projects", "Mentorship", "Cooperative Business Opportunities"].map((item) => <article key={item}><span>✺</span><strong>{item}</strong><small>Coming Soon</small></article>)}</div>
+          <div className="placeholder-card-grid">{futureSections.map((item) => <article key={item}><span>✺</span><strong>{item}</strong><small>Coming Soon</small></article>)}</div>
         </section>
 
         <section className="cosmic-section member-hub-card member-hub-card--wide living-section learning-hub-card">
