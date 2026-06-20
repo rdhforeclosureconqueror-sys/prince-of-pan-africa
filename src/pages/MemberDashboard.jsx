@@ -244,6 +244,18 @@ export default function MemberDashboard() {
   const growthTimeline = Array.isArray(growthProfile?.timeline) ? growthProfile.timeline : [];
   const completedAssessments = latestAssessmentResults.length ? latestAssessmentResults : latestCompletedAssessments(assessmentResults);
 
+  const latestAssessment = completedAssessments[0] || growthTimeline[0] || null;
+  const latestAssessmentName = latestAssessment?.assessment_name || latestAssessment?.title || "No assessment completed yet";
+  const latestAssessmentDate = latestAssessment?.completed_at || latestAssessment?.completion_date || null;
+  const recommendedAssessment = growthSummary.recommended_next_assessment?.assessment_name || latestAssessment?.recommended_next_assessment?.assessment_name || "Open the Assessment Center";
+  const currentStage = growthSummary.completed_assessments > 0 ? `${growthSummary.completed_assessments} assessment${growthSummary.completed_assessments === 1 ? "" : "s"} completed` : completedAssessments.length ? `${completedAssessments.length} assessment${completedAssessments.length === 1 ? "" : "s"} completed` : "Beginning the journey";
+  const currentGrowthFocus = latestAssessment?.opportunities_for_growth?.[0] || latestAssessment?.category || growthSummary.recommended_next_assessment?.reason || "Complete your next Garvey assessment to reveal your focus.";
+  const recentAchievement = growthBadges[0]?.label || (completedAssessments.length ? `Completed ${latestAssessmentName}` : "Your first achievement will appear after your first completed assessment.");
+  const latestReward = starRewards.find((reward) => reward.unlocked)?.title || starHistory[0]?.title || starHistory[0]?.activity_type?.replaceAll("_", " ") || "No reward unlocked yet";
+  const nextReward = starRewards.find((reward) => !reward.unlocked);
+  const nextRewardGoal = nextReward ? `${nextReward.title} · ${nextReward.star_needed} STAR needed` : rankProgress.next_rank ? `${rankProgress.next_rank} · ${rankProgress.star_to_next_rank ?? 0} STAR to go` : "Keep participating to unlock the next milestone";
+  const greeting = today.getHours() < 12 ? "Good Morning" : today.getHours() < 18 ? "Good Afternoon" : "Good Evening";
+
   const impactStats = [
     ["Businesses Supported This Month", summary?.businesses_supported_month ?? 0],
     ["Books Completed", summary?.books_completed ?? 0],
@@ -257,187 +269,93 @@ export default function MemberDashboard() {
   if (error) return <div className="admin-error">⚠️ {error}</div>;
 
   return (
-    <div className="admin-dashboard member-launchpad command-center-shell cosmic-readable-shell">
-      <header className="mission-control member-hero dashboard-header">
-        <p className="member-kicker">Today’s Mission</p>
-        <h1>Welcome Back, {memberName}</h1>
-        <p className="subtitle">Daily launch sequence for learning, participation, economic support, leadership, and restoration.</p>
-        <div className="mission-status-strip">
-          <span>{membership?.label || "Free Member"}</span>
-          <span>{membershipStatusLabel}</span>
-          <span>{formatDate(today)}</span>
-        </div>
-        <div className="participation-pulse" aria-label="Participation Engine summary">
-          <article><span>Current STAR</span><strong>{currentStar}</strong></article>
-          <article><span>Participation Score</span><strong>{participationScore}</strong></article>
-          <article><span>Community Rank</span><strong>{currentRank}</strong></article>
-          <article><span>Activities Recorded</span><strong>{activityCount}</strong></article>
-        </div>
-        <section className="star-credits-card" aria-label="STAR Community Credits">
-          <div>
-            <p className="member-kicker">STAR Community Credits</p>
-            <h2>{currentStar} STAR</h2>
-            <p>{currentRank} · {currentStreak} day streak · {activityCount} activities completed</p>
-          </div>
-          <div className="star-rank-progress">
-            <span>Progress to {rankProgress.next_rank || "next rank"}</span>
-            <strong>{rankProgress.percent ?? 0}%</strong>
-            <div className="star-progress-track"><i style={{ width: `${rankProgress.percent ?? 0}%` }} /></div>
-            <small>{rankProgress.star_to_next_rank ?? 0} STAR to next rank</small>
-          </div>
-        </section>
-        <div className="daily-actions-panel" aria-label="Today’s Four Actions">
-          <h2>Today’s Four Actions</h2>
-          <label><input type="checkbox" readOnly /> Learn Today’s Swahili Word</label>
-          <label><input type="checkbox" readOnly /> Read Today’s Historical Spotlight</label>
-          <label><input type="checkbox" readOnly /> Complete Today’s Community Challenge</label>
-          <label><input type="checkbox" readOnly /> Share One Insight</label>
-          <strong>Daily Progress: 0/4</strong>
+    <div className="admin-dashboard member-launchpad living-dashboard command-center-shell cosmic-readable-shell">
+      <header className="mission-control member-hero dashboard-header living-hero">
+        <p className="member-kicker">Simba Community Operating System</p>
+        <h1>{greeting}, {memberName}.</h1>
+        <p className="subtitle">Every step you take strengthens both yourself and your community.</p>
+        <div className="living-hero-grid" aria-label="Member journey summary">
+          <article><span>Community Progress</span><strong>{participationScore}</strong><small>{currentRank}</small></article>
+          <article><span>Current Journey</span><strong>{currentStage}</strong><small>{membership?.label || "Member"}</small></article>
+          <article><span>Today’s Recommendation</span><strong>{recommendedAssessment}</strong><small>{currentGrowthFocus}</small></article>
+          <article><span>Current STAR Balance</span><strong>{currentStar}</strong><small>{currentStreak} day streak</small></article>
         </div>
       </header>
 
-      <main className="member-hub-grid command-grid">
-
-        <section className="cosmic-section member-hub-card member-hub-card--wide growth-journey-card">
+      <main className="member-hub-grid living-dashboard-grid command-grid">
+        <section className="cosmic-section member-hub-card member-hub-card--wide living-section growth-journey-card">
           <div className="section-heading-row">
-            <div><p className="section-kicker">Garvey Intelligence Engine</p><h2>Growth Journey</h2></div>
+            <div><p className="section-kicker">Your Growth Journey</p><h2>Where you are becoming stronger</h2></div>
             <Link to="/assessments" className="member-action-btn member-action-btn--secondary">Open Assessment Center</Link>
           </div>
-          <p>Only real active or completed assessments are shown here. Future growth categories stay hidden until their assessments are live.</p>
-          {completedAssessments.length ? <p><strong>Completed active assessments:</strong> {completedAssessments.length}</p> : <p>No completed active assessments yet.</p>}
-          {growthSummary.recommended_next_assessment ? <p><strong>Recommended Next Assessment:</strong> {growthSummary.recommended_next_assessment.assessment_name}</p> : null}
-          <div className="command-chip-list" aria-label="Unlocked badges">{growthBadges.length ? growthBadges.map((badge) => <span key={badge.id}>✓ {badge.label}</span>) : <span>No badges unlocked yet</span>}</div>
-        </section>
-
-        <section className="cosmic-section member-hub-card member-hub-card--wide growth-history-card">
-          <p className="section-kicker">Assessment History</p>
-          <h2>Completed Assessment Results</h2>
-          {completedAssessments.length === 0 ? <p>Your completed assessments will appear here automatically after Garvey syncs results.</p> : <div className="builder-dashboard-grid">{completedAssessments.slice(0, 8).map((item) => {
-            const resultId = item.result_id || item.assessment_id || item.assessment_name;
-            const attempts = Array.isArray(item.attempt_history) ? item.attempt_history : [item];
-            return <article key={item.assessment_group_key || `${resultId}-${item.completed_at}`}>
-              <h3>{item.assessment_name}</h3>
-              <p><strong>Latest Result:</strong> {resultLabel(item)}</p>
-              <p><strong>Status:</strong> {item.completion_status || "completed"}</p>
-              <p><strong>Completed:</strong> {item.completed_at ? new Date(item.completed_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "Recently"}</p>
-              <p><strong>Recommended Next:</strong> {item.recommended_next_assessment?.assessment_name || growthSummary.recommended_next_assessment?.assessment_name || "Return to the Assessment Center"}</p>
-              <Link to={`/assessments/results/${encodeURIComponent(resultId)}`} className="member-action-btn member-action-btn--secondary">View Results</Link>
-              <Link to="/assessments" className="member-action-btn">Retake or Continue</Link>
-              {attempts.length > 1 ? <details className="attempt-history"><summary className="member-action-btn member-action-btn--ghost">View Attempt History</summary><ol>{attempts.map((attempt) => {
-                const attemptResultId = attempt.result_id || attempt.assessment_id || attempt.assessment_name;
-                return <li key={`${attemptResultId}-${attempt.completed_at}`}><span>{attempt.completed_at ? new Date(attempt.completed_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "Recently"} · {resultLabel(attempt)} · {attempt.completion_status || "completed"}</span><Link to={`/assessments/results/${encodeURIComponent(attemptResultId)}`}>View</Link></li>;
-              })}</ol></details> : null}
-            </article>;
-          })}</div>}
-          {growthTimeline.length ? <ul className="star-timeline">{growthTimeline.slice(0, 4).map((item) => <li key={`${item.assessment_id}-${item.completed_at}`}><strong>{item.assessment_name}</strong><span>{item.completed_at ? new Date(item.completed_at).toLocaleDateString("en-US", { month: "long", year: "numeric" }) : "Recently"} · {item.score ?? "Not scored"}% · {item.status}</span></li>)}</ul> : null}
-        </section>
-
-        <section className="cosmic-section member-hub-card member-hub-card--wide community-trust-card" aria-label="Community Trust">
-          <p className="section-kicker">Community Labor Exchange</p>
-          <div className="community-trust-header">
-            <div>
-              <h2>Community Trust</h2>
-              <p>Community Trust grows when you complete verified contributions, help verify others, and participate consistently.</p>
-            </div>
-            <strong className="trust-badge">{trust.leadership_level || "Community Member"}</strong>
+          <div className="journey-summary-grid">
+            <article><span>Completed Assessments</span><strong>{completedAssessments.length}</strong><small>Synced from Garvey</small></article>
+            <article><span>Current Community Development Stage</span><strong>{currentStage}</strong><small>Based on existing assessment completion</small></article>
+            <article><span>Latest Assessment</span><strong>{latestAssessmentName}</strong><small>{latestAssessmentDate ? new Date(latestAssessmentDate).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "Complete one to begin"}</small></article>
+            <article><span>Current Growth Focus</span><strong>{currentGrowthFocus}</strong><small>No invented scores</small></article>
+            <article><span>Suggested Next Assessment</span><strong>{recommendedAssessment}</strong><small>{growthSummary.recommended_next_assessment?.reason || "Continue the official Garvey path"}</small></article>
+            <article><span>Recent Achievement</span><strong>{recentAchievement}</strong><small>{growthBadges.length ? "Badge unlocked" : "Achievement history"}</small></article>
           </div>
-          <div className="trust-score-layout">
-            <article className="trust-score-card"><span>Trust Score</span><strong>{trustPercent}%</strong><div className="star-progress-track"><i style={{ width: `${trustPercent}%` }} /></div></article>
-            <article><span>STAR Community Credits</span><strong>{currentStar}</strong><small>Rewards for participation</small></article>
-            <article><span>Verified Contributions</span><strong>{trust.verified_contributions ?? 0}</strong></article>
-            <article><span>Verifications Completed</span><strong>{trust.verifications_completed ?? 0}</strong></article>
-            <article><span>Verification Accuracy</span><strong>{trust.verification_accuracy ?? 100}%</strong></article>
-            <article><span>Consistency Streak</span><strong>{trust.consistency_streak ?? 0} Days</strong></article>
-          </div>
-          <div className="trust-next-level"><span>Next Level: {trust.next_level || "Verified Contributor"}</span><strong>{trustProgress.percent ?? 0}%</strong></div>
-          <div className="star-progress-track"><i style={{ width: `${trustProgress.percent ?? 0}%` }} /></div>
-          <div className="trust-ladder" aria-label="Community Trust ladder">{trustLadder.map((level) => <span key={level.level} className={(trust.trust_score ?? 0) >= level.threshold ? "is-active" : ""}>{level.level}</span>)}</div>
-          <ul className="trust-calculation-list">{(trust.calculation || []).map((line) => <li key={line}>{line}</li>)}</ul>
         </section>
 
-        <section className="cosmic-section member-hub-card member-hub-card--wide verification-requests-card">
-          <p className="section-kicker">Help Verify Community Work</p>
-          <h2>Pending Verification Opportunities</h2>
-          {verificationRequests.length === 0 ? <p>No verification requests are open right now. When members submit proof of community work, you can help verify and earn STAR.</p> : <div className="verification-request-grid">{verificationRequests.map((request) => <article key={request.activity_id}><h3>{request.labor_category}</h3><p><strong>Submitted by:</strong> {request.submitted_by}</p><p><strong>Content/activity:</strong> {request.content || request.activity_type}</p><p><strong>Status:</strong> {request.status}</p><p><strong>Confirmations:</strong> {request.current_confirmations}/{request.required_confirmations}</p><strong className="star-reward-label">+{request.star_reward} STAR for verification</strong></article>)}</div>}
+        <section className="cosmic-section member-hub-card member-hub-card--wide living-section future-hook-section">
+          <p className="section-kicker">Community Characteristics</p><h2>Coming Soon</h2>
+          <p>These future indicators will help members understand how they contribute to collective life. Scoring is not active yet.</p>
+          <div className="placeholder-card-grid">{["Cooperation", "Leadership", "Stewardship", "Initiative", "Integrity", "Communication"].map((item) => <article key={item}><span>✦</span><strong>{item}</strong><small>Coming Soon</small></article>)}</div>
         </section>
 
-        <section className="cosmic-section member-hub-card member-hub-card--wide community-activity-card">
-          <p className="section-kicker">Recent Community Labor Activity</p>
-          <h2>Community Activity</h2>
-          {recentCommunityActivity.length === 0 ? <p>Community labor activity will appear here as members learn, submit proof, and verify one another.</p> : <ul className="activity-feed">{recentCommunityActivity.map((item) => <li key={item.id}><span className="highlight">{item.message}</span><div>{item.timestamp ? new Date(item.timestamp).toLocaleDateString() : "Recently"} · {item.status} · +{item.star_award || 0} STAR</div></li>)}</ul>}
+        <section className="cosmic-section member-hub-card member-hub-card--wide living-section future-hook-section archetype-section">
+          <p className="section-kicker">Your Community Archetypes</p><h2>Archetype insights are being prepared</h2>
+          <p>These will be generated from your assessment history as you continue your journey.</p>
+          <div className="placeholder-card-grid placeholder-card-grid--three">{["Builder", "Steward", "Organizer"].map((item) => <article key={item}><span>◌</span><strong>{item}</strong><small>Future pathway hook</small></article>)}</div>
         </section>
 
-        <section className="cosmic-section member-hub-card member-hub-card--wide star-opportunities-card">
-          <p className="section-kicker">STAR Engine</p>
-          <h2>Today’s STAR Opportunities</h2>
-          <div className="star-opportunity-grid">{starOpportunities.map((item) => <a key={item.activity_type} href={item.href} className="star-opportunity"><span>{item.title}</span><strong>+{item.star} STAR</strong></a>)}</div>
+        <section className="cosmic-section member-hub-card member-hub-card--wide living-section continue-journey-card">
+          <p className="section-kicker">Continue Your Journey</p><h2>Choose the next right action</h2>
+          <div className="journey-action-grid"><Link to="/assessments/center" className="member-action-btn">Continue Latest Assessment</Link><Link to="/assessments" className="member-action-btn member-action-btn--secondary">Take Recommended Assessment</Link><Link to="/assessments" className="member-action-btn member-action-btn--secondary">Browse Assessments</Link><Link to="/assessments" className="member-action-btn member-action-btn--ghost">Assessment History</Link></div>
+          {completedAssessments.length ? <ul className="star-timeline">{completedAssessments.slice(0, 3).map((item) => <li key={item.result_id || item.assessment_id || item.assessment_name}><strong>{item.assessment_name}</strong><span>{resultLabel(item)} · {item.completion_status || "completed"}</span></li>)}</ul> : <p>Your assessment history will appear here automatically after Garvey syncs results.</p>}
         </section>
 
-        <section className="cosmic-section member-hub-card star-history-card">
-          <p className="section-kicker">Verified Timeline</p>
-          <h2>Activity History</h2>
-          {starHistory.length === 0 ? <p>No STAR activity yet. Complete an opportunity to begin.</p> : <ul className="star-timeline">{starHistory.slice(0, 8).map((item) => <li key={item.activity_id || item.id}><strong>{(item.activity_type || item.title || "Activity").replaceAll("_", " ")}</strong><span>{item.timestamp ? new Date(item.timestamp).toLocaleDateString() : "Today"} · +{item.star_award || 0} STAR · {item.verification_status || "recorded"}</span></li>)}</ul>}
+        <section className="cosmic-section member-hub-card member-hub-card--wide living-section learning-hub-card">
+          <p className="section-kicker">Learning</p><h2>Build knowledge into daily practice</h2>
+          <div className="learning-hub-grid"><Link to="/library"><strong>Books</strong><span>Continue Reading</span></Link><Link to="/study"><strong>Audiobooks</strong><span>Listen and study</span></Link><a href="/languages/swahili.html"><strong>Swahili</strong><span>{swahiliWord ? `Today: ${swahiliWord.swahili}` : "Practice language"}</span></a><a href="/languages/yoruba.html"><strong>Yoruba</strong><span>Continue Learning</span></a><Link to="/brain-training"><strong>Adaptive Learning</strong><span>Train memory and focus</span></Link><Link to="/timeline"><strong>Historical Study</strong><span>{historicalSpotlightTitle}</span></Link></div>
         </section>
 
-        <section className="cosmic-section member-hub-card star-rewards-card">
-          <p className="section-kicker">Community Benefits</p>
-          <h2>STAR Rewards</h2>
+        <section className="cosmic-section member-hub-card member-hub-card--wide living-section community-placeholder-card">
+          <p className="section-kicker">Community</p><h2>Connect learning to collective work</h2>
+          <div className="placeholder-card-grid">{["Upcoming Community Activities", "Volunteer Opportunities", "Business Opportunities", "Discussion Groups", "Study Circles"].map((item) => <article key={item}><span>✺</span><strong>{item}</strong><small>Coming Soon</small></article>)}</div>
+        </section>
+
+        <section className="cosmic-section member-hub-card member-hub-card--wide living-section star-rewards-card">
+          <div className="section-heading-row"><div><p className="section-kicker">STAR Rewards</p><h2>Recognition for participation</h2></div><strong className="trust-badge">{currentStar} STAR</strong></div>
+          <div className="journey-summary-grid reward-summary-grid"><article><span>Current STAR</span><strong>{currentStar}</strong><small>{currentRank}</small></article><article><span>Latest Reward</span><strong>{latestReward}</strong><small>Existing reward data</small></article><article><span>Achievements</span><strong>{growthBadges.length || starRewards.filter((reward) => reward.unlocked).length}</strong><small>Unlocked badges and rewards</small></article><article><span>Next Reward Goal</span><strong>{nextRewardGoal}</strong><small>Preserves current reward logic</small></article></div>
           <ul className="star-reward-list">{starRewards.map((reward) => <li key={reward.title} className={reward.unlocked ? "is-unlocked" : ""}><span>{reward.title}</span><strong>{reward.unlocked ? "Unlocked" : `${reward.star_needed} STAR needed`}</strong></li>)}</ul>
         </section>
 
-        <section className="cosmic-section member-hub-card star-leaderboard-card">
-          <p className="section-kicker">Celebration Board</p>
-          <h2>Community Leaderboards</h2>
+        <section className="cosmic-section member-hub-card member-hub-card--wide community-trust-card" aria-label="Community Trust">
+          <p className="section-kicker">Existing Community Trust</p>
+          <div className="community-trust-header"><div><h2>Community Trust</h2><p>Existing verification and contribution data remains available.</p></div><strong className="trust-badge">{trust.leadership_level || "Community Member"}</strong></div>
+          <div className="trust-score-layout"><article className="trust-score-card"><span>Trust Score</span><strong>{trustPercent}%</strong><div className="star-progress-track"><i style={{ width: `${trustPercent}%` }} /></div></article><article><span>Verified Contributions</span><strong>{trust.verified_contributions ?? 0}</strong></article><article><span>Verifications Completed</span><strong>{trust.verifications_completed ?? 0}</strong></article><article><span>Consistency Streak</span><strong>{trust.consistency_streak ?? 0} Days</strong></article></div>
+        </section>
+
+        <section className="cosmic-section member-hub-card member-hub-card--wide living-section verification-requests-card">
+          <p className="section-kicker">Community Verification</p><h2>Help verify community work</h2>
+          {verificationRequests.length === 0 ? <p>No verification requests are open right now. When members submit proof of community work, you can help verify and earn STAR.</p> : <div className="verification-request-grid">{verificationRequests.map((request) => <article key={request.activity_id}><h3>{request.labor_category}</h3><p><strong>Submitted by:</strong> {request.submitted_by}</p><p><strong>Content/activity:</strong> {request.content || request.activity_type}</p><p><strong>Status:</strong> {request.status}</p><p><strong>Confirmations:</strong> {request.current_confirmations}/{request.required_confirmations}</p><strong className="star-reward-label">+{request.star_reward} STAR for verification</strong></article>)}</div>}
+        </section>
+
+        <section className="cosmic-section member-hub-card member-hub-card--wide living-section star-opportunities-card">
+          <p className="section-kicker">STAR Engine</p><h2>Today’s STAR Opportunities</h2>
+          <div className="star-opportunity-grid">{starOpportunities.map((item) => <a key={item.activity_type} href={item.href} className="star-opportunity"><span>{item.title}</span><strong>+{item.star} STAR</strong></a>)}</div>
+        </section>
+
+        <section className="cosmic-section member-hub-card member-hub-card--wide living-section community-activity-card">
+          <p className="section-kicker">Recent Community Labor Activity</p><h2>Community Activity</h2>
+          {recentCommunityActivity.length === 0 ? <p>Community labor activity will appear here as members learn, submit proof, and verify one another.</p> : <ul className="activity-feed">{recentCommunityActivity.map((item) => <li key={item.id}><span className="highlight">{item.message}</span><div>{item.timestamp ? new Date(item.timestamp).toLocaleDateString() : "Recently"} · {item.status} · +{item.star_award || 0} STAR</div></li>)}</ul>}
+        </section>
+
+        <section className="cosmic-section member-hub-card member-hub-card--wide living-section star-leaderboard-card">
+          <p className="section-kicker">Celebration Board</p><h2>Community Leaderboards</h2>
           <div className="star-leaderboard-grid">{Object.entries(leaderboards).map(([name, rows]) => <article key={name}><h3>{name.replaceAll("_", " ")}</h3>{rows?.length ? rows.slice(0, 3).map((row, idx) => <p key={`${name}-${row.user_id}`}>#{idx + 1} Member {row.user_id}: {row.star} STAR</p>) : <p>Be the first this week.</p>}</article>)}</div>
-        </section>
-
-        <section className="cosmic-section member-hub-card swahili-command-card">
-          <p className="section-kicker">Section 2</p>
-          <h2>Swahili Word of the Day</h2>
-          {swahiliWord ? <><p className="word-of-day">{swahiliWord.swahili}</p><dl className="data-list"><dt>Pronunciation</dt><dd>{swahiliWord.pronunciation || "Practice aloud with the lesson audio."}</dd><dt>Definition</dt><dd>{swahiliWord.english}</dd><dt>Example</dt><dd>{swahiliWord.sentence || swahiliWord.example_swahili}</dd><dt>Why it matters culturally</dt><dd>{swahiliLesson?.culture || swahiliLesson?.tip || "Swahili connects millions across East Africa and helps members practice restoration through language."}</dd></dl><a href="/languages/swahili.html" className="member-action-btn">Practice Word</a></> : <p>Swahili lesson content is being prepared.</p>}
-        </section>
-
-        <section className="cosmic-section member-hub-card history-command-card">
-          <p className="section-kicker">Section 3</p>
-          <h2>African History Spotlight</h2>
-          <p className="history-date">{formatDate(today)}</p>
-          <p className="highlight">{historicalSpotlightTitle}</p>
-          <dl className="data-list"><dt>Did you know?</dt><dd>{dailySpotlight?.did_you_know || historicalSpotlightTitle}</dd><dt>Context</dt><dd>{historicalSpotlightContext}</dd><dt>Key people or places</dt><dd>{dailySpotlight?.key_people_or_places || "Study the leaders, institutions, and communities behind the moment—not just the headline."}</dd><dt>Category</dt><dd>{dailySpotlight?.category || "African and Black history"}</dd><dt>Why it matters today</dt><dd>{dailySpotlight?.why_it_matters_today || "Use the lesson to guide today’s leadership, economic choices, and community restoration."}</dd><dt>Reflection question</dt><dd>{dailySpotlight?.reflection_question || "What responsibility does this history place on my actions today?"}</dd></dl>
-          <p className="data-note">Source note: {dailySpotlight?.source_note || "Repo timeline fallback; richer daily entries are being expanded."}</p>
-          <Link to="/timeline" className="member-action-btn member-action-btn--secondary">Learn More</Link>
-        </section>
-
-        <section className="cosmic-section member-hub-card member-hub-card--wide challenge-command-card">
-          <p className="section-kicker">Section 4</p>
-          <h2>Community Challenge of the Day</h2>
-          <div className="challenge-layout"><div><p className="challenge-day">{todayChallenge.day}</p><h3>{todayChallenge.title}</h3><p>{todayChallenge.action}</p><p className="data-note">Discord bridge pending: complete the action now and save your post text for the community feed.</p></div><ul className="command-chip-list">{todayChallenge.prompts.map((prompt) => <li key={prompt}>{prompt}</li>)}</ul></div>
-          <a href="#community-feed" className="member-action-btn">Prepare Community Share</a>
-        </section>
-
-        <section className="cosmic-section member-hub-card impact-command-card">
-          <p className="section-kicker">Section 5</p>
-          <h2>Community Impact</h2>
-          <p className="data-note">Tracked from current in-app records. Zero means the metric is not recorded yet—not that the community has no impact.</p>
-          <div className="impact-grid">{impactStats.map(([label, value]) => <article key={label}><strong>{value}</strong><span>{label}</span></article>)}</div>
-        </section>
-
-        <section className="cosmic-section member-hub-card learning-path-card">
-          <p className="section-kicker">Section 6</p>
-          <h2>Today’s Learning Path</h2>
-          <p className="highlight">{learningPath.title}</p><p>{featuredTimeline?.summary || "Study a focused pathway that turns knowledge into daily practice."}</p><p><strong>Why am I seeing this today?</strong> {learningPath.reason}</p><Link to="/library" className="member-action-btn member-action-btn--secondary">Open Learning Path</Link>
-        </section>
-
-        <section className="cosmic-section member-hub-card assessment-center-card">
-          <p className="section-kicker">Continue Your Journey</p>
-          <h2>Assessment Center</h2>
-          <p>Open the official Garvey-powered assessment experience, then return here to see synced results and recommendations.</p>
-          <Link to="/assessments" className="member-action-btn">Open Assessment Center</Link>
-        </section>
-
-        <section className="cosmic-section member-hub-card member-hub-card--wide feed-command-card" id="community-feed">
-          <p className="section-kicker">Section 7</p>
-          <h2>Community Feed</h2>
-          {recentActivity.length === 0 ? <ul className="activity-feed"><li><span className="highlight">Member wins</span><div>Share your first win to activate the feed.</div></li><li><span className="highlight">Business spotlights</span><div>Post a recommendation from today’s challenge.</div></li><li><span className="highlight">Builder announcements</span><div>Builder updates will appear here as the Discord bridge expands.</div></li><li><span className="highlight">New books & audiobooks</span><div>Library additions will be routed into this mission feed.</div></li></ul> : <ul className="activity-feed">{recentActivity.map((item, idx) => <li key={item.id || idx}><span className="highlight">{item.title || item.type}</span><div>{item.detail || item.description}</div></li>)}</ul>}
         </section>
       </main>
 

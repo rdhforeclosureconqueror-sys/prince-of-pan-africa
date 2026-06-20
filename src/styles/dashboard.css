@@ -921,3 +921,201 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+/* Phase 2.1 — Living Member Dashboard */
+.living-dashboard {
+  text-align: left;
+}
+
+.living-hero {
+  overflow: hidden;
+  position: relative;
+  max-width: 1180px;
+  margin-left: auto;
+  margin-right: auto;
+  padding: clamp(2rem, 5vw, 4rem);
+  border: 1px solid rgba(255, 215, 0, 0.26);
+  border-radius: 34px;
+  background:
+    radial-gradient(circle at 15% 10%, rgba(255, 215, 0, 0.22), transparent 34%),
+    radial-gradient(circle at 88% 0%, rgba(46, 204, 113, 0.18), transparent 30%),
+    linear-gradient(135deg, rgba(10, 18, 35, 0.86), rgba(24, 13, 6, 0.72));
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.living-hero::after {
+  content: "";
+  position: absolute;
+  inset: auto -10% -45% 45%;
+  height: 280px;
+  background: radial-gradient(circle, rgba(255, 215, 0, 0.2), transparent 65%);
+  filter: blur(12px);
+  pointer-events: none;
+}
+
+.living-hero h1 {
+  font-size: clamp(2.5rem, 7vw, 5.4rem);
+  line-height: 0.95;
+  margin: 0.25rem 0 1rem;
+}
+
+.living-hero .subtitle {
+  max-width: 760px;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: clamp(1rem, 2vw, 1.25rem);
+}
+
+.living-hero-grid,
+.journey-summary-grid,
+.placeholder-card-grid,
+.learning-hub-grid,
+.journey-action-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.living-hero-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: 2rem;
+}
+
+.living-hero-grid article,
+.journey-summary-grid article,
+.placeholder-card-grid article,
+.learning-hub-grid a {
+  position: relative;
+  overflow: hidden;
+  min-height: 118px;
+  padding: 1.1rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 22px;
+  background: rgba(4, 12, 28, 0.58);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.living-hero-grid article::before,
+.placeholder-card-grid article::before,
+.learning-hub-grid a::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255, 215, 0, 0.12), transparent 48%, rgba(46, 204, 113, 0.1));
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.living-hero-grid article:hover::before,
+.placeholder-card-grid article:hover::before,
+.learning-hub-grid a:hover::before {
+  opacity: 1;
+}
+
+.living-hero-grid span,
+.journey-summary-grid span,
+.placeholder-card-grid small {
+  display: block;
+  color: #f7d98f;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.living-hero-grid strong,
+.journey-summary-grid strong,
+.placeholder-card-grid strong,
+.learning-hub-grid strong {
+  position: relative;
+  z-index: 1;
+  display: block;
+  color: #fff8dc;
+  font-size: clamp(1.15rem, 2vw, 1.8rem);
+  line-height: 1.12;
+  margin-top: 0.45rem;
+}
+
+.living-hero-grid small,
+.journey-summary-grid small,
+.learning-hub-grid span {
+  position: relative;
+  z-index: 1;
+  display: block;
+  margin-top: 0.6rem;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.living-dashboard-grid {
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+.living-section {
+  max-width: none;
+  padding: clamp(1.35rem, 3vw, 2rem);
+}
+
+.journey-summary-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 1.25rem;
+}
+
+.future-hook-section {
+  border-color: rgba(125, 211, 252, 0.22);
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.76), rgba(4, 12, 28, 0.72));
+}
+
+.placeholder-card-grid {
+  grid-template-columns: repeat(auto-fit, minmax(165px, 1fr));
+  margin-top: 1rem;
+}
+
+.placeholder-card-grid--three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.placeholder-card-grid article span {
+  color: #ffd700;
+  font-size: 1.45rem;
+}
+
+.journey-action-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 1rem 0;
+}
+
+.learning-hub-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.learning-hub-grid a {
+  color: inherit;
+  min-height: 108px;
+  text-decoration: none;
+}
+
+.reward-summary-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 1rem;
+}
+
+@media (max-width: 980px) {
+  .living-hero-grid,
+  .journey-summary-grid,
+  .journey-action-grid,
+  .learning-hub-grid,
+  .reward-summary-grid,
+  .placeholder-card-grid--three {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .living-hero-grid,
+  .journey-summary-grid,
+  .journey-action-grid,
+  .learning-hub-grid,
+  .reward-summary-grid,
+  .placeholder-card-grid--three {
+    grid-template-columns: 1fr;
+  }
+}
