@@ -8,6 +8,49 @@ import "../styles/home.css";
 
 const API_BASE = API_BASE_URL;
 
+const capabilityCards = [
+  {
+    eyebrow: "Library",
+    title: "Books & Audiobooks Library",
+    description:
+      "Explore a growing library of books, audiobooks, and educational materials organized for cultural learning, leadership development, and self-directed study.",
+    cta: "Open Library",
+    to: "/library",
+  },
+  {
+    eyebrow: "Language",
+    title: "Language Learning",
+    description:
+      "Begin building language connection through Swahili and other learning resources designed to reconnect culture, communication, and identity.",
+    cta: "Explore Language Lessons",
+    to: "/languages",
+  },
+  {
+    eyebrow: "History",
+    title: "Historical Learning Paths",
+    description:
+      "Study history through curated timelines and learning paths that connect past struggles, present conditions, and future institution-building.",
+    cta: "Explore History",
+    to: "/timeline",
+  },
+  {
+    eyebrow: "Assessment",
+    title: "Leadership Assessment",
+    description:
+      "Take assessments that help members reflect on leadership, readiness, discipline, and personal development.",
+    cta: "Start Assessment",
+    to: "/assessments",
+  },
+  {
+    eyebrow: "Preparedness",
+    title: "Preparedness Center",
+    description:
+      "Build practical readiness for your household and community through preparedness education, planning, and action-based learning.",
+    cta: "Open Preparedness Center",
+    to: "/community/preparedness",
+  },
+];
+
 export default function Home({ user, isAdmin, canAccessOrganizer = false, authChecked = false, onAuthChange }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
@@ -36,7 +79,7 @@ export default function Home({ user, isAdmin, canAccessOrganizer = false, authCh
   const authTitle = useMemo(() => {
     if (isAdmin) return "Admin access active";
     if (user) return "Member access active";
-    return authMode === "join" ? "Join as a member" : "Sign in";
+    return authMode === "join" ? "Join the Community" : "Sign in";
   }, [authMode, isAdmin, user]);
 
   const handleSend = async () => {
@@ -126,31 +169,104 @@ export default function Home({ user, isAdmin, canAccessOrganizer = false, authCh
   }
 
   const latestReply = messages.filter((msg) => msg.role === "assistant").slice(-1)[0]?.text || "";
+  const dashboardLabel = isAdmin ? "Open Operations Deck" : "Open Member Dashboard";
 
   return (
     <div className="home-shell">
       <section className="hero-panel cosmic-readable-shell">
-        <p className="hero-kicker">Simba wa Ujamaa</p>
+        <p className="hero-kicker">SIMBA WA UJAMAA</p>
         <h1>Mufasa The Decolonizer</h1>
         <p className="hero-subtitle">
-          Join a Pan-African learning community rooted in language, history, leadership, and cooperative institution building.
+          A Pan-African learning and preparedness platform for language, history, leadership, cooperative economics,
+          books, audiobooks, assessments, and community-building.
         </p>
         <div className="hero-cta-row">
-          <Link to="/library" className="hero-btn">Books & Audiobooks Library</Link>
-          {user && ENABLE_TEXT_BOOK_ORGANIZER && canAccessOrganizer ? (
-            <>
-              <Link to="/library/organizer" className="hero-btn hero-btn--secondary">Format a Book</Link>
-              <Link to="/library/organizer" className="hero-btn hero-btn--secondary">Upload Book Text</Link>
-            </>
-          ) : null}
           {authChecked && user ? (
-            <Link to="/dashboard" className="hero-btn hero-btn--ghost">{isAdmin ? "Operations Deck" : "Member Dashboard"}</Link>
-          ) : null}
+            <Link to="/dashboard" className="hero-btn">{dashboardLabel}</Link>
+          ) : (
+            <a href="#join" className="hero-btn" onClick={() => setAuthMode("join")}>Join the Community</a>
+          )}
+          <Link to="/library" className="hero-btn hero-btn--secondary">Explore the Library</Link>
           <Link to="/assessments" className="hero-btn hero-btn--ghost">Assessment Center</Link>
+          {!user ? <a href="#join" className="hero-btn hero-btn--ghost" onClick={() => setAuthMode("login")}>Sign In</a> : null}
         </div>
       </section>
 
-      <section className="home-grid">
+      <section className="panel intro-panel cosmic-readable-shell" aria-labelledby="what-is-mufasa">
+        <p className="section-kicker">What is Mufasa Universe?</p>
+        <h2 id="what-is-mufasa">A digital learning home for culture, discipline, and community capacity.</h2>
+        <p>
+          Mufasa Universe is a digital learning home for people building knowledge, discipline, culture, and
+          community capacity. Members can study Pan-African history, explore books and audiobooks, practice
+          language, take leadership assessments, prepare for emergencies, and follow guided learning paths from
+          one dashboard.
+        </p>
+      </section>
+
+      <section className="capability-section" aria-labelledby="capabilities-title">
+        <div className="section-heading cosmic-readable-shell">
+          <p className="section-kicker">Explore the Universe</p>
+          <h2 id="capabilities-title">Learning, readiness, and institution-building in one platform.</h2>
+        </div>
+
+        <div className="capability-grid">
+          {capabilityCards.map((card) => (
+            <article className="panel capability-card cosmic-readable-shell" key={card.title}>
+              <p className="card-eyebrow">{card.eyebrow}</p>
+              <h3>{card.title}</h3>
+              <p>{card.description}</p>
+              <Link to={card.to} className="hero-btn hero-btn--small">{card.cta}</Link>
+            </article>
+          ))}
+
+          <article className="panel capability-card cosmic-readable-shell">
+            <p className="card-eyebrow">Member Hub</p>
+            <h3>Member Dashboard</h3>
+            <p>
+              Your dashboard brings your learning, assessments, library activity, and community tools into one
+              daily hub.
+            </p>
+            {authChecked && user ? (
+              <Link to="/dashboard" className="hero-btn hero-btn--small">{dashboardLabel}</Link>
+            ) : (
+              <a href="#join" className="hero-btn hero-btn--small" onClick={() => setAuthMode("join")}>Join to Access Dashboard</a>
+            )}
+          </article>
+
+          <article className="panel capability-card cosmic-readable-shell">
+            <p className="card-eyebrow">Builder Access</p>
+            <h3>Builder Access</h3>
+            <p>
+              Eligible Builder Members and administrators can access advanced tools for organizing content,
+              creating learning resources, and supporting the growth of the platform.
+            </p>
+            {ENABLE_TEXT_BOOK_ORGANIZER && canAccessOrganizer ? (
+              <Link to="/library/organizer" className="hero-btn hero-btn--small">Open Builder Tools</Link>
+            ) : (
+              <Link to="/membership" className="hero-btn hero-btn--small">View Membership Options</Link>
+            )}
+          </article>
+        </div>
+      </section>
+
+      <section className="membership-panel panel cosmic-readable-shell">
+        <p className="section-kicker">Membership</p>
+        <h2>Choose Your Level of Access</h2>
+        <p>
+          Membership supports the continued development of the Mufasa Universe and unlocks access to the learning
+          dashboard, assessments, preparedness tools, library experiences, and eligible member features.
+        </p>
+        <div className="hero-cta-row">
+          <Link to="/membership" className="hero-btn">View Membership Options</Link>
+          {authChecked && user ? (
+            <Link to="/dashboard" className="hero-btn hero-btn--secondary">{dashboardLabel}</Link>
+          ) : (
+            <a href="#join" className="hero-btn hero-btn--secondary" onClick={() => setAuthMode("join")}>Join Now</a>
+          )}
+        </div>
+      </section>
+
+      <section className="home-grid" id="join">
         <article className="panel account-panel cosmic-readable-shell">
           <h2>{authTitle}</h2>
           {user ? (
@@ -159,18 +275,17 @@ export default function Home({ user, isAdmin, canAccessOrganizer = false, authCh
                 Signed in as <strong>{user.email}</strong> ({isAdmin ? "admin" : "member"}).
               </p>
               <div className="hero-cta-row">
-                {ENABLE_TEXT_BOOK_ORGANIZER && canAccessOrganizer ? (
-                  <Link to="/library/organizer" className="hero-btn">Upload Book Text</Link>
-                ) : null}
-                <Link to="/dashboard" className="hero-btn hero-btn--secondary">{isAdmin ? "Open Operations Deck" : "Open Member Dashboard"}</Link>
-                {authChecked && ENABLE_TEXT_BOOK_ORGANIZER && user && !canAccessOrganizer ? (
-                  <span className="access-note">Text Book Organizer is available to Builder Member, admin, and superadmin accounts.</span>
-                ) : null}
+                <Link to="/dashboard" className="hero-btn hero-btn--secondary">{dashboardLabel}</Link>
+                <Link to="/membership" className="hero-btn hero-btn--ghost">Membership Options</Link>
                 <button type="button" onClick={logout} className="hero-btn hero-btn--ghost">Sign out</button>
               </div>
             </>
           ) : (
             <form className="auth-form" onSubmit={submitAuth}>
+              <p className="panel-text">
+                Create your member account or sign in to continue into your learning dashboard, assessments, and
+                member tools.
+              </p>
               <div className="auth-switch">
                 <button type="button" className={authMode === "join" ? "is-active" : ""} onClick={() => setAuthMode("join")}>Join</button>
                 <button type="button" className={authMode === "login" ? "is-active" : ""} onClick={() => setAuthMode("login")}>Sign In</button>
@@ -184,17 +299,26 @@ export default function Home({ user, isAdmin, canAccessOrganizer = false, authCh
         </article>
 
         <article className="panel cosmic-readable-shell">
-          <h2>Public Homepage</h2>
+          <p className="section-kicker">Start Here</p>
+          <h2>Explore before you join.</h2>
           <ul className="focus-list">
-            <li>Explore the library, language lessons, leadership assessment, and historical learning paths.</li>
-            <li>Members continue from a dedicated dashboard built as a daily community hub.</li>
-            <li>Builder tools remain permission-gated for eligible members and administrators.</li>
+            <li>Open the library and begin exploring books, audiobooks, and study materials.</li>
+            <li>Visit language lessons and historical learning paths to see the learning focus.</li>
+            <li>Join when you are ready to continue through the member dashboard and gated tools.</li>
           </ul>
+          <div className="hero-cta-row">
+            <Link to="/library" className="hero-btn hero-btn--secondary">Open Library</Link>
+            <Link to="/languages" className="hero-btn hero-btn--ghost">Language Lessons</Link>
+          </div>
         </article>
       </section>
 
       <section className="panel chat-panel cosmic-readable-shell">
-        <h2>Talk to Mufasa</h2>
+        <p className="section-kicker">Ask Mufasa</p>
+        <h2>Ask Mufasa</h2>
+        <p className="panel-text">
+          Ask questions about the platform, learning paths, books, language, history, and member tools.
+        </p>
         <div className="chat-window" id="chat-output">
           {messages.map((msg, i) => (
             <div key={i} className={`chat-bubble ${msg.role}`}>
