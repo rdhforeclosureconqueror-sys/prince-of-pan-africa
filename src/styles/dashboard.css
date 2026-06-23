@@ -1816,3 +1816,105 @@ body {
   font-weight: 800;
   text-decoration: none;
 }
+
+/* Member Home UX layering: compact accordions and futuristic snapshot */
+.member-home-grid details.cosmic-section {
+  cursor: default;
+}
+
+.member-home-grid details.cosmic-section > summary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  list-style: none;
+}
+
+.member-home-grid details.cosmic-section > summary::-webkit-details-marker {
+  display: none;
+}
+
+.member-home-grid details.cosmic-section > summary::after {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  content: "Open";
+  flex: 0 0 auto;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  padding: 0.45rem 0.75rem;
+  text-transform: uppercase;
+}
+
+.member-home-grid details.cosmic-section[open] > summary::after {
+  content: "Close";
+}
+
+.community-snapshot-card--futuristic {
+  background:
+    radial-gradient(circle at 12% 0%, rgba(56, 189, 248, 0.18), transparent 28%),
+    radial-gradient(circle at 88% 8%, rgba(168, 85, 247, 0.18), transparent 32%),
+    rgba(9, 14, 31, 0.88);
+  border-color: rgba(125, 211, 252, 0.28);
+  box-shadow: 0 0 45px rgba(14, 165, 233, 0.16);
+}
+
+.snapshot-impact-columns {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 1.25rem;
+}
+
+.snapshot-impact-columns h3 {
+  color: #e0f2fe;
+  margin: 0 0 0.75rem;
+}
+
+.snapshot-metric-card {
+  background: linear-gradient(145deg, rgba(15, 23, 42, 0.84), rgba(30, 41, 59, 0.54));
+  border: 1px solid rgba(125, 211, 252, 0.2);
+  box-shadow: inset 0 0 22px rgba(56, 189, 248, 0.08);
+}
+
+.mutual-aid-progress-card {
+  align-items: center;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.16), rgba(14, 165, 233, 0.12));
+  border: 1px solid rgba(110, 231, 183, 0.28);
+  border-radius: 1.25rem;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin-top: 1.25rem;
+  padding: 1.25rem;
+}
+
+.mutual-aid-progress-card > .community-progress,
+.mutual-aid-progress-card > small {
+  grid-column: 1 / -1;
+}
+
+.mutual-aid-progress-card h3,
+.mutual-aid-progress-card p {
+  margin: 0.25rem 0 0;
+}
+
+.mutual-aid-progress-card > div:first-child > span {
+  color: #bbf7d0;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 760px) {
+  .member-home-grid details.cosmic-section > summary,
+  .mutual-aid-progress-card {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .snapshot-impact-columns {
+    grid-template-columns: 1fr;
+  }
+}
