@@ -3,6 +3,10 @@ import { Link } from "react-router-dom";
 import "../styles/applications.css";
 
 function ApplicationAction({ application }) {
+  if (application.current) {
+    return <span className="application-card__button application-card__button--disabled">You are here</span>;
+  }
+
   if (application.route) {
     return <Link className="application-card__button" to={application.route}>{application.launchLabel || "Launch"}</Link>;
   }

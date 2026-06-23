@@ -41,7 +41,7 @@ export const SIMBA_APPLICATIONS = [
   ...reservedOperationApplications,
   { id: "garvey", icon: "🏪", name: "Garvey", platformPurpose: "Business Development Platform", description: "Business assessments, marketplace tools, landing pages, customer analytics, and growth engines remain in Garvey.", purpose: "Build and grow your business.", status: APPLICATION_STATUSES.external, category: "Economy", launchLabel: "Launch Garvey", externalUrl: "https://garvey.simbawu.com" },
   { id: "real-estate", icon: "🏘️", name: "Real Estate Platform", platformPurpose: "Investment Platform", description: "Independent community investment platform for property education, cooperative ownership, and wealth building.", purpose: "Build generational wealth.", status: APPLICATION_STATUSES.inviteOnly, category: "Future Systems" },
-  { id: "pocketpt", icon: "💪🏾", name: "PocketPT", platformPurpose: "Community Health Platform", description: "Independent health platform for fitness, nutrition, wellness, and physical readiness.", purpose: "Strengthen your body.", status: APPLICATION_STATUSES.external, category: "Health", launchLabel: "Launch PocketPT", externalUrl: "https://pocketpt.app" },
+  { id: "pocketpt", icon: "💪🏾", name: "Pocket PT", platformPurpose: "Community Health Platform", description: "Independent health platform for fitness, nutrition, wellness, and physical readiness.", purpose: "Strengthen your body.", status: APPLICATION_STATUSES.comingSoon, category: "Health", launchLabel: "Notify Me" },
 ];
 
 export const APPLICATION_CATEGORIES = ["Community", "Community Operations", "Learning", "Development", "Economy", "Health", "Leadership", "Culture", "Future Systems"];
