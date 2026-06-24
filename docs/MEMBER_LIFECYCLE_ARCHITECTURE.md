@@ -641,6 +641,12 @@ Privacy expectations:
 * Use aggregated community-health reporting whenever individual identity is not necessary.
 * Protect investment-related and business-readiness signals with heightened care.
 
+Ownership pathway policy baseline:
+
+* Owner-member eligibility requires a $2,500 recognized ownership contribution, completed cooperative orientation, active member good standing, a signed ownership/member agreement, and cooperative governance approval.
+* Recognized contribution sources may include direct ownership contributions, eligible membership dues allocation, approved service credits, approved builder/operator credits, and founder contribution credits.
+* These ownership criteria must remain transparent, human-governed, and compliance-reviewed before any runtime eligibility workflow is implemented.
+
 Privacy is not only a technical requirement. It is a trust requirement.
 
 ---

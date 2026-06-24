@@ -290,6 +290,26 @@ Introduce cooperative economic participation only after trust, identity, operati
 
 Create pathways from financial education and cooperative participation toward ownership opportunities, while respecting compliance, risk, and member protection.
 
+### Owner-Member Eligibility
+
+Required owner-member criteria:
+
+- $2,500 recognized ownership contribution.
+- Completed cooperative orientation.
+- Active member in good standing.
+- Signed ownership/member agreement.
+- Approved by cooperative governance process.
+
+Recognized contribution sources may include:
+
+- Direct ownership contribution.
+- Eligible membership dues allocation.
+- Approved service credits.
+- Approved builder/operator credits.
+- Founder contribution credits.
+
+These criteria are policy boundaries for future ownership pathways and do not authorize automated investment eligibility logic without compliance, governance, and implementation approval.
+
 ### Build next
 
 - Ownership education and readiness content.
