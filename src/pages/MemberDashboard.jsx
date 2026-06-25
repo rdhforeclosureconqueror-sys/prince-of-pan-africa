@@ -67,6 +67,31 @@ const LEARNING_PATHS = [
   { title: "Swahili Foundations", reason: "Language practice builds cultural continuity one word at a time." },
 ];
 
+
+const STAR_MEMBER_HOME_GUARDRAILS = [
+  "STAR is participation recognition.",
+  "STAR is not money.",
+  "STAR is not cash.",
+  "STAR is not ownership.",
+  "STAR cannot be purchased, sold, transferred, or redeemed for cash.",
+  "STAR does not automatically create owner-member status.",
+];
+
+function activityTime(item) {
+  return item?.created_at || item?.completed_at || item?.timestamp || item?.date || "";
+}
+
+function calculateRecentStar(items = []) {
+  const now = new Date();
+  const weekAgo = new Date(now);
+  weekAgo.setDate(now.getDate() - 7);
+  return items.reduce((total, item) => {
+    const when = activityTime(item) ? new Date(activityTime(item)) : null;
+    if (!when || Number.isNaN(when.getTime()) || when < weekAgo) return total;
+    return total + Number(item?.star_award ?? item?.star ?? item?.amount ?? 0);
+  }, 0);
+}
+
 function formatDate(date) {
   return date.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 }
@@ -300,6 +325,7 @@ export default function MemberDashboard() {
   const starOpportunities = starExperience?.opportunities || [];
   const starHistory = starExperience?.history || activity || [];
   const starRewards = starExperience?.rewards || [];
+  const recentStarEarned = participation?.star_earned_this_week ?? participation?.weekly_star ?? summary?.star_earned_this_week ?? calculateRecentStar(starHistory);
   const leaderboards = starExperience?.leaderboards || {};
   const trust = communityTrust || {};
   const trustProgress = trust.progress || {};
@@ -502,6 +528,25 @@ export default function MemberDashboard() {
           <h2>Resume Journey</h2>
           <p>{resumeJourney.detail}</p>
           <Link to={resumeJourney.to} className="member-action-btn">{resumeJourney.label}</Link>
+        </section>
+
+        <section className="cosmic-section member-hub-card member-hub-card--wide living-section star-member-home-card member-home-priority">
+          <div className="section-heading-row">
+            <div>
+              <p className="section-kicker">STAR Recognition</p>
+              <h2>Your STAR participation</h2>
+            </div>
+            <Link to="/star-rewards" className="member-action-btn">View STAR Rewards</Link>
+          </div>
+          <p className="heartbeat-intro">STAR measures participation and contribution across approved Simba learning, service, preparedness, and community actions using data already recorded for your member account.</p>
+          <div className="star-member-home-metrics" aria-label="STAR member summary">
+            <article><span>Current STAR Balance</span><strong>{Number(currentStar || 0).toLocaleString()}</strong><small>From your existing participation summary.</small></article>
+            <article><span>STAR Earned Recently</span><strong>{Number(recentStarEarned || 0).toLocaleString()}</strong><small>{recentStarEarned ? "Based on available recent activity." : "No recent STAR activity is available yet."}</small></article>
+            <article><span>Participation Rank</span><strong>{currentRank}</strong><small>{activityCount} recorded activit{activityCount === 1 ? "y" : "ies"}</small></article>
+          </div>
+          <ul className="star-member-home-guardrails" aria-label="STAR guardrails">
+            {STAR_MEMBER_HOME_GUARDRAILS.map((rule) => <li key={rule}>{rule}</li>)}
+          </ul>
         </section>
 
         <section className="cosmic-section member-hub-card member-hub-card--wide living-section application-launcher-card member-home-priority">
