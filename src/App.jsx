@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { BrowserRouter as Router, Routes, Route, Navigate, Link, useLocation } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate, Link, useLocation, useNavigate } from "react-router-dom";
 import GlobalNav from "./components/GlobalNav";
 import UniverseOverlay from "./components/UniverseOverlay";
 import AdminOperationsDashboard from "./pages/AdminOperationsDashboard";
@@ -10,6 +10,7 @@ import PortalDecolonize from "./pages/PortalDecolonize";
 import LibraryOrganizer from "./pages/LibraryOrganizer";
 import TimelinePage from "./pages/TimelinePage";
 import MemberDashboard from "./pages/MemberDashboard";
+import StarRewardsPage from "./pages/StarRewardsPage";
 import ApplicationsPage from "./pages/ApplicationsPage";
 import SystemVerificationPage from "./pages/SystemVerificationPage";
 import AuthDebugPage from "./pages/AuthDebugPage";
@@ -31,6 +32,13 @@ import "./styles/backgroundSystem.css";
 
 function DashboardRoute({ authChecked, user, rbac, isAdmin }) {
   const location = useLocation();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (location.hash === "#star-rewards") {
+      navigate("/star-rewards", { replace: true });
+    }
+  }, [location.hash, navigate]);
 
   useEffect(() => {
     if (!AUTH_DEBUG) return;
@@ -154,6 +162,7 @@ function AppRoutes({ user, rbac, isAdmin, canAccessOrganizer, authChecked, refre
       <Routes>
         <Route path="/" element={<Home user={user} isAdmin={isAdmin} canAccessOrganizer={canAccessOrganizer} authChecked={authChecked} onAuthChange={refreshAuth} />} />
         <Route path="/dashboard" element={<DashboardRoute authChecked={authChecked} user={user} rbac={rbac} isAdmin={isAdmin} />} />
+        <Route path="/star-rewards" element={<StarRewardsPage />} />
         <Route path="/applications" element={<ApplicationsPage />} />
         <Route path="/admin" element={<Navigate to="/dashboard" replace />} />
         <Route path="/admin-legacy" element={<Navigate to="/dashboard" replace />} />
