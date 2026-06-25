@@ -274,3 +274,7 @@ No Black Dollar, ownership contribution, partner reimbursement, or mutual aid ru
 - Some Member Home and STAR Rewards content remains presentation-layer or fallback copy, including static categories, opportunity messaging, badge/milestone presentation, and frontend grouping. These displays are not authoritative policy or ledger records.
 - STAR balances are still read from existing participation/activity summary data (`/participation/experience`, `/member/overview`, `/member/activity`) and are still effectively derived from existing participation activity data rather than a ledger-backed source of truth.
 - Before STAR becomes ledger-backed, Simba should make `star_transactions` the authoritative balance source, add reversal/appeal/admin review flows, externalize earning policy and high-value verification rules, reconcile historical `Activity.star_award` rows into ledger events, and add tests proving duplicate, reversal, merge, and verification behavior.
+
+## Follow-Up Note
+
+Next planned economy documentation step: Mutual Aid Society system design. This is documentation-only and does not activate mutual aid runtime flows.
