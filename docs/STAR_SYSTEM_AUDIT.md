@@ -263,3 +263,4 @@ No Black Dollar, ownership contribution, partner reimbursement, or mutual aid ru
 ## Follow-up Notes
 
 - Follow-up PR completed: dedicated STAR Rewards page and navigation repair.
+- Follow-up PR completed: Member Home / Dashboard STAR visibility and navigation cleanup.
