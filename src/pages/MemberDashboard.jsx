@@ -69,16 +69,51 @@ const LEARNING_PATHS = [
 
 
 const STAR_MEMBER_HOME_GUARDRAILS = [
-  "STAR is participation recognition.",
+  "STAR measures participation and contribution.",
   "STAR is not money.",
   "STAR is not cash.",
   "STAR is not ownership.",
-  "STAR cannot be purchased, sold, transferred, or redeemed for cash.",
+  "STAR cannot be bought, sold, transferred, or redeemed for cash.",
   "STAR does not automatically create owner-member status.",
 ];
 
 function activityTime(item) {
   return item?.created_at || item?.completed_at || item?.timestamp || item?.date || "";
+}
+
+
+function isHighValueOrVerificationActivity(item) {
+  const type = String(item?.activity_type || item?.type || item?.title || "").toLowerCase();
+  const status = String(item?.verification_status || item?.status || item?.review_status || "").toLowerCase();
+  const starAward = Number(item?.star_award ?? item?.star ?? item?.amount ?? 0);
+  return starAward >= 15 || /verif|review|appeal|reversal|volunteer|referr|support|service/.test(type) || /pending|review|verified|rejected|appeal/.test(status);
+}
+
+function groupedStarActivityTitle(item) {
+  const label = String(item?.activity_type || item?.type || item?.title || "STAR activity").replaceAll("_", " ");
+  if (item.count > 1) return `${item.count} ${label.toLowerCase()} actions`;
+  return item?.title || label;
+}
+
+function groupStarActivity(items = []) {
+  const grouped = new Map();
+  const visible = [];
+  items.forEach((item, index) => {
+    if (isHighValueOrVerificationActivity(item)) {
+      visible.push({ ...item, count: 1, latest: activityTime(item), groupKey: `visible:${item?.id || index}` });
+      return;
+    }
+    const type = item?.activity_type || item?.type || item?.title || "STAR activity";
+    const source = item?.source_module || item?.module || "simba";
+    const date = activityTime(item).slice(0, 10) || "undated";
+    const key = `${type}:${source}:${date}`;
+    const current = grouped.get(key) || { ...item, count: 0, star_award: 0, latest: activityTime(item), groupKey: key };
+    current.count += 1;
+    current.star_award += Number(item?.star_award ?? item?.star ?? item?.amount ?? 0);
+    if (activityTime(item) > current.latest) current.latest = activityTime(item);
+    grouped.set(key, current);
+  });
+  return [...visible, ...Array.from(grouped.values())].sort((a, b) => String(b.latest || activityTime(b)).localeCompare(String(a.latest || activityTime(a)))).slice(0, 4);
 }
 
 function calculateRecentStar(items = []) {
@@ -326,6 +361,7 @@ export default function MemberDashboard() {
   const starHistory = starExperience?.history || activity || [];
   const starRewards = starExperience?.rewards || [];
   const recentStarEarned = participation?.star_earned_this_week ?? participation?.weekly_star ?? summary?.star_earned_this_week ?? calculateRecentStar(starHistory);
+  const groupedStarActivity = groupStarActivity(starHistory);
   const leaderboards = starExperience?.leaderboards || {};
   const trust = communityTrust || {};
   const trustProgress = trust.progress || {};
@@ -543,6 +579,9 @@ export default function MemberDashboard() {
             <article><span>Current STAR Balance</span><strong>{Number(currentStar || 0).toLocaleString()}</strong><small>From your existing participation summary.</small></article>
             <article><span>STAR Earned Recently</span><strong>{Number(recentStarEarned || 0).toLocaleString()}</strong><small>{recentStarEarned ? "Based on available recent activity." : "No recent STAR activity is available yet."}</small></article>
             <article><span>Participation Rank</span><strong>{currentRank}</strong><small>{activityCount} recorded activit{activityCount === 1 ? "y" : "ies"}</small></article>
+          </div>
+          <div className="activity-scroll" aria-label="Recent STAR participation activity">
+            {groupedStarActivity.length ? groupedStarActivity.map((item) => <article key={item.groupKey || item.id || item.title} className="activity-card activity-card--feed"><span>{String(item.activity_type || item.type || "STAR activity").replaceAll("_", " ")}</span><strong>{groupedStarActivityTitle(item)}</strong><p>{item.count > 1 ? "Similar low-risk participation actions from the same day are grouped for readability." : (item.description || item.source_module || item.module || "Recorded participation and contribution activity.")}</p><small>{Number(item.star_award || 0) ? `+${Number(item.star_award).toLocaleString()} STAR participation recognition · not money, cash, ownership, transferable, or redeemable for cash` : "STAR is participation recognition only"}</small></article>) : <article className="activity-card activity-card--feed"><strong>No STAR activity yet.</strong><p>Earn STAR participation recognition through approved learning, reflection, preparedness, sharing, service, building, and support. STAR is not money, cash, ownership, transferable, or redeemable for cash, and it does not automatically create owner-member status.</p></article>}
           </div>
           <ul className="star-member-home-guardrails" aria-label="STAR guardrails">
             {STAR_MEMBER_HOME_GUARDRAILS.map((rule) => <li key={rule}>{rule}</li>)}
