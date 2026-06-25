@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import "../styles/globalNav.css";
-import { AUTH_DEBUG, ENABLE_TEXT_BOOK_ORGANIZER } from "../config";
+import { AUTH_DEBUG, ENABLE_MUTUAL_AID_OVERVIEW, ENABLE_TEXT_BOOK_ORGANIZER } from "../config";
 import { PILOT_NAV_LINKS } from "../pilotScope";
 import { getDashboardLabel, isAdminUser } from "../authz";
 
@@ -71,6 +71,16 @@ export default function GlobalNav({ user, rbac, canAccessOrganizer = false, auth
                   </Link>
                 );
               })}
+
+              {ENABLE_MUTUAL_AID_OVERVIEW ? (
+                <Link
+                  to="/mutual-aid"
+                  onClick={closeMenu}
+                  className={location.pathname === "/mutual-aid" ? "global-nav__link is-active" : "global-nav__link"}
+                >
+                  Mutual Aid
+                </Link>
+              ) : null}
 
               {ENABLE_TEXT_BOOK_ORGANIZER && canAccessOrganizer ? (
                 <Link
