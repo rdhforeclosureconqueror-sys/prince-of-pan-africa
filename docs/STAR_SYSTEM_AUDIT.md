@@ -264,3 +264,13 @@ No Black Dollar, ownership contribution, partner reimbursement, or mutual aid ru
 
 - Follow-up PR completed: dedicated STAR Rewards page and navigation repair.
 - Follow-up PR completed: Member Home / Dashboard STAR visibility and navigation cleanup.
+
+## Follow-up Note — STAR Activity Display Cleanup
+
+- Member Home now shows a compact recent STAR participation activity feed inside the STAR recognition card. Repeated low-risk activity from the same day and source is grouped in the frontend so members do not see long runs of duplicate lesson/listening rows, while higher-value, service, support, referral, review, appeal, and verification-related actions remain individually visible.
+- The `/star-rewards` page uses the same display safety approach for recent STAR activity: noisy same-day actions are summarized, and the card copy states that STAR is participation recognition only, not money, cash, ownership, transferable value, or cash-redemption value.
+- Empty states now explain that members can earn STAR through approved learning, reflection, preparedness, sharing, service, building, and support actions. These empty states also repeat that STAR does not automatically create owner-member status.
+- This cleanup is display-only. It does not add Black Dollars, ownership contribution logic, mutual aid runtime flows, partner reimbursement logic, schema changes, migrations, payments, or STAR earning-rule changes.
+- Some Member Home and STAR Rewards content remains presentation-layer or fallback copy, including static categories, opportunity messaging, badge/milestone presentation, and frontend grouping. These displays are not authoritative policy or ledger records.
+- STAR balances are still read from existing participation/activity summary data (`/participation/experience`, `/member/overview`, `/member/activity`) and are still effectively derived from existing participation activity data rather than a ledger-backed source of truth.
+- Before STAR becomes ledger-backed, Simba should make `star_transactions` the authoritative balance source, add reversal/appeal/admin review flows, externalize earning policy and high-value verification rules, reconcile historical `Activity.star_award` rows into ledger events, and add tests proving duplicate, reversal, merge, and verification behavior.

@@ -17,7 +17,7 @@ const STAR_RULES = [
   "STAR is not money.",
   "STAR is not cash.",
   "STAR is not ownership.",
-  "STAR cannot be purchased.",
+  "STAR cannot be bought or purchased.",
   "STAR cannot be sold.",
   "STAR cannot be transferred.",
   "STAR cannot be redeemed for cash.",
@@ -32,20 +32,38 @@ function activityTime(item) {
   return item?.created_at || item?.completed_at || item?.timestamp || item?.date || "";
 }
 
+function isHighValueOrVerificationActivity(item) {
+  const type = String(item?.activity_type || item?.type || item?.title || "").toLowerCase();
+  const status = String(item?.verification_status || item?.status || item?.review_status || "").toLowerCase();
+  const starAward = Number(item?.star_award ?? item?.star ?? item?.amount ?? 0);
+  return starAward >= 15 || /verif|review|appeal|reversal|volunteer|referr|support|service/.test(type) || /pending|review|verified|rejected|appeal/.test(status);
+}
+
+function groupedActivityTitle(item) {
+  const label = displayLabel(item.activity_type || item.type || item.title);
+  if (item.count > 1) return `${item.count} ${label.toLowerCase()} actions`;
+  return item.title || label;
+}
+
 function groupRepeatedActivity(items = []) {
   const grouped = new Map();
-  items.forEach((item) => {
+  const visible = [];
+  items.forEach((item, index) => {
+    if (isHighValueOrVerificationActivity(item)) {
+      visible.push({ ...item, count: 1, latest: activityTime(item), groupKey: `visible:${item?.id || index}` });
+      return;
+    }
     const type = item?.activity_type || item?.type || item?.title || "STAR activity";
     const source = item?.source_module || item?.module || "simba";
-    const date = activityTime(item).slice(0, 10);
+    const date = activityTime(item).slice(0, 10) || "undated";
     const key = `${type}:${source}:${date}`;
-    const current = grouped.get(key) || { ...item, count: 0, star_award: 0, latest: activityTime(item) };
+    const current = grouped.get(key) || { ...item, count: 0, star_award: 0, latest: activityTime(item), groupKey: key };
     current.count += 1;
     current.star_award += Number(item?.star_award ?? item?.star ?? item?.amount ?? 0);
     if (activityTime(item) > current.latest) current.latest = activityTime(item);
     grouped.set(key, current);
   });
-  return Array.from(grouped.values()).sort((a, b) => String(b.latest || activityTime(b)).localeCompare(String(a.latest || activityTime(a)))).slice(0, 8);
+  return [...visible, ...Array.from(grouped.values())].sort((a, b) => String(b.latest || activityTime(b)).localeCompare(String(a.latest || activityTime(a)))).slice(0, 8);
 }
 
 function calculateWeeklyStar(items = []) {
@@ -112,7 +130,7 @@ export default function StarRewardsPage() {
         </div>
       </header>
 
-      {loading ? <div className="admin-loading">Loading STAR Rewards...</div> : null}
+      {loading ? <div className="admin-loading">Loading STAR participation recognition from existing activity data...</div> : null}
       {error ? <section className="cosmic-section star-safe-notice"><strong>{error}</strong></section> : null}
 
       <section className="star-summary-grid" aria-label="STAR summary">
@@ -144,7 +162,7 @@ export default function StarRewardsPage() {
       <section className="cosmic-section">
         <p className="section-kicker">Recent STAR Activity</p>
         <h2>Existing activity only</h2>
-        {groupedActivity.length ? <div className="activity-scroll">{groupedActivity.map((item) => <article key={`${item.activity_type || item.title}-${item.latest || item.id}`} className="activity-card activity-card--feed"><span>{displayLabel(item.activity_type || item.type || item.title)}</span><strong>{item.count > 1 ? `${item.count} repeated actions grouped` : (item.title || displayLabel(item.activity_type))}</strong><p>{item.description || item.source_module || item.module || "Recorded Simba participation activity."}</p><small>{Number(item.star_award || 0) ? `+${Number(item.star_award).toLocaleString()} STAR` : "STAR amount not shown"}</small></article>)}</div> : <p>No STAR activity yet. Complete approved learning, preparedness, service, or contribution actions to begin earning STAR.</p>}
+        {groupedActivity.length ? <div className="activity-scroll">{groupedActivity.map((item) => <article key={item.groupKey || `${item.activity_type || item.title}-${item.latest || item.id}`} className="activity-card activity-card--feed"><span>{displayLabel(item.activity_type || item.type || item.title)}</span><strong>{groupedActivityTitle(item)}</strong><p>{item.count > 1 ? "Similar low-risk participation actions from the same day are grouped to keep this feed readable." : (item.description || item.source_module || item.module || "Recorded Simba participation activity.")}</p><small>{Number(item.star_award || 0) ? `+${Number(item.star_award).toLocaleString()} STAR participation recognition · not money, cash, ownership, transferable, or redeemable for cash` : "STAR amount not shown · STAR is participation recognition only"}</small></article>)}</div> : <p>No STAR activity yet. Members can earn STAR participation recognition through approved learning, reflection, preparedness, sharing, service, building, and support actions. STAR is not money, cash, ownership, transferable, or redeemable for cash, and it does not automatically create owner-member status.</p>}
       </section>
 
       <section className="cosmic-section">
