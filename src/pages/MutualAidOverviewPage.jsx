@@ -1,14 +1,8 @@
 import React from "react";
 import { Link } from "react-router-dom";
+import MutualAidFundProgressCard from "../components/MutualAidFundProgressCard";
+import { activationRequirements, formatMutualAidCurrency, MUTUAL_AID_ACTIVATION_THRESHOLD, MUTUAL_AID_STATUS } from "../mutualAidFundProgress";
 import "../styles/mutualAid.css";
-
-const activationRequirements = [
-  "approved policy",
-  "governance process",
-  "accounting controls",
-  "privacy rules",
-  "approval controls",
-];
 
 export default function MutualAidOverviewPage() {
   return (
@@ -21,7 +15,7 @@ export default function MutualAidOverviewPage() {
         </p>
         <div className="mutual-aid-status" aria-label="Current status">
           <span className="mutual-aid-status__dot" aria-hidden="true" />
-          <span>Building Toward Activation</span>
+          <span>{MUTUAL_AID_STATUS}</span>
         </div>
       </section>
 
@@ -45,7 +39,7 @@ export default function MutualAidOverviewPage() {
 
         <article className="mutual-aid-card mutual-aid-threshold">
           <h2>Activation threshold</h2>
-          <p className="mutual-aid-threshold__amount">$20,000</p>
+          <p className="mutual-aid-threshold__amount">{formatMutualAidCurrency(MUTUAL_AID_ACTIVATION_THRESHOLD)}</p>
           <p>
             Live aid review begins only after the designated Mutual Aid / Community Development Fund reaches this
             amount in available or committed funding.
@@ -62,15 +56,7 @@ export default function MutualAidOverviewPage() {
           </ul>
         </article>
 
-        <article className="mutual-aid-card">
-          <h2>Mutual Aid Fund Progress</h2>
-          <div className="mutual-aid-progress" aria-label="Fund progress placeholder">
-            <div className="mutual-aid-progress__bar" />
-          </div>
-          <p className="mutual-aid-note">
-            Progress reporting is coming soon. This placeholder does not connect to external processing or fund movement.
-          </p>
-        </article>
+        <MutualAidFundProgressCard />
 
         <article className="mutual-aid-card mutual-aid-card--wide">
           <h2>Requests coming soon</h2>
