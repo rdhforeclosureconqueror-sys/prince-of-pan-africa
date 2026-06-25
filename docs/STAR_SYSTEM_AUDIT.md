@@ -260,3 +260,6 @@ No Black Dollar, ownership contribution, partner reimbursement, or mutual aid ru
 - `rg -n "participation|STAR|star_award|star_transactions|current_rank|reward|badge" backend src --glob '!node_modules/**'`
 - `rg -n "STAR|Black Dollars|ownership|cash|transfer|purchas|revers|review|participation" SIMBA_COOPERATIVE_ECONOMY_BINDER.md`
 - `npm run build`
+## Follow-up Notes
+
+- Follow-up PR completed: dedicated STAR Rewards page and navigation repair.
