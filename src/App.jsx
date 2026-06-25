@@ -24,8 +24,9 @@ import BuilderOnboardingPage from "./pages/BuilderOnboardingPage";
 import CommunityOnboardingPage from "./pages/CommunityOnboardingPage";
 import CommunityDirectoryPage from "./pages/CommunityDirectoryPage";
 import CommunityPreparednessPage from "./pages/CommunityPreparednessPage";
+import MutualAidOverviewPage from "./pages/MutualAidOverviewPage";
 import { getBackgroundForPath } from "./utils/backgroundSystem";
-import { API_DEBUG, AUTH_DEBUG, ENABLE_TEXT_BOOK_ORGANIZER } from "./config";
+import { API_DEBUG, AUTH_DEBUG, ENABLE_MUTUAL_AID_OVERVIEW, ENABLE_TEXT_BOOK_ORGANIZER } from "./config";
 import { api } from "./api/api";
 import { canAccessTextBookOrganizer, isAdminUser } from "./authz";
 import "./styles/backgroundSystem.css";
@@ -198,6 +199,16 @@ function AppRoutes({ user, rbac, isAdmin, canAccessOrganizer, authChecked, refre
         <Route path="/community/onboarding" element={<CommunityOnboardingPage />} />
         <Route path="/community/directory" element={<CommunityDirectoryPage />} />
         <Route path="/community/preparedness" element={<CommunityPreparednessPage />} />
+        <Route
+          path="/mutual-aid"
+          element={
+            ENABLE_MUTUAL_AID_OVERVIEW ? (
+              <MutualAidOverviewPage />
+            ) : (
+              <PilotDeferredPage title="Mutual Aid overview is not enabled" />
+            )
+          }
+        />
         <Route path="/preparedness" element={<Navigate to="/community/preparedness" replace />} />
         <Route path="/billing/cancel" element={<BillingCancelPage />} />
         <Route path="/assessments" element={<AssessmentLandingPage />} />

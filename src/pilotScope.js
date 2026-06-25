@@ -19,6 +19,7 @@ export const PILOT_INCLUDED_ROUTES = [
   "/membership/community",
   "/membership/builder",
   "/community/directory",
+  "/mutual-aid",
 ];
 
 export const PILOT_DEFERRED_ROUTES = [
