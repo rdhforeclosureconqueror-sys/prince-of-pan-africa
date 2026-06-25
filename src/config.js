@@ -104,8 +104,10 @@ export const ENV = {
 
 const TEXT_BOOK_ORGANIZER_FLAG = import.meta.env.VITE_ENABLE_TEXT_BOOK_ORGANIZER;
 const MUTUAL_AID_OVERVIEW_FLAG = import.meta.env.VITE_ENABLE_MUTUAL_AID_OVERVIEW;
+const MUTUAL_AID_ADMIN_PLANNING_FLAG = import.meta.env.VITE_ENABLE_MUTUAL_AID_ADMIN_PLANNING;
 const normalizedTextBookOrganizerFlag = String(TEXT_BOOK_ORGANIZER_FLAG || "").trim().toLowerCase();
 const normalizedMutualAidOverviewFlag = String(MUTUAL_AID_OVERVIEW_FLAG || "").trim().toLowerCase();
+const normalizedMutualAidAdminPlanningFlag = String(MUTUAL_AID_ADMIN_PLANNING_FLAG || "").trim().toLowerCase();
 
 export const ENABLE_TEXT_BOOK_ORGANIZER = TEXT_BOOK_ORGANIZER_FLAG === undefined
   ? !isDev
@@ -114,6 +116,10 @@ export const ENABLE_TEXT_BOOK_ORGANIZER = TEXT_BOOK_ORGANIZER_FLAG === undefined
 export const ENABLE_MUTUAL_AID_OVERVIEW = MUTUAL_AID_OVERVIEW_FLAG === undefined
   ? true
   : ["1", "true", "yes", "on"].includes(normalizedMutualAidOverviewFlag);
+
+export const ENABLE_MUTUAL_AID_ADMIN_PLANNING = MUTUAL_AID_ADMIN_PLANNING_FLAG === undefined
+  ? false
+  : ["1", "true", "yes", "on"].includes(normalizedMutualAidAdminPlanningFlag);
 
 // -----------------------------
 // ✅ LOG CONFIG SUMMARY (Dev only)
