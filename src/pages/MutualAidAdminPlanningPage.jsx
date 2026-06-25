@@ -1,16 +1,8 @@
 import React from "react";
 import { Link } from "react-router-dom";
+import MutualAidFundProgressCard from "../components/MutualAidFundProgressCard";
+import { activationRequirements, formatMutualAidCurrency, MUTUAL_AID_ACTIVATION_THRESHOLD, MUTUAL_AID_STATUS } from "../mutualAidFundProgress";
 import "../styles/mutualAid.css";
-
-const activationRequirements = [
-  "Approved policy",
-  "Governance process",
-  "Accounting controls",
-  "Privacy rules",
-  "Approval controls",
-  "Trained committee",
-  "Legal/tax/compliance review before public launch",
-];
 
 const pilotReadinessChecklist = [
   "Binder approved",
@@ -54,11 +46,11 @@ export default function MutualAidAdminPlanningPage() {
         <p className="mutual-aid-kicker">Internal Admin Planning</p>
         <h1 id="mutual-aid-admin-title">Mutual Aid Society Readiness</h1>
         <p className="mutual-aid-subtitle">
-          Phase 3 planning scaffold for activation requirements, pilot readiness, and go/no-go safeguards.
+          Phase 4 planning scaffold for activation requirements, pilot readiness, and go/no-go safeguards.
         </p>
         <div className="mutual-aid-status" aria-label="Current status">
           <span className="mutual-aid-status__dot" aria-hidden="true" />
-          <span>Building Toward Activation</span>
+          <span>{MUTUAL_AID_STATUS}</span>
         </div>
       </section>
 
@@ -70,14 +62,7 @@ export default function MutualAidAdminPlanningPage() {
       </section>
 
       <section className="mutual-aid-grid" aria-label="Mutual Aid admin readiness plan">
-        <article className="mutual-aid-card mutual-aid-threshold">
-          <h2>Activation threshold</h2>
-          <p className="mutual-aid-threshold__amount">$20,000</p>
-          <p>
-            Activation requires the designated Mutual Aid / Community Development Fund to reach this amount in
-            available or committed funding and all governance controls to be approved.
-          </p>
-        </article>
+        <MutualAidFundProgressCard />
 
         <article className="mutual-aid-card">
           <h2>Activation requirements</h2>
@@ -116,7 +101,7 @@ export default function MutualAidAdminPlanningPage() {
         <article className="mutual-aid-card">
           <h2>Next planned phase</h2>
           <p>
-            Phase 4 is a future, separately approved internal pilot workflow test with manual controls only after
+            A later separately approved phase may test internal pilot workflows with manual controls only after
             governance, privacy, professional review, and permission safeguards are ready.
           </p>
         </article>

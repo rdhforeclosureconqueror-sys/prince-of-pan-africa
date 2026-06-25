@@ -121,6 +121,10 @@ export const ENABLE_MUTUAL_AID_ADMIN_PLANNING = MUTUAL_AID_ADMIN_PLANNING_FLAG =
   ? false
   : ["1", "true", "yes", "on"].includes(normalizedMutualAidAdminPlanningFlag);
 
+export const MUTUAL_AID_ACTIVATION_THRESHOLD = 20000;
+export const MUTUAL_AID_CURRENT_PROGRESS = 0;
+export const MUTUAL_AID_STATUS = "Building Toward Activation";
+
 // -----------------------------
 // ✅ LOG CONFIG SUMMARY (Dev only)
 // -----------------------------
