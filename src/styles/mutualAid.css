@@ -150,3 +150,56 @@
     grid-template-columns: 1fr;
   }
 }
+
+.mutual-aid-page--admin .mutual-aid-hero {
+  border-color: rgba(255, 190, 96, 0.42);
+}
+
+.mutual-aid-warning {
+  margin: 1.5rem auto;
+  max-width: 1080px;
+  padding: 1rem 1.25rem;
+  border: 1px solid rgba(255, 190, 96, 0.45);
+  border-radius: 18px;
+  background: rgba(72, 44, 13, 0.72);
+  color: #fff7df;
+  line-height: 1.7;
+}
+
+.mutual-aid-checklist-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  margin-top: 1rem;
+}
+
+.mutual-aid-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.mutual-aid-check input {
+  margin-top: 0.2rem;
+  accent-color: #f5b84b;
+}
+
+.mutual-aid-list--danger li::marker {
+  color: #ff8b72;
+}
+
+.mutual-aid-link-button {
+  display: inline-flex;
+  margin-top: 0.75rem;
+  padding: 0.7rem 1rem;
+  border-radius: 999px;
+  background: rgba(245, 184, 75, 0.18);
+  border: 1px solid rgba(245, 184, 75, 0.45);
+  color: #fff4cf;
+  text-decoration: none;
+  font-weight: 700;
+}

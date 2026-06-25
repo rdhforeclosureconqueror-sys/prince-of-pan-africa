@@ -25,8 +25,9 @@ import CommunityOnboardingPage from "./pages/CommunityOnboardingPage";
 import CommunityDirectoryPage from "./pages/CommunityDirectoryPage";
 import CommunityPreparednessPage from "./pages/CommunityPreparednessPage";
 import MutualAidOverviewPage from "./pages/MutualAidOverviewPage";
+import MutualAidAdminPlanningPage from "./pages/MutualAidAdminPlanningPage";
 import { getBackgroundForPath } from "./utils/backgroundSystem";
-import { API_DEBUG, AUTH_DEBUG, ENABLE_MUTUAL_AID_OVERVIEW, ENABLE_TEXT_BOOK_ORGANIZER } from "./config";
+import { API_DEBUG, AUTH_DEBUG, ENABLE_MUTUAL_AID_ADMIN_PLANNING, ENABLE_MUTUAL_AID_OVERVIEW, ENABLE_TEXT_BOOK_ORGANIZER } from "./config";
 import { api } from "./api/api";
 import { canAccessTextBookOrganizer, isAdminUser } from "./authz";
 import "./styles/backgroundSystem.css";
@@ -155,6 +156,25 @@ function OrganizerRoute({ authChecked, user, rbac, canAccessOrganizer }) {
   );
 }
 
+function AdminPlanningRoute({ authChecked, user, isAdmin }) {
+  if (!ENABLE_MUTUAL_AID_ADMIN_PLANNING) {
+    return <PilotDeferredPage title="Mutual Aid admin planning is not enabled" />;
+  }
+
+  if (!authChecked) return <div className="admin-loading">Checking admin access...</div>;
+  if (!user) return <Navigate to="/?auth=login" replace />;
+  if (!isAdmin) {
+    return (
+      <PilotDeferredPage
+        title="Admin access required"
+        detail="This internal Mutual Aid planning scaffold is available only to admin users."
+      />
+    );
+  }
+
+  return <MutualAidAdminPlanningPage />;
+}
+
 function AppRoutes({ user, rbac, isAdmin, canAccessOrganizer, authChecked, refreshAuth }) {
   return (
     <>
@@ -166,6 +186,7 @@ function AppRoutes({ user, rbac, isAdmin, canAccessOrganizer, authChecked, refre
         <Route path="/star-rewards" element={<StarRewardsPage />} />
         <Route path="/applications" element={<ApplicationsPage />} />
         <Route path="/admin" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/admin/mutual-aid" element={<AdminPlanningRoute authChecked={authChecked} user={user} isAdmin={isAdmin} />} />
         <Route path="/admin-legacy" element={<Navigate to="/dashboard" replace />} />
         <Route
           path="/fitness"
