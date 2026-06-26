@@ -277,3 +277,141 @@
     margin-top: 0.75rem;
   }
 }
+
+.mutual-aid-page--preview .mutual-aid-hero {
+  border-color: rgba(96, 165, 250, 0.42);
+}
+
+.mutual-aid-preview-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  max-width: 1120px;
+  margin: 1.25rem auto 0;
+}
+
+.mutual-aid-preview-nav a,
+.mutual-aid-badges span {
+  border: 1px solid rgba(147, 197, 253, 0.42);
+  border-radius: 999px;
+  background: rgba(30, 64, 175, 0.28);
+  color: #dbeafe;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.mutual-aid-preview-nav a {
+  padding: 0.72rem 1rem;
+}
+
+.mutual-aid-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.mutual-aid-badges span {
+  padding: 0.45rem 0.7rem;
+  font-size: 0.78rem;
+}
+
+.mutual-aid-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.mutual-aid-field {
+  display: grid;
+  gap: 0.45rem;
+  color: #e2e8f0;
+  font-weight: 800;
+}
+
+.mutual-aid-field input,
+.mutual-aid-field select,
+.mutual-aid-field textarea {
+  width: 100%;
+  border: 1px solid rgba(148, 163, 184, 0.32);
+  border-radius: 14px;
+  padding: 0.85rem 0.95rem;
+  background: rgba(15, 23, 42, 0.72);
+  color: #cbd5e1;
+}
+
+.mutual-aid-field textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+
+.mutual-aid-disabled-button {
+  margin-top: 1rem;
+  border: 1px solid rgba(248, 113, 113, 0.42);
+  border-radius: 999px;
+  padding: 0.8rem 1rem;
+  background: rgba(127, 29, 29, 0.34);
+  color: #fecaca;
+  font-weight: 900;
+}
+
+.mutual-aid-empty-state {
+  text-align: center;
+}
+
+.mutual-aid-table {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.mutual-aid-table__row {
+  display: grid;
+  grid-template-columns: 1.4fr 1.4fr 0.6fr auto;
+  gap: 0.75rem;
+  align-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  padding: 0.85rem;
+  background: rgba(255, 255, 255, 0.06);
+  color: #e2e8f0;
+}
+
+.mutual-aid-table__row button {
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 999px;
+  padding: 0.55rem 0.75rem;
+  background: rgba(15, 23, 42, 0.72);
+  color: #cbd5e1;
+}
+
+.mutual-aid-preview-metrics {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+}
+
+.mutual-aid-preview-metrics div {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  padding: 0.85rem;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.mutual-aid-preview-metrics dt {
+  color: #bfdbfe;
+  font-weight: 800;
+}
+
+.mutual-aid-preview-metrics dd {
+  margin: 0.3rem 0 0;
+  color: #fef3c7;
+  font-size: 1.8rem;
+  font-weight: 900;
+}
+
+@media (max-width: 760px) {
+  .mutual-aid-form-grid,
+  .mutual-aid-table__row {
+    grid-template-columns: 1fr;
+  }
+}
