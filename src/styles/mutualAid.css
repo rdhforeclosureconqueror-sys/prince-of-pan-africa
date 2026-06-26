@@ -515,3 +515,122 @@
     grid-template-columns: 1fr;
   }
 }
+
+.mutual-aid-page--operations .mutual-aid-hero {
+  border-color: rgba(168, 85, 247, 0.42);
+}
+
+.mutual-aid-dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.25rem;
+  max-width: 1120px;
+  margin: 1.25rem auto;
+}
+
+.mutual-aid-executive-grid,
+.mutual-aid-notice-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.85rem;
+}
+
+.mutual-aid-metric-card,
+.mutual-aid-notice-grid strong,
+.mutual-aid-blocker-card,
+.mutual-aid-committee-list > div {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 18px;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.mutual-aid-metric-card {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.mutual-aid-metric-card span,
+.mutual-aid-committee-list span,
+.mutual-aid-committee-list small {
+  color: #bfdbfe;
+  font-weight: 800;
+}
+
+.mutual-aid-metric-card strong {
+  color: #fef3c7;
+  font-size: clamp(1.55rem, 4vw, 2.35rem);
+  line-height: 1;
+}
+
+.mutual-aid-metric-card small,
+.mutual-aid-committee-list small {
+  color: #cbd5e1;
+}
+
+.mutual-aid-timeline {
+  position: relative;
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  padding-left: 1.4rem;
+  color: #e2e8f0;
+}
+
+.mutual-aid-timeline li::marker {
+  color: #facc15;
+  font-weight: 900;
+}
+
+.mutual-aid-blocker-list,
+.mutual-aid-dashboard-checklist,
+.mutual-aid-committee-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.mutual-aid-blocker-card {
+  border-color: rgba(248, 113, 113, 0.28);
+  background: rgba(127, 29, 29, 0.22);
+  color: #fecaca;
+  font-weight: 900;
+}
+
+.mutual-aid-committee-list > div {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.mutual-aid-committee-list strong {
+  color: #fef3c7;
+}
+
+.mutual-aid-risk-table {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.mutual-aid-risk-row {
+  display: grid;
+  grid-template-columns: 1.4fr 0.65fr 1.4fr 0.75fr;
+  gap: 0.75rem;
+  align-items: start;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  padding: 0.85rem;
+  background: rgba(255, 255, 255, 0.06);
+  color: #e2e8f0;
+}
+
+.mutual-aid-risk-row--header {
+  background: rgba(15, 23, 42, 0.74);
+  color: #fde68a;
+  font-weight: 900;
+}
+
+@media (max-width: 760px) {
+  .mutual-aid-dashboard-grid,
+  .mutual-aid-risk-row {
+    grid-template-columns: 1fr;
+  }
+}
