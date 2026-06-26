@@ -8,7 +8,7 @@ from app.authz import user_has_permission
 from app.config import settings
 from app.database import get_db
 from app.dependencies.auth import require_permission
-from app.models import MutualAidAuditLog, MutualAidFund, MutualAidRequest, MutualAidRequestDocument, MutualAidRequestStatusHistory, User
+from app.models import MutualAidAuditLog, MutualAidConflictDisclosure, MutualAidFund, MutualAidRequest, MutualAidRequestDocument, MutualAidRequestStatusHistory, MutualAidReview, User
 from app.services.mutual_aid import DEFAULT_MUTUAL_AID_FUND_NAME
 
 router = APIRouter(prefix="/mutual-aid", tags=["Mutual Aid"])
@@ -25,6 +25,19 @@ class RequestPayload(BaseModel):
     preferred_support_method: str
     policy_consent: bool
 
+class AssignReviewerPayload(BaseModel):
+    reviewer_user_id: int
+
+class RecommendationPayload(BaseModel):
+    recommendation: str = Field(min_length=3, max_length=64)
+    notes: str = Field(min_length=3, max_length=5000)
+
+class MoreInfoPayload(BaseModel):
+    message: str = Field(min_length=3, max_length=5000)
+
+class ConflictDisclosurePayload(BaseModel):
+    disclosure: str = Field(min_length=3, max_length=5000)
+
 class DocumentMetadataPayload(BaseModel):
     document_type: str = Field(default="supporting", max_length=128)
     filename: str = Field(min_length=1, max_length=255)
@@ -36,6 +49,12 @@ class DocumentMetadataPayload(BaseModel):
 def _ensure_enabled():
     if not settings.MUTUAL_AID_REQUESTS_ENABLED or settings.ENABLE_MUTUAL_AID_PAYMENTS:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mutual Aid request intake is not enabled")
+
+
+def _ensure_review_enabled():
+    _ensure_enabled()
+    if not settings.MUTUAL_AID_REVIEW_ENABLED:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mutual Aid review workflow is not enabled")
 
 
 def _fund(db):
@@ -60,6 +79,11 @@ def _validate_payload(payload: RequestPayload):
     return category, urgency, support
 
 
+def _serialize_user(user: User | None):
+    if not user:
+        return None
+    return {"id": user.id, "email": user.email, "role": user.role}
+
 def _serialize(req: MutualAidRequest):
     return {
         "id": req.id,
@@ -79,6 +103,34 @@ def _serialize(req: MutualAidRequest):
 
 def _audit(db, actor_id, entity_id, action, before=None, after=None):
     db.add(MutualAidAuditLog(actor_user_id=actor_id, entity_type="mutual_aid_request", entity_id=entity_id, action=action, before=before or {}, after=after or {}))
+
+
+def _serialize_history(row: MutualAidRequestStatusHistory):
+    return {"id": row.id, "from_status": row.from_status, "to_status": row.to_status, "changed_by_user_id": row.changed_by_user_id, "reason": row.reason, "created_at": row.created_at.isoformat() if row.created_at else None}
+
+def _serialize_review(row: MutualAidReview):
+    return {"id": row.id, "request_id": row.request_id, "reviewer_user_id": row.reviewer_user_id, "status": row.status, "notes": row.notes, "created_at": row.created_at.isoformat() if row.created_at else None}
+
+def _serialize_conflict(row: MutualAidConflictDisclosure):
+    return {"id": row.id, "request_id": row.request_id, "committee_member_id": row.committee_member_id, "disclosure": row.disclosure, "status": row.status, "created_at": row.created_at.isoformat() if row.created_at else None}
+
+def _is_admin(db, user):
+    return user_has_permission(db, user, "mutual_aid:read_requests_admin")
+
+def _assigned_review(db, request_id, user_id):
+    return db.query(MutualAidReview).filter(MutualAidReview.request_id == request_id, MutualAidReview.reviewer_user_id == user_id).order_by(MutualAidReview.created_at.desc()).first()
+
+def _ensure_reviewer_access(db, req, current_user):
+    if _is_admin(db, current_user):
+        return
+    if not _assigned_review(db, req.id, current_user.id):
+        raise HTTPException(status_code=404, detail="Request not found")
+
+def _has_open_conflict(db, request_id, reviewer_id):
+    review = _assigned_review(db, request_id, reviewer_id)
+    if not review:
+        return False
+    return db.query(MutualAidConflictDisclosure).filter(MutualAidConflictDisclosure.request_id == request_id, MutualAidConflictDisclosure.committee_member_id == review.id, MutualAidConflictDisclosure.status == "open").first() is not None
 
 
 @router.post("/requests/draft")
@@ -118,9 +170,77 @@ def get_request(request_id: int, current_user: User = Depends(require_permission
 
 @router.get("/admin/requests")
 def admin_requests(current_user: User = Depends(require_permission("mutual_aid:read_requests_admin")), db: Session = Depends(get_db)):
-    _ensure_enabled()
+    _ensure_review_enabled()
     return {"ok": True, "requests": [_serialize(r) for r in db.query(MutualAidRequest).order_by(MutualAidRequest.created_at.desc()).all()]}
 
+
+
+@router.get("/admin/requests/{request_id}")
+def admin_request_detail(request_id: int, current_user: User = Depends(require_permission("mutual_aid:review_requests")), db: Session = Depends(get_db)):
+    _ensure_review_enabled()
+    req = db.query(MutualAidRequest).filter(MutualAidRequest.id == request_id).first()
+    if not req: raise HTTPException(status_code=404, detail="Request not found")
+    _ensure_reviewer_access(db, req, current_user)
+    reviews = db.query(MutualAidReview).filter(MutualAidReview.request_id == req.id).order_by(MutualAidReview.created_at.desc()).all()
+    history = db.query(MutualAidRequestStatusHistory).filter(MutualAidRequestStatusHistory.request_id == req.id).order_by(MutualAidRequestStatusHistory.created_at.desc()).all()
+    conflicts = db.query(MutualAidConflictDisclosure).filter(MutualAidConflictDisclosure.request_id == req.id).order_by(MutualAidConflictDisclosure.created_at.desc()).all()
+    requester = db.query(User).filter(User.id == req.requester_user_id).first() if req.requester_user_id else None
+    return {"ok": True, "request": _serialize(req), "requester": _serialize_user(requester), "reviews": [_serialize_review(r) for r in reviews], "status_history": [_serialize_history(h) for h in history], "conflicts": [_serialize_conflict(c) for c in conflicts]}
+
+@router.post("/admin/requests/{request_id}/assign-reviewer")
+def assign_reviewer(request_id: int, payload: AssignReviewerPayload, current_user: User = Depends(require_permission("mutual_aid:read_requests_admin")), db: Session = Depends(get_db)):
+    _ensure_review_enabled()
+    req = db.query(MutualAidRequest).filter(MutualAidRequest.id == request_id).first()
+    reviewer = db.query(User).filter(User.id == payload.reviewer_user_id).first()
+    if not req or not reviewer: raise HTTPException(status_code=404, detail="Request not found")
+    review = MutualAidReview(request_id=req.id, reviewer_user_id=reviewer.id, status="assigned", notes="")
+    before = {"status": req.status}; req.status = "under_review"
+    db.add(review); db.flush()
+    db.add(MutualAidRequestStatusHistory(request_id=req.id, from_status=before["status"], to_status=req.status, changed_by_user_id=current_user.id, reason=f"reviewer assigned: {reviewer.id}"))
+    _audit(db, current_user.id, req.id, "reviewer_assigned", before=before, after={"status": req.status, "reviewer_user_id": reviewer.id, "review_id": review.id})
+    db.commit(); db.refresh(review)
+    return {"ok": True, "review": _serialize_review(review), "request": _serialize(req)}
+
+@router.post("/admin/requests/{request_id}/recommendation")
+def reviewer_recommendation(request_id: int, payload: RecommendationPayload, current_user: User = Depends(require_permission("mutual_aid:review_requests")), db: Session = Depends(get_db)):
+    _ensure_review_enabled()
+    req = db.query(MutualAidRequest).filter(MutualAidRequest.id == request_id).first()
+    if not req: raise HTTPException(status_code=404, detail="Request not found")
+    _ensure_reviewer_access(db, req, current_user)
+    if _has_open_conflict(db, req.id, current_user.id): raise HTTPException(status_code=409, detail="Conflicted reviewers cannot recommend")
+    review = _assigned_review(db, req.id, current_user.id) or MutualAidReview(request_id=req.id, reviewer_user_id=current_user.id)
+    before = _serialize_review(review) if review.id else {}
+    review.status = f"recommended_{payload.recommendation.strip().lower()}"; review.notes = payload.notes.strip()
+    db.add(review); db.flush()
+    _audit(db, current_user.id, req.id, "recommendation_recorded", before=before, after=_serialize_review(review))
+    db.commit(); db.refresh(review)
+    return {"ok": True, "review": _serialize_review(review)}
+
+@router.post("/admin/requests/{request_id}/request-more-info")
+def request_more_info(request_id: int, payload: MoreInfoPayload, current_user: User = Depends(require_permission("mutual_aid:review_requests")), db: Session = Depends(get_db)):
+    _ensure_review_enabled()
+    req = db.query(MutualAidRequest).filter(MutualAidRequest.id == request_id).first()
+    if not req: raise HTTPException(status_code=404, detail="Request not found")
+    _ensure_reviewer_access(db, req, current_user)
+    before = {"status": req.status}; req.status = "more_info_requested"
+    db.add(MutualAidRequestStatusHistory(request_id=req.id, from_status=before["status"], to_status=req.status, changed_by_user_id=current_user.id, reason=payload.message.strip()))
+    _audit(db, current_user.id, req.id, "more_info_requested", before=before, after={"status": req.status, "message": payload.message.strip()})
+    db.commit(); db.refresh(req)
+    return {"ok": True, "request": _serialize(req)}
+
+@router.post("/admin/requests/{request_id}/conflict-disclosure")
+def disclose_conflict(request_id: int, payload: ConflictDisclosurePayload, current_user: User = Depends(require_permission("mutual_aid:review_requests")), db: Session = Depends(get_db)):
+    _ensure_review_enabled()
+    req = db.query(MutualAidRequest).filter(MutualAidRequest.id == request_id).first()
+    if not req: raise HTTPException(status_code=404, detail="Request not found")
+    _ensure_reviewer_access(db, req, current_user)
+    review = _assigned_review(db, req.id, current_user.id)
+    if not review: raise HTTPException(status_code=404, detail="Assigned review not found")
+    conflict = MutualAidConflictDisclosure(request_id=req.id, committee_member_id=review.id, disclosure=payload.disclosure.strip(), status="open")
+    db.add(conflict); db.flush()
+    _audit(db, current_user.id, req.id, "conflict_disclosed", after=_serialize_conflict(conflict))
+    db.commit(); db.refresh(conflict)
+    return {"ok": True, "conflict": _serialize_conflict(conflict)}
 
 @router.post("/requests/{request_id}/documents/metadata")
 def document_metadata(request_id: int, payload: DocumentMetadataPayload, current_user: User = Depends(require_permission("mutual_aid:create_request_self")), db: Session = Depends(get_db)):

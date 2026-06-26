@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.models import Permission, Role, User, UserRole
 
 DEFAULT_ROLE_NAME = "community_member"
-DEFAULT_ROLE_NAMES = ("community_member", "builder_member", "admin", "superadmin")
+DEFAULT_ROLE_NAMES = ("community_member", "builder_member", "mutual_aid_reviewer", "admin", "superadmin")
 LEGACY_ROLE_ALIASES = {
     "member": "community_member",
     "subscriber": "builder_member",
@@ -58,6 +58,7 @@ DEFAULT_PERMISSION_NAMES = (
     "mutual_aid:create_request_self",
     "mutual_aid:read_request_self",
     "mutual_aid:read_requests_admin",
+    "mutual_aid:review_requests",
 )
 
 BOOK_ORGANIZER_PERMISSION_NAMES = {
@@ -111,12 +112,14 @@ ADMIN_EXTRA_PERMISSION_NAMES = {
     "admin:read_activity",
     "assessment:read_analytics",
     "mutual_aid:read_requests_admin",
+    "mutual_aid:review_requests",
 }
 
 
 ROLE_PERMISSION_NAMES = {
     "community_member": MEMBER_PERMISSION_NAMES,
     "builder_member": BUILDER_PERMISSION_NAMES,
+    "mutual_aid_reviewer": MEMBER_PERMISSION_NAMES | {"mutual_aid:review_requests"},
     "admin": BUILDER_PERMISSION_NAMES | ADMIN_EXTRA_PERMISSION_NAMES,
     "superadmin": set(DEFAULT_PERMISSION_NAMES),
 }

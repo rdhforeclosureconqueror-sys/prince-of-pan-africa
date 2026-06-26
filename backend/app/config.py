@@ -37,7 +37,8 @@ class Settings:
     ENABLE_MUTUAL_AID_RUNTIME_FOUNDATION: bool = os.getenv("ENABLE_MUTUAL_AID_RUNTIME_FOUNDATION", "true").strip().lower() in {"1", "true", "yes", "on"}
     MUTUAL_AID_REQUESTS_ENABLED: bool = os.getenv("MUTUAL_AID_REQUESTS_ENABLED", os.getenv("ENABLE_MUTUAL_AID_REQUEST_INTAKE", "false")).strip().lower() in {"1", "true", "yes", "on"}
     ENABLE_MUTUAL_AID_REQUEST_INTAKE: bool = MUTUAL_AID_REQUESTS_ENABLED
-    ENABLE_MUTUAL_AID_REVIEW_WORKFLOW: bool = os.getenv("ENABLE_MUTUAL_AID_REVIEW_WORKFLOW", "false").strip().lower() in {"1", "true", "yes", "on"}
+    MUTUAL_AID_REVIEW_ENABLED: bool = os.getenv("MUTUAL_AID_REVIEW_ENABLED", os.getenv("ENABLE_MUTUAL_AID_REVIEW_WORKFLOW", "false")).strip().lower() in {"1", "true", "yes", "on"}
+    ENABLE_MUTUAL_AID_REVIEW_WORKFLOW: bool = MUTUAL_AID_REVIEW_ENABLED
     ENABLE_MUTUAL_AID_PAYMENTS: bool = os.getenv("ENABLE_MUTUAL_AID_PAYMENTS", "false").strip().lower() in {"1", "true", "yes", "on"}
 
 

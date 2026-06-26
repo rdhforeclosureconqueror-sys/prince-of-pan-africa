@@ -112,6 +112,7 @@ const MUTUAL_AID_OPERATIONS_DASHBOARD_FLAG = import.meta.env.VITE_ENABLE_MUTUAL_
 const MUTUAL_AID_GOVERNANCE_CENTER_FLAG = import.meta.env.VITE_ENABLE_MUTUAL_AID_GOVERNANCE_CENTER;
 const MUTUAL_AID_EXECUTIVE_DASHBOARD_FLAG = import.meta.env.VITE_ENABLE_MUTUAL_AID_EXECUTIVE_DASHBOARD;
 const MUTUAL_AID_REQUESTS_FLAG = import.meta.env.VITE_MUTUAL_AID_REQUESTS_ENABLED;
+const MUTUAL_AID_REVIEW_WORKFLOW_FLAG = import.meta.env.VITE_ENABLE_MUTUAL_AID_REVIEW_WORKFLOW;
 const normalizedTextBookOrganizerFlag = String(TEXT_BOOK_ORGANIZER_FLAG || "").trim().toLowerCase();
 const normalizedMutualAidOverviewFlag = String(MUTUAL_AID_OVERVIEW_FLAG || "").trim().toLowerCase();
 const normalizedMutualAidAdminPlanningFlag = String(MUTUAL_AID_ADMIN_PLANNING_FLAG || "").trim().toLowerCase();
@@ -122,6 +123,7 @@ const normalizedMutualAidOperationsDashboardFlag = String(MUTUAL_AID_OPERATIONS_
 const normalizedMutualAidGovernanceCenterFlag = String(MUTUAL_AID_GOVERNANCE_CENTER_FLAG || "").trim().toLowerCase();
 const normalizedMutualAidExecutiveDashboardFlag = String(MUTUAL_AID_EXECUTIVE_DASHBOARD_FLAG || "").trim().toLowerCase();
 const normalizedMutualAidRequestsFlag = String(MUTUAL_AID_REQUESTS_FLAG || "").trim().toLowerCase();
+const normalizedMutualAidReviewWorkflowFlag = String(MUTUAL_AID_REVIEW_WORKFLOW_FLAG || "").trim().toLowerCase();
 
 export const ENABLE_TEXT_BOOK_ORGANIZER = TEXT_BOOK_ORGANIZER_FLAG === undefined
   ? !isDev
@@ -162,6 +164,10 @@ export const ENABLE_MUTUAL_AID_EXECUTIVE_DASHBOARD = MUTUAL_AID_EXECUTIVE_DASHBO
 export const MUTUAL_AID_REQUESTS_ENABLED = MUTUAL_AID_REQUESTS_FLAG === undefined
   ? false
   : ["1", "true", "yes", "on"].includes(normalizedMutualAidRequestsFlag);
+
+export const ENABLE_MUTUAL_AID_REVIEW_WORKFLOW = MUTUAL_AID_REVIEW_WORKFLOW_FLAG === undefined
+  ? false
+  : ["1", "true", "yes", "on"].includes(normalizedMutualAidReviewWorkflowFlag);
 
 export const MUTUAL_AID_ACTIVATION_THRESHOLD = 20000;
 export const MUTUAL_AID_CURRENT_PROGRESS = 0;
