@@ -7,7 +7,9 @@ import {
   getMutualAidAdminRequest,
   getMutualAidAdminRequests,
   requestMutualAidMoreInfo,
+  recordMutualAidDecision,
 } from "../api/mutualAidRequests";
+import { ENABLE_MUTUAL_AID_DECISION_WORKFLOW } from "../config";
 import { formatMutualAidCurrency } from "../mutualAidFundProgress";
 
 function StatusBadge({ status }) {
@@ -53,6 +55,13 @@ export function MutualAidAdminRequestDetailPage() {
   const [moreInfo, setMoreInfo] = React.useState("");
   const [conflict, setConflict] = React.useState("");
   const [message, setMessage] = React.useState("");
+  const [decision, setDecision] = React.useState("approve");
+  const [reasonCode, setReasonCode] = React.useState("eligible_need");
+  const [decisionNotes, setDecisionNotes] = React.useState("");
+  const [approvedAmount, setApprovedAmount] = React.useState("");
+  const [appealEligible, setAppealEligible] = React.useState(false);
+  const [appealDeadline, setAppealDeadline] = React.useState("");
+  const [appealInstructions, setAppealInstructions] = React.useState("");
 
   const refresh = React.useCallback(() => {
     return getMutualAidAdminRequest(requestId)
@@ -123,7 +132,31 @@ export function MutualAidAdminRequestDetailPage() {
               <button type="button" onClick={() => runAction(() => discloseMutualAidConflict(request.id, conflict), "Conflict disclosed.")}>Disclose conflict</button>
             </section>
 
+
+            {ENABLE_MUTUAL_AID_DECISION_WORKFLOW ? (
+              <section className="library-card">
+                <h2>Governance decision</h2>
+                <p>Records decision outcomes only. This does not create payments, payouts, wallets, reimbursements, or disbursements.</p>
+                <select value={decision} onChange={(event) => setDecision(event.target.value)}>
+                  <option value="approve">Approve</option>
+                  <option value="partial_approve">Partial approve</option>
+                  <option value="not_approved">Not approved</option>
+                  <option value="close">Close</option>
+                </select>
+                <select value={reasonCode} onChange={(event) => setReasonCode(event.target.value)}>
+                  {(detail.decision_reason_codes || ["eligible_need", "partial_need", "insufficient_documentation", "outside_policy", "duplicate_request", "withdrawn", "unable_to_contact", "closed_by_admin", "other"]).map((code) => <option key={code} value={code}>{code.replaceAll("_", " ")}</option>)}
+                </select>
+                <input type="number" min="0" value={approvedAmount} onChange={(event) => setApprovedAmount(event.target.value)} placeholder="Approved amount (whole dollars)" />
+                <textarea value={decisionNotes} onChange={(event) => setDecisionNotes(event.target.value)} placeholder="Decision notes" />
+                <label><input type="checkbox" checked={appealEligible} onChange={(event) => setAppealEligible(event.target.checked)} /> Appeal eligible</label>
+                <input type="date" value={appealDeadline} onChange={(event) => setAppealDeadline(event.target.value)} />
+                <textarea value={appealInstructions} onChange={(event) => setAppealInstructions(event.target.value)} placeholder="Appeal instructions" />
+                <button type="button" onClick={() => runAction(() => recordMutualAidDecision(request.id, { decision, reason_code: reasonCode, notes: decisionNotes, approved_amount: Number(approvedAmount || 0), appeal_eligible: appealEligible, appeal_deadline: appealDeadline ? `${appealDeadline}T23:59:59` : null, appeal_instructions: appealInstructions }), "Decision recorded.")}>Record decision</button>
+              </section>
+            ) : null}
+
             <section className="library-card"><h2>Reviews</h2>{detail.reviews?.map((r) => <p key={r.id}>#{r.id}: {r.status} by user {r.reviewer_user_id} — {r.notes}</p>)}</section>
+            <section className="library-card"><h2>Decision history</h2>{detail.decisions?.map((d) => <p key={d.id}>{d.decision} by user {d.decided_by_user_id} — {formatMutualAidCurrency(d.approved_amount)} — {d.reason_code}: {d.notes}</p>)}</section>
             <section className="library-card"><h2>Status history</h2>{detail.status_history?.map((h) => <p key={h.id}>{h.from_status || "none"} → {h.to_status}: {h.reason}</p>)}</section>
             <section className="library-card"><h2>Conflicts</h2>{detail.conflicts?.map((c) => <p key={c.id}>{c.status}: {c.disclosure}</p>)}</section>
           </>

@@ -39,3 +39,8 @@ export function requestMutualAidMoreInfo(requestId, message) {
 export function discloseMutualAidConflict(requestId, disclosure) {
   return post(`/mutual-aid/admin/requests/${requestId}/conflict-disclosure`, { disclosure });
 }
+
+
+export function recordMutualAidDecision(requestId, payload) {
+  return post(`/mutual-aid/admin/requests/${requestId}/decision`, payload);
+}
