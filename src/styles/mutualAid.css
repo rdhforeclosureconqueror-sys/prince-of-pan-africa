@@ -634,3 +634,148 @@
     grid-template-columns: 1fr;
   }
 }
+
+.mutual-aid-page--governance .mutual-aid-hero {
+  border-color: rgba(250, 204, 21, 0.5);
+}
+
+.mutual-aid-governance-grid,
+.mutual-aid-document-grid {
+  display: grid;
+  gap: 1rem;
+  max-width: 1120px;
+  margin: 1.25rem auto;
+}
+
+.mutual-aid-governance-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.mutual-aid-document-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+}
+
+.mutual-aid-document-grid--compact {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.mutual-aid-document-card,
+.mutual-aid-sop-list div,
+.mutual-aid-decision-timeline div,
+.mutual-aid-review-schedule div,
+.mutual-aid-version-table__row {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.mutual-aid-document-card {
+  padding: 1rem;
+}
+
+.mutual-aid-document-card h3 {
+  margin: 0;
+  color: #fef3c7;
+}
+
+.mutual-aid-document-card p {
+  margin: 0.45rem 0 0;
+}
+
+.mutual-aid-governance-badge {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  border: 1px solid rgba(250, 204, 21, 0.38);
+  border-radius: 999px;
+  padding: 0.35rem 0.65rem;
+  background: rgba(113, 63, 18, 0.36);
+  color: #fef3c7;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.mutual-aid-sop-list,
+.mutual-aid-decision-timeline,
+.mutual-aid-review-schedule,
+.mutual-aid-version-table {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.mutual-aid-sop-list div {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem;
+  color: #e0f2fe;
+  font-weight: 800;
+}
+
+.mutual-aid-sop-list span {
+  display: inline-grid;
+  place-items: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 999px;
+  background: rgba(45, 212, 191, 0.18);
+  color: #99f6e4;
+  font-size: 0.78rem;
+}
+
+.mutual-aid-decision-timeline {
+  position: relative;
+}
+
+.mutual-aid-decision-timeline div,
+.mutual-aid-review-schedule div {
+  padding: 0.9rem;
+}
+
+.mutual-aid-decision-timeline time,
+.mutual-aid-review-schedule time {
+  color: #bfdbfe;
+  font-weight: 900;
+}
+
+.mutual-aid-review-schedule strong {
+  display: block;
+  margin-top: 0.35rem;
+  color: #fef3c7;
+}
+
+.mutual-aid-version-table__row {
+  display: grid;
+  grid-template-columns: 1.5fr 0.6fr 0.9fr 0.8fr;
+  gap: 0.75rem;
+  padding: 0.85rem;
+  color: #e2e8f0;
+}
+
+.mutual-aid-version-table__row--header {
+  color: #fde68a;
+  font-weight: 900;
+}
+
+.mutual-aid-inline-link {
+  color: #fde68a;
+  font-weight: 900;
+}
+
+@media (max-width: 900px) {
+  .mutual-aid-governance-grid,
+  .mutual-aid-document-grid,
+  .mutual-aid-document-grid--compact {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .mutual-aid-governance-grid,
+  .mutual-aid-document-grid,
+  .mutual-aid-document-grid--compact,
+  .mutual-aid-version-table__row {
+    grid-template-columns: 1fr;
+  }
+}

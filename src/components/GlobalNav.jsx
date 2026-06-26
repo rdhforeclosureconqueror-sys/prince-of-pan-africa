@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import "../styles/globalNav.css";
-import { AUTH_DEBUG, ENABLE_MUTUAL_AID_ALLOWLIST_SHELL, ENABLE_MUTUAL_AID_OPERATIONS_DASHBOARD, ENABLE_MUTUAL_AID_OVERVIEW, ENABLE_MUTUAL_AID_PILOT_UI_SHELL, ENABLE_TEXT_BOOK_ORGANIZER } from "../config";
+import { AUTH_DEBUG, ENABLE_MUTUAL_AID_ALLOWLIST_SHELL, ENABLE_MUTUAL_AID_GOVERNANCE_CENTER, ENABLE_MUTUAL_AID_OPERATIONS_DASHBOARD, ENABLE_MUTUAL_AID_OVERVIEW, ENABLE_MUTUAL_AID_PILOT_UI_SHELL, ENABLE_TEXT_BOOK_ORGANIZER } from "../config";
 import { PILOT_NAV_LINKS } from "../pilotScope";
 import { getDashboardLabel, isAdminUser } from "../authz";
 
@@ -100,6 +100,16 @@ export default function GlobalNav({ user, rbac, canAccessOrganizer = false, auth
                   className={location.pathname === "/admin/mutual-aid/dashboard" ? "global-nav__link is-active" : "global-nav__link"}
                 >
                   Operations Dashboard
+                </Link>
+              ) : null}
+
+              {isAdmin && ENABLE_MUTUAL_AID_GOVERNANCE_CENTER ? (
+                <Link
+                  to="/admin/mutual-aid/governance"
+                  onClick={closeMenu}
+                  className={location.pathname === "/admin/mutual-aid/governance" ? "global-nav__link is-active" : "global-nav__link"}
+                >
+                  Governance Center
                 </Link>
               ) : null}
 
