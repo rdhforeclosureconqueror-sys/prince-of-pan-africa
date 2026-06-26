@@ -44,3 +44,20 @@ export function discloseMutualAidConflict(requestId, disclosure) {
 export function recordMutualAidDecision(requestId, payload) {
   return post(`/mutual-aid/admin/requests/${requestId}/decision`, payload);
 }
+
+
+export function getMutualAidFinancialControls() {
+  return get("/mutual-aid/admin/financial-controls");
+}
+
+export function getMutualAidDisbursements() {
+  return get("/mutual-aid/admin/disbursements");
+}
+
+export function createMutualAidDisbursement(requestId, payload) {
+  return post(`/mutual-aid/admin/requests/${requestId}/disbursements`, payload);
+}
+
+export function updateMutualAidDisbursementStatus(disbursementId, payload) {
+  return post(`/mutual-aid/admin/disbursements/${disbursementId}/status`, payload);
+}
