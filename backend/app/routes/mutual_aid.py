@@ -148,6 +148,7 @@ REQUIRED_LAUNCH_LOCK_FLAGS = (
     "MUTUAL_AID_PILOT_HARDENING_ENABLED",
     "MUTUAL_AID_PILOT_LAUNCH_LOCK_ENABLED",
 )
+REQUIRED_RUNBOOK_FLAGS = REQUIRED_LAUNCH_LOCK_FLAGS + ("MUTUAL_AID_PILOT_RUNBOOK_ENABLED",)
 REQUIRED_LAUNCH_LOCK_ROLES = {"reviewer", "treasurer", "governance"}
 REQUIRED_LAUNCH_LOCK_TABLES = {"mutual_aid_audit_logs", "mutual_aid_request_status_history", "mutual_aid_notifications"}
 SAFE_PRE_ACTIVATION_DISBURSEMENT_STATUSES = {"not_started", "pending", "scheduled", "cancelled", "reversed", "failed", "closed"}
@@ -199,6 +200,58 @@ def _launch_lock_response(db):
 @router.get("/admin/pilot-launch-lock/verification")
 def pilot_launch_lock_verification(current_user: User = Depends(require_permission("mutual_aid:read_requests_admin")), db: Session = Depends(get_db)):
     return _launch_lock_response(db)
+
+
+def _pilot_runbook_response(db):
+    flags = mutual_aid_feature_flags()
+    phase8 = pilot_readiness_verification(db=db)
+    launch_lock = _launch_lock_response(db)
+    missing_flags = [key for key in REQUIRED_RUNBOOK_FLAGS if not flags.get(key)]
+    required_docs = [
+        "SIMBA_MUTUAL_AID_SOCIETY_BINDER.md",
+        "SIMBA_MUTUAL_AID_SOCIETY_OPERATING_APPENDIX.md",
+        "SIMBA_MUTUAL_AID_PILOT_LAUNCH_PLAN.md",
+        "SIMBA_PILOT_READINESS_REPORT.md",
+    ]
+    checklist = [
+        _readiness_check("readiness_verified", "Verify Phase 8 readiness", phase8["ready"], "Confirm Phase 8 readiness still passes."),
+        _readiness_check("launch_lock_verified", "Verify Phase 9 launch lock", launch_lock["ready"], "Confirm Phase 9 launch lock still passes."),
+        _readiness_check("payments_disabled", "Confirm payments remain disabled", not flags["ENABLE_MUTUAL_AID_PAYMENTS"], "ENABLE_MUTUAL_AID_PAYMENTS must remain false."),
+        _readiness_check("no_money_routes", "Confirm no payment/payout/wallet routes exist", not phase8["money_route_findings"], "Registered Mutual Aid routes must remain read-only for money movement."),
+        _readiness_check("export_only", "Use print/export view only", True, "Operators may print from the browser; no downloads, file storage, persistence, or signoff writes are performed."),
+    ]
+    blockers = [check for check in checklist if not check["passed"]]
+    if missing_flags:
+        blockers.append(_readiness_check("required_flags_present", "Required runbook flags are enabled", False, f"Missing flags: {', '.join(missing_flags)}."))
+    ready = not blockers
+    return {
+        "ok": True,
+        "phase": "Phase 10 pilot runbook",
+        "ready": ready,
+        "status": "go" if ready else "no-go",
+        "go_no_go_result": "GO" if ready else "NO-GO",
+        "pilot_status": "Read-only pilot operations only",
+        "phase8_readiness": {"ready": phase8["ready"], "status": "pass" if phase8["ready"] else "fail", "checks": phase8["checks"]},
+        "phase9_launch_lock": {"ready": launch_lock["ready"], "status": launch_lock["status"], "checks": launch_lock["checks"]},
+        "blockers": blockers + launch_lock["blockers"],
+        "operator_checklist": checklist,
+        "required_roles": sorted(REQUIRED_LAUNCH_LOCK_ROLES),
+        "required_flags": list(REQUIRED_RUNBOOK_FLAGS) + ["ENABLE_MUTUAL_AID_PAYMENTS=false"],
+        "required_docs_policies": required_docs,
+        "guardrails": [
+            "No money movement",
+            "No payment processors connected",
+            "No payout execution",
+            "No wallet balances",
+            "No STAR, Black Dollar, ownership, partner reimbursement, payment, payout, or wallet integrations",
+            "No downloads, file storage, persistence, or signoff writes from this export view",
+        ],
+    }
+
+
+@router.get("/admin/pilot-runbook/verification")
+def pilot_runbook_verification(current_user: User = Depends(require_permission("mutual_aid:read_requests_admin")), db: Session = Depends(get_db)):
+    return _pilot_runbook_response(db)
 
 
 def _ensure_enabled():

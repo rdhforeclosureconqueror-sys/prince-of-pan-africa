@@ -21,6 +21,7 @@ def build_app(payments="false", status="Building Toward Activation", flags=True)
         "MUTUAL_AID_APPEALS_ENABLED": "true",
         "MUTUAL_AID_PILOT_HARDENING_ENABLED": "true",
         "MUTUAL_AID_PILOT_LAUNCH_LOCK_ENABLED": "true" if flags else "false",
+        "MUTUAL_AID_PILOT_RUNBOOK_ENABLED": "true" if flags else "false",
         "ENABLE_MUTUAL_AID_PAYMENTS": payments,
         "SESSION_SECRET": "test-session-secret",
     }
@@ -30,9 +31,10 @@ def build_app(payments="false", status="Building Toward Activation", flags=True)
     importlib.reload(config); importlib.reload(database)
     import app.models as models
     import app.authz as authz
+    import app.services.mutual_aid as mutual_aid_service
     import app.routes.mutual_aid as mutual_aid_route
     import app.main as main
-    importlib.reload(models); importlib.reload(authz); importlib.reload(mutual_aid_route); importlib.reload(main)
+    importlib.reload(models); importlib.reload(authz); importlib.reload(mutual_aid_service); importlib.reload(mutual_aid_route); importlib.reload(main)
     database.init_db()
     seed_safe_state(database, models, status)
     return tmp, database, models, TestClient(main.app)

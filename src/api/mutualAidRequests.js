@@ -66,3 +66,7 @@ export function updateMutualAidDisbursementStatus(disbursementId, payload) {
 export function getMutualAidPilotLaunchLock() {
   return get("/mutual-aid/admin/pilot-launch-lock/verification");
 }
+
+export function getMutualAidPilotRunbook() {
+  return get("/mutual-aid/admin/pilot-runbook/verification");
+}

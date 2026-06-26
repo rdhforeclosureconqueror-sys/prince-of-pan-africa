@@ -932,3 +932,56 @@
     grid-template-columns: 1fr;
   }
 }
+
+.mutual-aid-runbook-print code {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 0.35rem;
+  padding: 0.1rem 0.3rem;
+}
+
+.mutual-aid-runbook-print .is-pass {
+  color: #d6ffe3;
+}
+
+.mutual-aid-runbook-print .is-blocked {
+  color: #ffd6d6;
+}
+
+@media print {
+  body {
+    background: #fff !important;
+    color: #111 !important;
+  }
+
+  .global-nav,
+  .cosmic-nav,
+  .universe-overlay,
+  .nav-bar {
+    display: none !important;
+  }
+
+  .mutual-aid-runbook-print,
+  .mutual-aid-runbook-print .mutual-aid-hero,
+  .mutual-aid-runbook-print .mutual-aid-card {
+    background: #fff !important;
+    box-shadow: none !important;
+    color: #111 !important;
+    border-color: #ccc !important;
+  }
+
+  .mutual-aid-runbook-print {
+    padding: 0 !important;
+  }
+
+  .mutual-aid-runbook-print .mutual-aid-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .mutual-aid-runbook-print code,
+  .mutual-aid-runbook-print .is-pass,
+  .mutual-aid-runbook-print .is-blocked {
+    color: #111 !important;
+    background: transparent !important;
+  }
+}
