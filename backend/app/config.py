@@ -43,6 +43,7 @@ class Settings:
     ENABLE_MUTUAL_AID_PAYMENTS: bool = os.getenv("ENABLE_MUTUAL_AID_PAYMENTS", "false").strip().lower() in {"1", "true", "yes", "on"}
     MUTUAL_AID_FINANCIAL_CONTROLS_ENABLED: bool = os.getenv("MUTUAL_AID_FINANCIAL_CONTROLS_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
     MUTUAL_AID_DISBURSEMENT_TRACKING_ENABLED: bool = os.getenv("MUTUAL_AID_DISBURSEMENT_TRACKING_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
+    MUTUAL_AID_NOTIFICATIONS_ENABLED: bool = os.getenv("MUTUAL_AID_NOTIFICATIONS_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
 
 
 settings = Settings()
