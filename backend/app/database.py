@@ -291,3 +291,11 @@ def init_db() -> None:
     Base.metadata.create_all(bind=engine)
     _run_sqlite_compat_migrations()
     _run_generic_compat_migrations()
+
+    db = SessionLocal()
+    try:
+        from app.services.mutual_aid import seed_default_mutual_aid_fund
+
+        seed_default_mutual_aid_fund(db)
+    finally:
+        db.close()
