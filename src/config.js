@@ -109,6 +109,7 @@ const MUTUAL_AID_PILOT_UI_SHELL_FLAG = import.meta.env.VITE_ENABLE_MUTUAL_AID_PI
 const MUTUAL_AID_PILOT_READINESS_SHELL_FLAG = import.meta.env.VITE_ENABLE_MUTUAL_AID_PILOT_READINESS_SHELL;
 const MUTUAL_AID_ALLOWLIST_SHELL_FLAG = import.meta.env.VITE_ENABLE_MUTUAL_AID_ALLOWLIST_SHELL;
 const MUTUAL_AID_OPERATIONS_DASHBOARD_FLAG = import.meta.env.VITE_ENABLE_MUTUAL_AID_OPERATIONS_DASHBOARD;
+const MUTUAL_AID_GOVERNANCE_CENTER_FLAG = import.meta.env.VITE_ENABLE_MUTUAL_AID_GOVERNANCE_CENTER;
 const normalizedTextBookOrganizerFlag = String(TEXT_BOOK_ORGANIZER_FLAG || "").trim().toLowerCase();
 const normalizedMutualAidOverviewFlag = String(MUTUAL_AID_OVERVIEW_FLAG || "").trim().toLowerCase();
 const normalizedMutualAidAdminPlanningFlag = String(MUTUAL_AID_ADMIN_PLANNING_FLAG || "").trim().toLowerCase();
@@ -116,6 +117,7 @@ const normalizedMutualAidPilotUiShellFlag = String(MUTUAL_AID_PILOT_UI_SHELL_FLA
 const normalizedMutualAidPilotReadinessShellFlag = String(MUTUAL_AID_PILOT_READINESS_SHELL_FLAG || "").trim().toLowerCase();
 const normalizedMutualAidAllowlistShellFlag = String(MUTUAL_AID_ALLOWLIST_SHELL_FLAG || "").trim().toLowerCase();
 const normalizedMutualAidOperationsDashboardFlag = String(MUTUAL_AID_OPERATIONS_DASHBOARD_FLAG || "").trim().toLowerCase();
+const normalizedMutualAidGovernanceCenterFlag = String(MUTUAL_AID_GOVERNANCE_CENTER_FLAG || "").trim().toLowerCase();
 
 export const ENABLE_TEXT_BOOK_ORGANIZER = TEXT_BOOK_ORGANIZER_FLAG === undefined
   ? !isDev
@@ -144,6 +146,10 @@ export const ENABLE_MUTUAL_AID_ALLOWLIST_SHELL = MUTUAL_AID_ALLOWLIST_SHELL_FLAG
 export const ENABLE_MUTUAL_AID_OPERATIONS_DASHBOARD = MUTUAL_AID_OPERATIONS_DASHBOARD_FLAG === undefined
   ? false
   : ["1", "true", "yes", "on"].includes(normalizedMutualAidOperationsDashboardFlag);
+
+export const ENABLE_MUTUAL_AID_GOVERNANCE_CENTER = MUTUAL_AID_GOVERNANCE_CENTER_FLAG === undefined
+  ? false
+  : ["1", "true", "yes", "on"].includes(normalizedMutualAidGovernanceCenterFlag);
 
 export const MUTUAL_AID_ACTIVATION_THRESHOLD = 20000;
 export const MUTUAL_AID_CURRENT_PROGRESS = 0;
