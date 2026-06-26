@@ -107,11 +107,13 @@ const MUTUAL_AID_OVERVIEW_FLAG = import.meta.env.VITE_ENABLE_MUTUAL_AID_OVERVIEW
 const MUTUAL_AID_ADMIN_PLANNING_FLAG = import.meta.env.VITE_ENABLE_MUTUAL_AID_ADMIN_PLANNING;
 const MUTUAL_AID_PILOT_UI_SHELL_FLAG = import.meta.env.VITE_ENABLE_MUTUAL_AID_PILOT_UI_SHELL;
 const MUTUAL_AID_PILOT_READINESS_SHELL_FLAG = import.meta.env.VITE_ENABLE_MUTUAL_AID_PILOT_READINESS_SHELL;
+const MUTUAL_AID_ALLOWLIST_SHELL_FLAG = import.meta.env.VITE_ENABLE_MUTUAL_AID_ALLOWLIST_SHELL;
 const normalizedTextBookOrganizerFlag = String(TEXT_BOOK_ORGANIZER_FLAG || "").trim().toLowerCase();
 const normalizedMutualAidOverviewFlag = String(MUTUAL_AID_OVERVIEW_FLAG || "").trim().toLowerCase();
 const normalizedMutualAidAdminPlanningFlag = String(MUTUAL_AID_ADMIN_PLANNING_FLAG || "").trim().toLowerCase();
 const normalizedMutualAidPilotUiShellFlag = String(MUTUAL_AID_PILOT_UI_SHELL_FLAG || "").trim().toLowerCase();
 const normalizedMutualAidPilotReadinessShellFlag = String(MUTUAL_AID_PILOT_READINESS_SHELL_FLAG || "").trim().toLowerCase();
+const normalizedMutualAidAllowlistShellFlag = String(MUTUAL_AID_ALLOWLIST_SHELL_FLAG || "").trim().toLowerCase();
 
 export const ENABLE_TEXT_BOOK_ORGANIZER = TEXT_BOOK_ORGANIZER_FLAG === undefined
   ? !isDev
@@ -132,6 +134,10 @@ export const ENABLE_MUTUAL_AID_PILOT_UI_SHELL = MUTUAL_AID_PILOT_UI_SHELL_FLAG =
 export const ENABLE_MUTUAL_AID_PILOT_READINESS_SHELL = MUTUAL_AID_PILOT_READINESS_SHELL_FLAG === undefined
   ? false
   : ["1", "true", "yes", "on"].includes(normalizedMutualAidPilotReadinessShellFlag);
+
+export const ENABLE_MUTUAL_AID_ALLOWLIST_SHELL = MUTUAL_AID_ALLOWLIST_SHELL_FLAG === undefined
+  ? false
+  : ["1", "true", "yes", "on"].includes(normalizedMutualAidAllowlistShellFlag);
 
 export const MUTUAL_AID_ACTIVATION_THRESHOLD = 20000;
 export const MUTUAL_AID_CURRENT_PROGRESS = 0;
