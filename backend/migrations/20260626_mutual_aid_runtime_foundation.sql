@@ -18,3 +18,14 @@ CREATE TABLE IF NOT EXISTS mutual_aid_fraud_reviews (id INTEGER PRIMARY KEY, req
 CREATE TABLE IF NOT EXISTS mutual_aid_reconciliation_reports (id INTEGER PRIMARY KEY, fund_id INTEGER NOT NULL, period_start DATETIME, period_end DATETIME, status VARCHAR(64) NOT NULL DEFAULT 'draft', totals JSON NOT NULL DEFAULT '{}', created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS mutual_aid_category_budgets (id INTEGER PRIMARY KEY, fund_id INTEGER NOT NULL, category VARCHAR(128) NOT NULL, budget_amount INTEGER NOT NULL DEFAULT 0, reserved_amount INTEGER NOT NULL DEFAULT 0, currency VARCHAR(3) NOT NULL DEFAULT 'USD', created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS mutual_aid_vendor_recipients (id INTEGER PRIMARY KEY, name VARCHAR(255) NOT NULL, status VARCHAR(64) NOT NULL DEFAULT 'inactive', contact_metadata JSON NOT NULL DEFAULT '{}', created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP);
+
+-- Phase 5 financial controls and administrative disbursement tracking only.
+ALTER TABLE mutual_aid_funds ADD COLUMN reserve_percent INTEGER NOT NULL DEFAULT 10;
+ALTER TABLE mutual_aid_funds ADD COLUMN approval_threshold INTEGER NOT NULL DEFAULT 500;
+ALTER TABLE mutual_aid_disbursements ADD COLUMN receipt_required BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE mutual_aid_disbursements ADD COLUMN notes TEXT NOT NULL DEFAULT '';
+ALTER TABLE mutual_aid_disbursements ADD COLUMN scheduled_for DATETIME;
+ALTER TABLE mutual_aid_disbursements ADD COLUMN closed_at DATETIME;
+ALTER TABLE mutual_aid_disbursements ADD COLUMN created_by_user_id INTEGER;
+ALTER TABLE mutual_aid_disbursements ADD COLUMN updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP;
+CREATE TABLE IF NOT EXISTS mutual_aid_disbursement_status_history (id INTEGER PRIMARY KEY, disbursement_id INTEGER NOT NULL, from_status VARCHAR(64), to_status VARCHAR(64) NOT NULL, changed_by_user_id INTEGER, reason TEXT NOT NULL DEFAULT '', created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP);

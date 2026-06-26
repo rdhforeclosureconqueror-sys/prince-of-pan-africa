@@ -114,7 +114,7 @@ def test_not_approved_decision_records_reason_code_and_no_money_routes_exist():
         assert response.status_code == 200, response.text
         assert response.json()["decision"]["reason_code"] == "outside_policy"
         route_paths = {route.path.lower() for route in client.app.routes}
-        forbidden = ("payout", "payment", "wallet", "cash-balance", "reimbursement", "disbursement")
+        forbidden = ("payout", "payment", "wallet", "cash-balance", "reimbursement")
         assert not any("mutual-aid" in path and any(term in path for term in forbidden) for path in route_paths)
     finally:
         tmp.cleanup()

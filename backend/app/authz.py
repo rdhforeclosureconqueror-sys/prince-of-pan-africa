@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.models import Permission, Role, User, UserRole
 
 DEFAULT_ROLE_NAME = "community_member"
-DEFAULT_ROLE_NAMES = ("community_member", "builder_member", "mutual_aid_reviewer", "admin", "superadmin")
+DEFAULT_ROLE_NAMES = ("community_member", "builder_member", "mutual_aid_reviewer", "mutual_aid_treasurer", "admin", "superadmin")
 LEGACY_ROLE_ALIASES = {
     "member": "community_member",
     "subscriber": "builder_member",
@@ -60,6 +60,8 @@ DEFAULT_PERMISSION_NAMES = (
     "mutual_aid:read_requests_admin",
     "mutual_aid:review_requests",
     "mutual_aid:decide_requests",
+    "mutual_aid:read_financial_controls",
+    "mutual_aid:manage_disbursements",
 )
 
 BOOK_ORGANIZER_PERMISSION_NAMES = {
@@ -115,6 +117,8 @@ ADMIN_EXTRA_PERMISSION_NAMES = {
     "mutual_aid:read_requests_admin",
     "mutual_aid:review_requests",
     "mutual_aid:decide_requests",
+    "mutual_aid:read_financial_controls",
+    "mutual_aid:manage_disbursements",
 }
 
 
@@ -122,6 +126,7 @@ ROLE_PERMISSION_NAMES = {
     "community_member": MEMBER_PERMISSION_NAMES,
     "builder_member": BUILDER_PERMISSION_NAMES,
     "mutual_aid_reviewer": MEMBER_PERMISSION_NAMES | {"mutual_aid:review_requests"},
+    "mutual_aid_treasurer": MEMBER_PERMISSION_NAMES | {"mutual_aid:read_financial_controls", "mutual_aid:manage_disbursements"},
     "admin": BUILDER_PERMISSION_NAMES | ADMIN_EXTRA_PERMISSION_NAMES,
     "superadmin": set(DEFAULT_PERMISSION_NAMES),
 }

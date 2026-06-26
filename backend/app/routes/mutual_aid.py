@@ -8,7 +8,7 @@ from app.authz import user_has_permission
 from app.config import settings
 from app.database import get_db
 from app.dependencies.auth import require_permission
-from app.models import MutualAidAuditLog, MutualAidConflictDisclosure, MutualAidDecision, MutualAidFund, MutualAidRequest, MutualAidRequestDocument, MutualAidRequestStatusHistory, MutualAidReview, User
+from app.models import MutualAidAuditLog, MutualAidCategoryBudget, MutualAidConflictDisclosure, MutualAidDecision, MutualAidDisbursement, MutualAidDisbursementStatusHistory, MutualAidFund, MutualAidReconciliationReport, MutualAidRequest, MutualAidRequestDocument, MutualAidRequestStatusHistory, MutualAidReview, User
 from app.services.mutual_aid import DEFAULT_MUTUAL_AID_FUND_NAME
 
 router = APIRouter(prefix="/mutual-aid", tags=["Mutual Aid"])
@@ -19,6 +19,7 @@ SUPPORT_METHODS = {"direct_vendor", "member_follow_up", "resource_referral", "co
 DECISIONS = {"approve", "partial_approve", "not_approved", "close"}
 DECISION_REASON_CODES = {"eligible_need", "partial_need", "insufficient_documentation", "outside_policy", "duplicate_request", "withdrawn", "unable_to_contact", "closed_by_admin", "other"}
 DECISION_STATUS = {"approve": "approved", "partial_approve": "partially_approved", "not_approved": "not_approved", "close": "closed"}
+DISBURSEMENT_STATUSES = {"pending", "scheduled", "paid", "failed", "cancelled", "reversed", "needs_receipt", "closed"}
 
 class RequestPayload(BaseModel):
     category: str
@@ -49,6 +50,17 @@ class DecisionPayload(BaseModel):
     appeal_eligible: bool = False
     appeal_deadline: datetime | None = None
     appeal_instructions: str = Field(default="", max_length=5000)
+
+class DisbursementPayload(BaseModel):
+    amount: int = Field(ge=1, le=1000000)
+    status: str = "pending"
+    receipt_required: bool = False
+    scheduled_for: datetime | None = None
+    notes: str = Field(default="", max_length=5000)
+
+class DisbursementStatusPayload(BaseModel):
+    status: str
+    reason: str = Field(min_length=3, max_length=5000)
 
 class DocumentMetadataPayload(BaseModel):
     document_type: str = Field(default="supporting", max_length=128)
@@ -145,6 +157,34 @@ def _ensure_reviewer_access(db, req, current_user):
         return
     if not _assigned_review(db, req.id, current_user.id):
         raise HTTPException(status_code=404, detail="Request not found")
+
+def _ensure_financial_controls_enabled():
+    _ensure_decisions_enabled()
+    if not settings.MUTUAL_AID_FINANCIAL_CONTROLS_ENABLED or settings.ENABLE_MUTUAL_AID_PAYMENTS:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mutual Aid financial controls are not enabled")
+
+def _ensure_disbursement_tracking_enabled():
+    _ensure_financial_controls_enabled()
+    if not settings.MUTUAL_AID_DISBURSEMENT_TRACKING_ENABLED:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mutual Aid disbursement tracking is not enabled")
+
+def _latest_approval(db, request_id):
+    return db.query(MutualAidDecision).filter(MutualAidDecision.request_id == request_id, MutualAidDecision.decision.in_(["approve", "partial_approve"])).order_by(MutualAidDecision.created_at.desc()).first()
+
+def _disbursed_total(db, request_id):
+    rows = db.query(MutualAidDisbursement).filter(MutualAidDisbursement.request_id == request_id, MutualAidDisbursement.status.notin_(["cancelled", "reversed", "failed"])).all()
+    return sum(row.amount for row in rows)
+
+def _serialize_disbursement(row: MutualAidDisbursement):
+    return {"id": row.id, "request_id": row.request_id, "recipient_user_id": row.recipient_user_id, "amount": row.amount, "currency": row.currency, "status": row.status, "receipt_required": row.receipt_required, "scheduled_for": row.scheduled_for.isoformat() if row.scheduled_for else None, "notes": row.notes, "created_by_user_id": row.created_by_user_id, "created_at": row.created_at.isoformat() if row.created_at else None, "updated_at": row.updated_at.isoformat() if row.updated_at else None}
+
+def _fund_balance_read_model(db, fund):
+    active = db.query(MutualAidDisbursement).join(MutualAidRequest, MutualAidRequest.id == MutualAidDisbursement.request_id).filter(MutualAidRequest.fund_id == fund.id, MutualAidDisbursement.status.in_(["pending", "scheduled", "needs_receipt"])).all()
+    paid = db.query(MutualAidDisbursement).join(MutualAidRequest, MutualAidRequest.id == MutualAidDisbursement.request_id).filter(MutualAidRequest.fund_id == fund.id, MutualAidDisbursement.status.in_(["paid", "closed"])).all()
+    reserved = sum(row.amount for row in active)
+    paid_total = sum(row.amount for row in paid)
+    reserve_floor = fund.current_balance * fund.reserve_percent // 100
+    return {"fund_id": fund.id, "current_balance": fund.current_balance, "reserved_balance": reserved, "paid_total": paid_total, "reserve_percent": fund.reserve_percent, "reserve_floor": reserve_floor, "available_for_disbursement": max(fund.current_balance - reserve_floor - reserved, 0), "approval_threshold": fund.approval_threshold, "currency": fund.currency}
 
 def _has_open_conflict(db, request_id, reviewer_id):
     review = _assigned_review(db, request_id, reviewer_id)
@@ -297,3 +337,54 @@ def document_metadata(request_id: int, payload: DocumentMetadataPayload, current
     _audit(db, current_user.id, req.id, "document_metadata_added", after={"document_id": doc.id, "filename": doc.filename, "content_type": doc.content_type, "file_size": doc.file_size})
     db.commit()
     return {"ok": True, "document": {"id": doc.id, "filename": doc.filename, "status": doc.status}}
+
+
+@router.get("/admin/financial-controls")
+def financial_controls(current_user: User = Depends(require_permission("mutual_aid:read_financial_controls")), db: Session = Depends(get_db)):
+    _ensure_financial_controls_enabled()
+    fund = _fund(db)
+    budgets = db.query(MutualAidCategoryBudget).filter(MutualAidCategoryBudget.fund_id == fund.id).order_by(MutualAidCategoryBudget.category.asc()).all()
+    reports = db.query(MutualAidReconciliationReport).filter(MutualAidReconciliationReport.fund_id == fund.id).order_by(MutualAidReconciliationReport.created_at.desc()).all()
+    return {"ok": True, "balance": _fund_balance_read_model(db, fund), "category_budgets": [{"id": b.id, "category": b.category, "budget_amount": b.budget_amount, "reserved_amount": b.reserved_amount, "currency": b.currency} for b in budgets], "reconciliation_reports": [{"id": r.id, "status": r.status, "totals": r.totals, "created_at": r.created_at.isoformat() if r.created_at else None} for r in reports]}
+
+@router.get("/admin/disbursements")
+def list_disbursements(current_user: User = Depends(require_permission("mutual_aid:manage_disbursements")), db: Session = Depends(get_db)):
+    _ensure_disbursement_tracking_enabled()
+    rows = db.query(MutualAidDisbursement).order_by(MutualAidDisbursement.created_at.desc()).all()
+    return {"ok": True, "statuses": sorted(DISBURSEMENT_STATUSES), "disbursements": [_serialize_disbursement(row) for row in rows]}
+
+@router.post("/admin/requests/{request_id}/disbursements")
+def create_disbursement(request_id: int, payload: DisbursementPayload, current_user: User = Depends(require_permission("mutual_aid:manage_disbursements")), db: Session = Depends(get_db)):
+    _ensure_disbursement_tracking_enabled()
+    req = db.query(MutualAidRequest).filter(MutualAidRequest.id == request_id).first()
+    if not req: raise HTTPException(status_code=404, detail="Request not found")
+    if req.status not in {"approved", "partially_approved"}: raise HTTPException(status_code=409, detail="Only approved requests can receive disbursement records")
+    normalized_status = payload.status.strip().lower()
+    if normalized_status not in DISBURSEMENT_STATUSES: raise HTTPException(status_code=422, detail="Unsupported disbursement status")
+    approval = _latest_approval(db, req.id)
+    if not approval: raise HTTPException(status_code=409, detail="Approved request is missing an approval decision")
+    if _disbursed_total(db, req.id) + payload.amount > approval.amount_approved: raise HTTPException(status_code=409, detail="Disbursement exceeds approved amount")
+    fund = db.query(MutualAidFund).filter(MutualAidFund.id == req.fund_id).one()
+    balance = _fund_balance_read_model(db, fund)
+    if payload.amount > balance["available_for_disbursement"]: raise HTTPException(status_code=409, detail="Reserve rule blocks this disbursement record")
+    if payload.amount > fund.approval_threshold and current_user.role not in {"admin", "superadmin"}: raise HTTPException(status_code=403, detail="Disbursement exceeds treasurer approval threshold")
+    row = MutualAidDisbursement(request_id=req.id, recipient_user_id=req.requester_user_id, amount=payload.amount, currency=req.currency, status=normalized_status, receipt_required=payload.receipt_required, scheduled_for=payload.scheduled_for, notes=payload.notes.strip(), created_by_user_id=current_user.id)
+    db.add(row); db.flush()
+    db.add(MutualAidDisbursementStatusHistory(disbursement_id=row.id, from_status=None, to_status=normalized_status, changed_by_user_id=current_user.id, reason="administrative tracking record created"))
+    _audit(db, current_user.id, row.id, "disbursement_record_created", after=_serialize_disbursement(row))
+    db.commit(); db.refresh(row)
+    return {"ok": True, "disbursement": _serialize_disbursement(row)}
+
+@router.post("/admin/disbursements/{disbursement_id}/status")
+def update_disbursement_status(disbursement_id: int, payload: DisbursementStatusPayload, current_user: User = Depends(require_permission("mutual_aid:manage_disbursements")), db: Session = Depends(get_db)):
+    _ensure_disbursement_tracking_enabled()
+    row = db.query(MutualAidDisbursement).filter(MutualAidDisbursement.id == disbursement_id).first()
+    if not row: raise HTTPException(status_code=404, detail="Disbursement not found")
+    normalized_status = payload.status.strip().lower()
+    if normalized_status not in DISBURSEMENT_STATUSES: raise HTTPException(status_code=422, detail="Unsupported disbursement status")
+    before = _serialize_disbursement(row); old = row.status; row.status = normalized_status
+    if normalized_status == "closed": row.closed_at = datetime.utcnow()
+    db.add(MutualAidDisbursementStatusHistory(disbursement_id=row.id, from_status=old, to_status=normalized_status, changed_by_user_id=current_user.id, reason=payload.reason.strip()))
+    _audit(db, current_user.id, row.id, "disbursement_status_changed", before=before, after=_serialize_disbursement(row))
+    db.commit(); db.refresh(row)
+    return {"ok": True, "disbursement": _serialize_disbursement(row)}
