@@ -55,6 +55,9 @@ DEFAULT_PERMISSION_NAMES = (
     "admin:read_users",
     "admin:manage_users",
     "admin:read_activity",
+    "mutual_aid:create_request_self",
+    "mutual_aid:read_request_self",
+    "mutual_aid:read_requests_admin",
 )
 
 BOOK_ORGANIZER_PERMISSION_NAMES = {
@@ -87,6 +90,8 @@ MEMBER_PERMISSION_NAMES = {
     "chat:use",
     "voice:use_tts",
     "voice:use_stt",
+    "mutual_aid:create_request_self",
+    "mutual_aid:read_request_self",
 }
 
 BUILDER_PERMISSION_NAMES = MEMBER_PERMISSION_NAMES | BOOK_ORGANIZER_PERMISSION_NAMES | {
@@ -105,6 +110,7 @@ ADMIN_EXTRA_PERMISSION_NAMES = {
     "admin:manage_users",
     "admin:read_activity",
     "assessment:read_analytics",
+    "mutual_aid:read_requests_admin",
 }
 
 

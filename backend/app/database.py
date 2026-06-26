@@ -130,6 +130,27 @@ def _run_sqlite_compat_migrations() -> None:
             ))
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_stripe_webhook_events_stripe_event_id ON stripe_webhook_events (stripe_event_id)"))
 
+        mutual_aid_request_cols = [row[1] for row in conn.execute(text("PRAGMA table_info(mutual_aid_requests)"))]
+        mutual_aid_request_columns = {
+            "urgency": "TEXT NOT NULL DEFAULT 'standard'",
+            "preferred_support_method": "TEXT NOT NULL DEFAULT 'community_follow_up'",
+            "policy_consent": "BOOLEAN NOT NULL DEFAULT 0",
+            "submitted_at": "DATETIME",
+        }
+        for column, column_type in mutual_aid_request_columns.items():
+            if mutual_aid_request_cols and column not in mutual_aid_request_cols:
+                conn.execute(text(f"ALTER TABLE mutual_aid_requests ADD COLUMN {column} {column_type}"))
+
+        mutual_aid_document_cols = [row[1] for row in conn.execute(text("PRAGMA table_info(mutual_aid_request_documents)"))]
+        mutual_aid_document_columns = {
+            "filename": "TEXT NOT NULL DEFAULT ''",
+            "content_type": "TEXT NOT NULL DEFAULT ''",
+            "file_size": "INTEGER NOT NULL DEFAULT 0",
+        }
+        for column, column_type in mutual_aid_document_columns.items():
+            if mutual_aid_document_cols and column not in mutual_aid_document_cols:
+                conn.execute(text(f"ALTER TABLE mutual_aid_request_documents ADD COLUMN {column} {column_type}"))
+
         audio_asset_cols = [row[1] for row in conn.execute(text("PRAGMA table_info(audio_assets)"))]
         audio_asset_compat_columns = {
             "audiobook_id": "INTEGER",
@@ -263,6 +284,23 @@ def _run_generic_compat_migrations() -> None:
             conn.execute(text(f"ALTER TABLE audiobooks ADD COLUMN IF NOT EXISTS {column} {column_type}"))
 
         conn.execute(text("ALTER TABLE audiobook_progress ADD COLUMN IF NOT EXISTS completed_chapters TEXT NOT NULL DEFAULT '[]'"))
+
+        mutual_aid_request_columns = {
+            "urgency": "TEXT NOT NULL DEFAULT 'standard'",
+            "preferred_support_method": "TEXT NOT NULL DEFAULT 'community_follow_up'",
+            "policy_consent": "BOOLEAN NOT NULL DEFAULT false",
+            "submitted_at": "TIMESTAMP",
+        }
+        for column, column_type in mutual_aid_request_columns.items():
+            conn.execute(text(f"ALTER TABLE mutual_aid_requests ADD COLUMN IF NOT EXISTS {column} {column_type}"))
+
+        mutual_aid_document_columns = {
+            "filename": "TEXT NOT NULL DEFAULT ''",
+            "content_type": "TEXT NOT NULL DEFAULT ''",
+            "file_size": "INTEGER NOT NULL DEFAULT 0",
+        }
+        for column, column_type in mutual_aid_document_columns.items():
+            conn.execute(text(f"ALTER TABLE mutual_aid_request_documents ADD COLUMN IF NOT EXISTS {column} {column_type}"))
 
         audio_asset_columns = {
             "audiobook_id": "INTEGER",

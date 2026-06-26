@@ -39,6 +39,7 @@ class MutualAidRuntimeFoundationTests(unittest.TestCase):
         db_path = Path(cls.temp_dir.name) / "test_mutual_aid_foundation.db"
         os.environ["DATABASE_URL"] = f"sqlite:///{db_path}"
         os.environ["ENABLE_MUTUAL_AID_RUNTIME_FOUNDATION"] = "true"
+        os.environ["MUTUAL_AID_REQUESTS_ENABLED"] = "false"
         os.environ["ENABLE_MUTUAL_AID_REQUEST_INTAKE"] = "false"
         os.environ["ENABLE_MUTUAL_AID_REVIEW_WORKFLOW"] = "false"
         os.environ["ENABLE_MUTUAL_AID_PAYMENTS"] = "false"
@@ -87,6 +88,7 @@ class MutualAidRuntimeFoundationTests(unittest.TestCase):
 
         flags = mutual_aid_feature_flags()
         self.assertTrue(flags["ENABLE_MUTUAL_AID_RUNTIME_FOUNDATION"])
+        self.assertFalse(flags["MUTUAL_AID_REQUESTS_ENABLED"])
         self.assertFalse(flags["ENABLE_MUTUAL_AID_REQUEST_INTAKE"])
         self.assertFalse(flags["ENABLE_MUTUAL_AID_REVIEW_WORKFLOW"])
         self.assertFalse(flags["ENABLE_MUTUAL_AID_PAYMENTS"])
@@ -95,7 +97,7 @@ class MutualAidRuntimeFoundationTests(unittest.TestCase):
         from app.main import app
 
         route_paths = {route.path.lower() for route in app.routes}
-        forbidden_terms = ("mutual-aid/payout", "mutual-aid/payment", "mutual-aid/request", "wallet", "cash-balance")
+        forbidden_terms = ("mutual-aid/payout", "mutual-aid/payment", "wallet", "cash-balance", "reimbursement")
         for path in route_paths:
             self.assertFalse(any(term in path for term in forbidden_terms), path)
 
