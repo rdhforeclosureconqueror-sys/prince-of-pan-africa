@@ -121,5 +121,66 @@ class MutualAidMigrationFileTests(unittest.TestCase):
         self.assertIn("20000", contents)
 
 
+class MutualAidFundPhase5CompatibilityTests(unittest.TestCase):
+    def test_init_db_adds_phase5_columns_to_existing_sqlite_fund_table_without_data_loss(self):
+        try:
+            from sqlalchemy import create_engine, inspect, text
+        except ModuleNotFoundError as exc:
+            raise unittest.SkipTest("SQLAlchemy is required for Mutual Aid compatibility tests") from exc
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "old_mutual_aid_fund.db"
+            old_engine = create_engine(f"sqlite:///{db_path}")
+            with old_engine.begin() as conn:
+                conn.execute(text(
+                    "CREATE TABLE mutual_aid_funds ("
+                    "id INTEGER PRIMARY KEY, "
+                    "name VARCHAR(255) NOT NULL UNIQUE, "
+                    "status VARCHAR(128) NOT NULL DEFAULT 'Building Toward Activation', "
+                    "activation_threshold INTEGER NOT NULL DEFAULT 20000, "
+                    "current_balance INTEGER NOT NULL DEFAULT 0, "
+                    "available_balance INTEGER NOT NULL DEFAULT 0, "
+                    "reserved_balance INTEGER NOT NULL DEFAULT 0, "
+                    "currency VARCHAR(3) NOT NULL DEFAULT 'USD', "
+                    "created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, "
+                    "updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP"
+                    ")"
+                ))
+                conn.execute(text(
+                    "INSERT INTO mutual_aid_funds "
+                    "(id, name, status, activation_threshold, current_balance, "
+                    "available_balance, reserved_balance, currency) "
+                    "VALUES (1, 'Simba Mutual Aid Society', "
+                    "'Building Toward Activation', 20000, 1234, 1000, 234, 'USD')"
+                ))
+
+            os.environ["DATABASE_URL"] = f"sqlite:///{db_path}"
+            import app.database as database_module
+            import app.models as models_module
+
+            importlib.reload(database_module)
+            importlib.reload(models_module)
+
+            database_module.init_db()
+
+            inspector = inspect(database_module.engine)
+            columns = {column["name"] for column in inspector.get_columns("mutual_aid_funds")}
+            self.assertIn("reserve_percent", columns)
+            self.assertIn("approval_threshold", columns)
+
+            db = database_module.SessionLocal()
+            try:
+                fund = db.query(models_module.MutualAidFund).filter(
+                    models_module.MutualAidFund.name == "Simba Mutual Aid Society"
+                ).one()
+                self.assertEqual(fund.current_balance, 1234)
+                self.assertEqual(fund.available_balance, 1000)
+                self.assertEqual(fund.reserved_balance, 234)
+                self.assertEqual(fund.reserve_percent, 10)
+                self.assertEqual(fund.approval_threshold, 500)
+            finally:
+                db.close()
+
+
 if __name__ == "__main__":
     unittest.main()

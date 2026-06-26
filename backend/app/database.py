@@ -343,6 +343,50 @@ def _run_generic_compat_migrations() -> None:
 
 
 # =========================
+# MUTUAL AID COMPAT MIGRATIONS
+# =========================
+def _ensure_mutual_aid_fund_phase5_columns() -> None:
+    """Ensure older mutual_aid_funds tables have Phase 5 control columns.
+
+    SQLAlchemy selects every mapped MutualAidFund column when seeding the
+    default fund. Existing production databases may already have the table from
+    an earlier migration, and create_all() will not add newly mapped columns to
+    that table. Keep this defensive check before any MutualAidFund ORM query.
+    """
+    phase5_columns = {
+        "reserve_percent": "INTEGER NOT NULL DEFAULT 10",
+        "approval_threshold": "INTEGER NOT NULL DEFAULT 500",
+    }
+
+    with engine.begin() as conn:
+        dialect = engine.dialect.name
+        if dialect == "postgresql":
+            for column, column_type in phase5_columns.items():
+                conn.execute(
+                    text(
+                        "ALTER TABLE mutual_aid_funds "
+                        f"ADD COLUMN IF NOT EXISTS {column} {column_type}"
+                    )
+                )
+            return
+
+        if dialect == "sqlite":
+            existing_columns = {
+                row[1]
+                for row in conn.execute(text("PRAGMA table_info(mutual_aid_funds)"))
+            }
+            if not existing_columns:
+                return
+            for column, column_type in phase5_columns.items():
+                if column not in existing_columns:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE mutual_aid_funds "
+                            f"ADD COLUMN {column} {column_type}"
+                        )
+                    )
+
+# =========================
 # INIT DB (UNIFIED VERSION)
 # =========================
 def init_db() -> None:
@@ -355,6 +399,7 @@ def init_db() -> None:
     Base.metadata.create_all(bind=engine)
     _run_sqlite_compat_migrations()
     _run_generic_compat_migrations()
+    _ensure_mutual_aid_fund_phase5_columns()
 
     db = SessionLocal()
     try:
