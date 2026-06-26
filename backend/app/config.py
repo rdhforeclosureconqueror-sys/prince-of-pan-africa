@@ -34,5 +34,10 @@ class Settings:
     GARVEY_ALLOWED_ISSUER: str = os.getenv("GARVEY_ALLOWED_ISSUER", "simba_wajuma")
     GARVEY_CALLBACK_SECRET: str = os.getenv("GARVEY_CALLBACK_SECRET", "")
 
+    ENABLE_MUTUAL_AID_RUNTIME_FOUNDATION: bool = os.getenv("ENABLE_MUTUAL_AID_RUNTIME_FOUNDATION", "true").strip().lower() in {"1", "true", "yes", "on"}
+    ENABLE_MUTUAL_AID_REQUEST_INTAKE: bool = os.getenv("ENABLE_MUTUAL_AID_REQUEST_INTAKE", "false").strip().lower() in {"1", "true", "yes", "on"}
+    ENABLE_MUTUAL_AID_REVIEW_WORKFLOW: bool = os.getenv("ENABLE_MUTUAL_AID_REVIEW_WORKFLOW", "false").strip().lower() in {"1", "true", "yes", "on"}
+    ENABLE_MUTUAL_AID_PAYMENTS: bool = os.getenv("ENABLE_MUTUAL_AID_PAYMENTS", "false").strip().lower() in {"1", "true", "yes", "on"}
+
 
 settings = Settings()

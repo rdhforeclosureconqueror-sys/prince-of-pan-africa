@@ -539,3 +539,216 @@ class PreparednessVolunteer(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, onupdate=datetime.utcnow)
 
+
+class MutualAidFund(Base):
+    __tablename__ = "mutual_aid_funds"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True)
+    status: Mapped[str] = mapped_column(String(128), nullable=False, default="Building Toward Activation")
+    activation_threshold: Mapped[int] = mapped_column(Integer, nullable=False, default=20000)
+    current_balance: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    available_balance: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    reserved_balance: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="USD")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, onupdate=datetime.utcnow)
+
+
+class MutualAidContribution(Base):
+    __tablename__ = "mutual_aid_contributions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    fund_id: Mapped[int] = mapped_column(ForeignKey("mutual_aid_funds.id"), nullable=False, index=True)
+    contributor_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    amount: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="USD")
+    status: Mapped[str] = mapped_column(String(64), nullable=False, default="recorded")
+    source_reference: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    metadata_: Mapped[dict] = mapped_column("metadata", JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class MutualAidRequest(Base):
+    __tablename__ = "mutual_aid_requests"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    fund_id: Mapped[int] = mapped_column(ForeignKey("mutual_aid_funds.id"), nullable=False, index=True)
+    requester_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    category: Mapped[str] = mapped_column(String(128), nullable=False, default="unclassified")
+    amount_requested: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="USD")
+    status: Mapped[str] = mapped_column(String(64), nullable=False, default="draft")
+    narrative: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, onupdate=datetime.utcnow)
+
+
+class MutualAidRequestDocument(Base):
+    __tablename__ = "mutual_aid_request_documents"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    request_id: Mapped[int] = mapped_column(ForeignKey("mutual_aid_requests.id"), nullable=False, index=True)
+    document_type: Mapped[str] = mapped_column(String(128), nullable=False, default="supporting")
+    storage_key: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    status: Mapped[str] = mapped_column(String(64), nullable=False, default="pending")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class MutualAidReview(Base):
+    __tablename__ = "mutual_aid_reviews"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    request_id: Mapped[int] = mapped_column(ForeignKey("mutual_aid_requests.id"), nullable=False, index=True)
+    reviewer_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    status: Mapped[str] = mapped_column(String(64), nullable=False, default="not_started")
+    notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class MutualAidDecision(Base):
+    __tablename__ = "mutual_aid_decisions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    request_id: Mapped[int] = mapped_column(ForeignKey("mutual_aid_requests.id"), nullable=False, index=True)
+    decision: Mapped[str] = mapped_column(String(64), nullable=False, default="pending")
+    decided_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    amount_approved: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    rationale: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class MutualAidDisbursement(Base):
+    __tablename__ = "mutual_aid_disbursements"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    request_id: Mapped[int] = mapped_column(ForeignKey("mutual_aid_requests.id"), nullable=False, index=True)
+    recipient_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    amount: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="USD")
+    status: Mapped[str] = mapped_column(String(64), nullable=False, default="not_started")
+    payment_reference: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class MutualAidPolicyVersion(Base):
+    __tablename__ = "mutual_aid_policy_versions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    version: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    effective_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class MutualAidMemberAcceptance(Base):
+    __tablename__ = "mutual_aid_member_acceptances"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    policy_version_id: Mapped[int] = mapped_column(ForeignKey("mutual_aid_policy_versions.id"), nullable=False, index=True)
+    accepted_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class MutualAidAuditLog(Base):
+    __tablename__ = "mutual_aid_audit_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    actor_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    entity_type: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    entity_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    action: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    before: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    after: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class MutualAidRequestStatusHistory(Base):
+    __tablename__ = "mutual_aid_request_status_history"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    request_id: Mapped[int] = mapped_column(ForeignKey("mutual_aid_requests.id"), nullable=False, index=True)
+    from_status: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    to_status: Mapped[str] = mapped_column(String(64), nullable=False)
+    changed_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    reason: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class MutualAidCommitteeMember(Base):
+    __tablename__ = "mutual_aid_committee_members"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    role: Mapped[str] = mapped_column(String(128), nullable=False, default="reviewer")
+    status: Mapped[str] = mapped_column(String(64), nullable=False, default="inactive")
+    appointed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class MutualAidConflictDisclosure(Base):
+    __tablename__ = "mutual_aid_conflict_disclosures"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    request_id: Mapped[int | None] = mapped_column(ForeignKey("mutual_aid_requests.id"), nullable=True, index=True)
+    committee_member_id: Mapped[int | None] = mapped_column(ForeignKey("mutual_aid_committee_members.id"), nullable=True, index=True)
+    disclosure: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    status: Mapped[str] = mapped_column(String(64), nullable=False, default="open")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class MutualAidAppeal(Base):
+    __tablename__ = "mutual_aid_appeals"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    request_id: Mapped[int] = mapped_column(ForeignKey("mutual_aid_requests.id"), nullable=False, index=True)
+    appellant_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    status: Mapped[str] = mapped_column(String(64), nullable=False, default="not_started")
+    reason: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class MutualAidFraudReview(Base):
+    __tablename__ = "mutual_aid_fraud_reviews"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    request_id: Mapped[int | None] = mapped_column(ForeignKey("mutual_aid_requests.id"), nullable=True, index=True)
+    status: Mapped[str] = mapped_column(String(64), nullable=False, default="not_started")
+    risk_level: Mapped[str] = mapped_column(String(64), nullable=False, default="unknown")
+    notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class MutualAidReconciliationReport(Base):
+    __tablename__ = "mutual_aid_reconciliation_reports"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    fund_id: Mapped[int] = mapped_column(ForeignKey("mutual_aid_funds.id"), nullable=False, index=True)
+    period_start: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    period_end: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    status: Mapped[str] = mapped_column(String(64), nullable=False, default="draft")
+    totals: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class MutualAidCategoryBudget(Base):
+    __tablename__ = "mutual_aid_category_budgets"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    fund_id: Mapped[int] = mapped_column(ForeignKey("mutual_aid_funds.id"), nullable=False, index=True)
+    category: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    budget_amount: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    reserved_amount: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="USD")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class MutualAidVendorRecipient(Base):
+    __tablename__ = "mutual_aid_vendor_recipients"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(64), nullable=False, default="inactive")
+    contact_metadata: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
