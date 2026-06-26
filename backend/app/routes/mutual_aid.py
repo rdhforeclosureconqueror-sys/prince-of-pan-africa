@@ -8,7 +8,7 @@ from app.authz import user_has_permission
 from app.config import settings
 from app.database import get_db
 from app.dependencies.auth import require_permission
-from app.models import MutualAidAuditLog, MutualAidCategoryBudget, MutualAidConflictDisclosure, MutualAidDecision, MutualAidDisbursement, MutualAidDisbursementStatusHistory, MutualAidFund, MutualAidNotification, MutualAidReconciliationReport, MutualAidRequest, MutualAidRequestDocument, MutualAidRequestStatusHistory, MutualAidReview, User
+from app.models import MutualAidAppeal, MutualAidAuditLog, MutualAidCategoryBudget, MutualAidConflictDisclosure, MutualAidDecision, MutualAidDisbursement, MutualAidDisbursementStatusHistory, MutualAidFund, MutualAidNotification, MutualAidReconciliationReport, MutualAidRequest, MutualAidRequestDocument, MutualAidRequestStatusHistory, MutualAidReview, User
 from app.services.mutual_aid import DEFAULT_MUTUAL_AID_FUND_NAME, record_mutual_aid_notification
 
 router = APIRouter(prefix="/mutual-aid", tags=["Mutual Aid"])
@@ -20,6 +20,7 @@ DECISIONS = {"approve", "partial_approve", "not_approved", "close"}
 DECISION_REASON_CODES = {"eligible_need", "partial_need", "insufficient_documentation", "outside_policy", "duplicate_request", "withdrawn", "unable_to_contact", "closed_by_admin", "other"}
 DECISION_STATUS = {"approve": "approved", "partial_approve": "partially_approved", "not_approved": "not_approved", "close": "closed"}
 DISBURSEMENT_STATUSES = {"pending", "scheduled", "paid", "failed", "cancelled", "reversed", "needs_receipt", "closed"}
+APPEAL_STATUSES = {"submitted", "under_review", "more_info_requested", "approved", "denied", "closed"}
 
 class RequestPayload(BaseModel):
     category: str
@@ -62,6 +63,14 @@ class DisbursementStatusPayload(BaseModel):
     status: str
     reason: str = Field(min_length=3, max_length=5000)
 
+class AppealPayload(BaseModel):
+    reason: str = Field(min_length=3, max_length=255)
+    explanation: str = Field(min_length=20, max_length=5000)
+
+class AppealReviewPayload(BaseModel):
+    status: str
+    notes: str = Field(min_length=3, max_length=5000)
+
 class DocumentMetadataPayload(BaseModel):
     document_type: str = Field(default="supporting", max_length=128)
     filename: str = Field(min_length=1, max_length=255)
@@ -84,6 +93,11 @@ def _ensure_decisions_enabled():
     _ensure_review_enabled()
     if not settings.MUTUAL_AID_DECISIONS_ENABLED:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mutual Aid decision workflow is not enabled")
+
+def _ensure_appeals_enabled():
+    _ensure_decisions_enabled()
+    if not settings.MUTUAL_AID_APPEALS_ENABLED:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mutual Aid appeals workflow is not enabled")
 
 
 def _fund(db):
@@ -130,8 +144,8 @@ def _serialize(req: MutualAidRequest):
     }
 
 
-def _audit(db, actor_id, entity_id, action, before=None, after=None):
-    db.add(MutualAidAuditLog(actor_user_id=actor_id, entity_type="mutual_aid_request", entity_id=entity_id, action=action, before=before or {}, after=after or {}))
+def _audit(db, actor_id, entity_id, action, before=None, after=None, entity_type="mutual_aid_request"):
+    db.add(MutualAidAuditLog(actor_user_id=actor_id, entity_type=entity_type, entity_id=entity_id, action=action, before=before or {}, after=after or {}))
 
 
 def _serialize_history(row: MutualAidRequestStatusHistory):
@@ -146,11 +160,20 @@ def _serialize_conflict(row: MutualAidConflictDisclosure):
 def _serialize_decision(row: MutualAidDecision):
     return {"id": row.id, "request_id": row.request_id, "decision": row.decision, "decided_by_user_id": row.decided_by_user_id, "approved_amount": row.amount_approved, "reason_code": row.reason_code, "notes": row.rationale, "appeal_eligible": row.appeal_eligible, "appeal_deadline": row.appeal_deadline.isoformat() if row.appeal_deadline else None, "appeal_instructions": row.appeal_instructions, "created_at": row.created_at.isoformat() if row.created_at else None}
 
+def _serialize_appeal(row: MutualAidAppeal):
+    return {"id": row.id, "request_id": row.request_id, "decision_id": row.decision_id, "appellant_user_id": row.appellant_user_id, "status": row.status, "reason": row.reason, "explanation": row.explanation, "reviewed_by_user_id": row.reviewed_by_user_id, "review_notes": row.review_notes, "reviewed_at": row.reviewed_at.isoformat() if row.reviewed_at else None, "closed_at": row.closed_at.isoformat() if row.closed_at else None, "created_at": row.created_at.isoformat() if row.created_at else None, "updated_at": row.updated_at.isoformat() if row.updated_at else None}
+
 def _serialize_notification(row: MutualAidNotification):
     return {"id": row.id, "request_id": row.request_id, "disbursement_id": row.disbursement_id, "recipient_user_id": row.recipient_user_id, "actor_user_id": row.actor_user_id, "audience": row.audience, "event_type": row.event_type, "title": row.title, "message": row.message, "delivery_status": row.delivery_status, "channels": row.channels, "payload": row.payload, "created_at": row.created_at.isoformat() if row.created_at else None}
 
 def _request_notifications(db, request_id):
     return db.query(MutualAidNotification).filter(MutualAidNotification.request_id == request_id).order_by(MutualAidNotification.created_at.desc()).all()
+
+def _request_appeals(db, request_id):
+    return db.query(MutualAidAppeal).filter(MutualAidAppeal.request_id == request_id).order_by(MutualAidAppeal.created_at.desc()).all()
+
+def _latest_not_approved_decision(db, request_id):
+    return db.query(MutualAidDecision).filter(MutualAidDecision.request_id == request_id, MutualAidDecision.decision == "not_approved").order_by(MutualAidDecision.created_at.desc()).first()
 
 def _is_admin(db, user):
     return user_has_permission(db, user, "mutual_aid:read_requests_admin")
@@ -234,7 +257,8 @@ def get_request(request_id: int, current_user: User = Depends(require_permission
     if req.requester_user_id != current_user.id and not user_has_permission(db, current_user, "mutual_aid:read_requests_admin"):
         raise HTTPException(status_code=404, detail="Request not found")
     notifications = db.query(MutualAidNotification).filter(MutualAidNotification.request_id == req.id, MutualAidNotification.recipient_user_id == current_user.id).order_by(MutualAidNotification.created_at.desc()).all()
-    return {"ok": True, "request": _serialize(req), "notifications": [_serialize_notification(n) for n in notifications]}
+    appeals = _request_appeals(db, req.id)
+    return {"ok": True, "request": _serialize(req), "appeals": [_serialize_appeal(a) for a in appeals], "notifications": [_serialize_notification(n) for n in notifications]}
 
 
 @router.get("/admin/requests")
@@ -256,7 +280,8 @@ def admin_request_detail(request_id: int, current_user: User = Depends(require_p
     decisions = db.query(MutualAidDecision).filter(MutualAidDecision.request_id == req.id).order_by(MutualAidDecision.created_at.desc()).all()
     requester = db.query(User).filter(User.id == req.requester_user_id).first() if req.requester_user_id else None
     notifications = _request_notifications(db, req.id)
-    return {"ok": True, "request": _serialize(req), "requester": _serialize_user(requester), "reviews": [_serialize_review(r) for r in reviews], "status_history": [_serialize_history(h) for h in history], "conflicts": [_serialize_conflict(c) for c in conflicts], "decisions": [_serialize_decision(d) for d in decisions], "notifications": [_serialize_notification(n) for n in notifications], "decision_reason_codes": sorted(DECISION_REASON_CODES)}
+    appeals = _request_appeals(db, req.id)
+    return {"ok": True, "request": _serialize(req), "requester": _serialize_user(requester), "reviews": [_serialize_review(r) for r in reviews], "status_history": [_serialize_history(h) for h in history], "conflicts": [_serialize_conflict(c) for c in conflicts], "decisions": [_serialize_decision(d) for d in decisions], "appeals": [_serialize_appeal(a) for a in appeals], "notifications": [_serialize_notification(n) for n in notifications], "decision_reason_codes": sorted(DECISION_REASON_CODES), "appeal_statuses": sorted(APPEAL_STATUSES)}
 
 
 @router.post("/admin/requests/{request_id}/decision")
@@ -342,6 +367,57 @@ def disclose_conflict(request_id: int, payload: ConflictDisclosurePayload, curre
     _audit(db, current_user.id, req.id, "conflict_disclosed", after=_serialize_conflict(conflict))
     db.commit(); db.refresh(conflict)
     return {"ok": True, "conflict": _serialize_conflict(conflict)}
+
+@router.post("/requests/{request_id}/appeals")
+def submit_appeal(request_id: int, payload: AppealPayload, current_user: User = Depends(require_permission("mutual_aid:create_request_self")), db: Session = Depends(get_db)):
+    _ensure_appeals_enabled()
+    req = db.query(MutualAidRequest).filter(MutualAidRequest.id == request_id, MutualAidRequest.requester_user_id == current_user.id).first()
+    if not req:
+        raise HTTPException(status_code=404, detail="Request not found")
+    if req.status != "not_approved":
+        raise HTTPException(status_code=409, detail="Only not-approved requests can be appealed")
+    decision = _latest_not_approved_decision(db, req.id)
+    if not decision or not decision.appeal_eligible:
+        raise HTTPException(status_code=409, detail="This request is not appeal eligible")
+    if decision.appeal_deadline and datetime.utcnow() > decision.appeal_deadline:
+        raise HTTPException(status_code=409, detail="The appeal deadline has passed")
+    existing = db.query(MutualAidAppeal).filter(MutualAidAppeal.request_id == req.id, MutualAidAppeal.status.in_(["submitted", "under_review", "more_info_requested"])).first()
+    if existing:
+        raise HTTPException(status_code=409, detail="An open appeal already exists for this request")
+    appeal = MutualAidAppeal(request_id=req.id, decision_id=decision.id, appellant_user_id=current_user.id, status="submitted", reason=payload.reason.strip(), explanation=payload.explanation.strip())
+    db.add(appeal); db.flush()
+    _audit(db, current_user.id, appeal.id, "appeal_submitted", after=_serialize_appeal(appeal), entity_type="mutual_aid_appeal")
+    _audit(db, current_user.id, req.id, "appeal_submitted", after={"appeal": _serialize_appeal(appeal)})
+    record_mutual_aid_notification(db, event_type="appeal_submitted", request_id=req.id, recipient_user_id=current_user.id, actor_user_id=current_user.id, payload={"appeal_id": appeal.id, "status": appeal.status})
+    record_mutual_aid_notification(db, event_type="admin_appeal_submitted", request_id=req.id, recipient_user_id=None, actor_user_id=current_user.id, audience="admin", payload={"appeal_id": appeal.id, "status": appeal.status})
+    db.commit(); db.refresh(appeal)
+    return {"ok": True, "appeal": _serialize_appeal(appeal)}
+
+@router.post("/admin/appeals/{appeal_id}/review")
+def review_appeal(appeal_id: int, payload: AppealReviewPayload, current_user: User = Depends(require_permission("mutual_aid:decide_requests")), db: Session = Depends(get_db)):
+    _ensure_appeals_enabled()
+    appeal = db.query(MutualAidAppeal).filter(MutualAidAppeal.id == appeal_id).first()
+    if not appeal:
+        raise HTTPException(status_code=404, detail="Appeal not found")
+    normalized_status = payload.status.strip().lower()
+    if normalized_status not in APPEAL_STATUSES:
+        raise HTTPException(status_code=422, detail="Unsupported appeal status")
+    req = db.query(MutualAidRequest).filter(MutualAidRequest.id == appeal.request_id).first()
+    if not req:
+        raise HTTPException(status_code=404, detail="Request not found")
+    before = _serialize_appeal(appeal)
+    appeal.status = normalized_status
+    appeal.review_notes = payload.notes.strip()
+    appeal.reviewed_by_user_id = current_user.id
+    appeal.reviewed_at = datetime.utcnow()
+    if normalized_status in {"approved", "denied", "closed"}:
+        appeal.closed_at = appeal.reviewed_at
+    _audit(db, current_user.id, appeal.id, "appeal_reviewed", before=before, after=_serialize_appeal(appeal), entity_type="mutual_aid_appeal")
+    _audit(db, current_user.id, req.id, "appeal_reviewed", before={"appeal": before}, after={"appeal": _serialize_appeal(appeal)})
+    record_mutual_aid_notification(db, event_type="appeal_status_changed", request_id=req.id, recipient_user_id=appeal.appellant_user_id, actor_user_id=current_user.id, payload={"appeal_id": appeal.id, "status": appeal.status})
+    record_mutual_aid_notification(db, event_type="admin_appeal_status_changed", request_id=req.id, recipient_user_id=None, actor_user_id=current_user.id, audience="admin", payload={"appeal_id": appeal.id, "status": appeal.status})
+    db.commit(); db.refresh(appeal)
+    return {"ok": True, "appeal": _serialize_appeal(appeal)}
 
 @router.post("/requests/{request_id}/documents/metadata")
 def document_metadata(request_id: int, payload: DocumentMetadataPayload, current_user: User = Depends(require_permission("mutual_aid:create_request_self")), db: Session = Depends(get_db)):

@@ -116,6 +116,7 @@ const MUTUAL_AID_REVIEW_WORKFLOW_FLAG = import.meta.env.VITE_ENABLE_MUTUAL_AID_R
 const MUTUAL_AID_DECISION_WORKFLOW_FLAG = import.meta.env.VITE_ENABLE_MUTUAL_AID_DECISION_WORKFLOW;
 const MUTUAL_AID_FINANCIAL_CONTROLS_FLAG = import.meta.env.VITE_ENABLE_MUTUAL_AID_FINANCIAL_CONTROLS;
 const MUTUAL_AID_NOTIFICATIONS_FLAG = import.meta.env.VITE_ENABLE_MUTUAL_AID_NOTIFICATIONS;
+const MUTUAL_AID_APPEALS_FLAG = import.meta.env.VITE_ENABLE_MUTUAL_AID_APPEALS;
 const normalizedTextBookOrganizerFlag = String(TEXT_BOOK_ORGANIZER_FLAG || "").trim().toLowerCase();
 const normalizedMutualAidOverviewFlag = String(MUTUAL_AID_OVERVIEW_FLAG || "").trim().toLowerCase();
 const normalizedMutualAidAdminPlanningFlag = String(MUTUAL_AID_ADMIN_PLANNING_FLAG || "").trim().toLowerCase();
@@ -130,6 +131,7 @@ const normalizedMutualAidReviewWorkflowFlag = String(MUTUAL_AID_REVIEW_WORKFLOW_
 const normalizedMutualAidDecisionWorkflowFlag = String(MUTUAL_AID_DECISION_WORKFLOW_FLAG || "").trim().toLowerCase();
 const normalizedMutualAidFinancialControlsFlag = String(MUTUAL_AID_FINANCIAL_CONTROLS_FLAG || "").trim().toLowerCase();
 const normalizedMutualAidNotificationsFlag = String(MUTUAL_AID_NOTIFICATIONS_FLAG || "").trim().toLowerCase();
+const normalizedMutualAidAppealsFlag = String(MUTUAL_AID_APPEALS_FLAG || "").trim().toLowerCase();
 
 export const ENABLE_TEXT_BOOK_ORGANIZER = TEXT_BOOK_ORGANIZER_FLAG === undefined
   ? !isDev
@@ -186,6 +188,10 @@ export const ENABLE_MUTUAL_AID_FINANCIAL_CONTROLS = MUTUAL_AID_FINANCIAL_CONTROL
 export const ENABLE_MUTUAL_AID_NOTIFICATIONS = MUTUAL_AID_NOTIFICATIONS_FLAG === undefined
   ? false
   : ["1", "true", "yes", "on"].includes(normalizedMutualAidNotificationsFlag);
+
+export const ENABLE_MUTUAL_AID_APPEALS = MUTUAL_AID_APPEALS_FLAG === undefined
+  ? false
+  : ["1", "true", "yes", "on"].includes(normalizedMutualAidAppealsFlag);
 
 export const MUTUAL_AID_ACTIVATION_THRESHOLD = 20000;
 export const MUTUAL_AID_CURRENT_PROGRESS = 0;

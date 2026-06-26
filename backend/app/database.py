@@ -151,6 +151,20 @@ def _run_sqlite_compat_migrations() -> None:
             if mutual_aid_document_cols and column not in mutual_aid_document_cols:
                 conn.execute(text(f"ALTER TABLE mutual_aid_request_documents ADD COLUMN {column} {column_type}"))
 
+        mutual_aid_appeal_cols = [row[1] for row in conn.execute(text("PRAGMA table_info(mutual_aid_appeals)"))]
+        mutual_aid_appeal_columns = {
+            "decision_id": "INTEGER",
+            "explanation": "TEXT NOT NULL DEFAULT ''",
+            "reviewed_by_user_id": "INTEGER",
+            "review_notes": "TEXT NOT NULL DEFAULT ''",
+            "reviewed_at": "DATETIME",
+            "closed_at": "DATETIME",
+            "updated_at": "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP",
+        }
+        for column, column_type in mutual_aid_appeal_columns.items():
+            if mutual_aid_appeal_cols and column not in mutual_aid_appeal_cols:
+                conn.execute(text(f"ALTER TABLE mutual_aid_appeals ADD COLUMN {column} {column_type}"))
+
         audio_asset_cols = [row[1] for row in conn.execute(text("PRAGMA table_info(audio_assets)"))]
         audio_asset_compat_columns = {
             "audiobook_id": "INTEGER",
@@ -301,6 +315,18 @@ def _run_generic_compat_migrations() -> None:
         }
         for column, column_type in mutual_aid_document_columns.items():
             conn.execute(text(f"ALTER TABLE mutual_aid_request_documents ADD COLUMN IF NOT EXISTS {column} {column_type}"))
+
+        mutual_aid_appeal_columns = {
+            "decision_id": "INTEGER",
+            "explanation": "TEXT NOT NULL DEFAULT ''",
+            "reviewed_by_user_id": "INTEGER",
+            "review_notes": "TEXT NOT NULL DEFAULT ''",
+            "reviewed_at": "TIMESTAMP",
+            "closed_at": "TIMESTAMP",
+            "updated_at": "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP",
+        }
+        for column, column_type in mutual_aid_appeal_columns.items():
+            conn.execute(text(f"ALTER TABLE mutual_aid_appeals ADD COLUMN IF NOT EXISTS {column} {column_type}"))
 
         audio_asset_columns = {
             "audiobook_id": "INTEGER",
