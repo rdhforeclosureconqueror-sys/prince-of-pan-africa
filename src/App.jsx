@@ -30,6 +30,7 @@ import MutualAidPilotReadinessPage from "./pages/MutualAidPilotReadinessPage";
 import MutualAidAllowlistPreviewPage from "./pages/MutualAidAllowlistPreviewPage";
 import MutualAidOperationsDashboard from "./pages/MutualAidOperationsDashboard";
 import MutualAidGovernanceCenter from "./pages/MutualAidGovernanceCenter";
+import MutualAidExecutiveDashboard from "./pages/MutualAidExecutiveDashboard";
 import {
   MutualAidDisbursementsPreviewPage,
   MutualAidNominatePreviewPage,
@@ -39,7 +40,7 @@ import {
   MutualAidReviewPreviewPage,
 } from "./pages/MutualAidPilotPreviews";
 import { getBackgroundForPath } from "./utils/backgroundSystem";
-import { API_DEBUG, AUTH_DEBUG, ENABLE_MUTUAL_AID_ADMIN_PLANNING, ENABLE_MUTUAL_AID_ALLOWLIST_SHELL, ENABLE_MUTUAL_AID_GOVERNANCE_CENTER, ENABLE_MUTUAL_AID_OPERATIONS_DASHBOARD, ENABLE_MUTUAL_AID_OVERVIEW, ENABLE_MUTUAL_AID_PILOT_READINESS_SHELL, ENABLE_MUTUAL_AID_PILOT_UI_SHELL, ENABLE_TEXT_BOOK_ORGANIZER } from "./config";
+import { API_DEBUG, AUTH_DEBUG, ENABLE_MUTUAL_AID_ADMIN_PLANNING, ENABLE_MUTUAL_AID_ALLOWLIST_SHELL, ENABLE_MUTUAL_AID_EXECUTIVE_DASHBOARD, ENABLE_MUTUAL_AID_GOVERNANCE_CENTER, ENABLE_MUTUAL_AID_OPERATIONS_DASHBOARD, ENABLE_MUTUAL_AID_OVERVIEW, ENABLE_MUTUAL_AID_PILOT_READINESS_SHELL, ENABLE_MUTUAL_AID_PILOT_UI_SHELL, ENABLE_TEXT_BOOK_ORGANIZER } from "./config";
 import { api } from "./api/api";
 import { canAccessTextBookOrganizer, isAdminUser } from "./authz";
 import "./styles/backgroundSystem.css";
@@ -255,6 +256,22 @@ function AdminMutualAidGovernanceRoute({ authChecked, user, isAdmin }) {
   return <MutualAidGovernanceCenter />;
 }
 
+
+function AdminMutualAidExecutiveDashboardRoute({ authChecked, user, isAdmin }) {
+  if (!authChecked) return <div className="admin-loading">Checking admin access...</div>;
+  if (!user) return <Navigate to="/?auth=login" replace />;
+  if (!isAdmin) {
+    return (
+      <PilotDeferredPage
+        title="Admin access required"
+        detail="This static Mutual Aid executive launch readiness dashboard is available only to admin users."
+      />
+    );
+  }
+
+  return <MutualAidExecutiveDashboard />;
+}
+
 function MutualAidPilotShellRoute({ children }) {
   if (!ENABLE_MUTUAL_AID_PILOT_UI_SHELL) {
     return <PilotDeferredPage title="Mutual Aid pilot UI shell is not enabled" />;
@@ -301,6 +318,9 @@ function AppRoutes({ user, rbac, isAdmin, canAccessOrganizer, authChecked, refre
         ) : null}
         {ENABLE_MUTUAL_AID_GOVERNANCE_CENTER ? (
           <Route path="/admin/mutual-aid/governance" element={<AdminMutualAidGovernanceRoute authChecked={authChecked} user={user} isAdmin={isAdmin} />} />
+        ) : null}
+        {ENABLE_MUTUAL_AID_EXECUTIVE_DASHBOARD ? (
+          <Route path="/admin/mutual-aid/executive" element={<AdminMutualAidExecutiveDashboardRoute authChecked={authChecked} user={user} isAdmin={isAdmin} />} />
         ) : null}
         <Route path="/admin-legacy" element={<Navigate to="/dashboard" replace />} />
         <Route
