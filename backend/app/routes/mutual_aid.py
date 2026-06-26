@@ -9,7 +9,7 @@ from app.config import settings
 from app.database import get_db
 from app.dependencies.auth import require_permission
 from app.models import MutualAidAppeal, MutualAidAuditLog, MutualAidCategoryBudget, MutualAidConflictDisclosure, MutualAidDecision, MutualAidDisbursement, MutualAidDisbursementStatusHistory, MutualAidFund, MutualAidNotification, MutualAidReconciliationReport, MutualAidRequest, MutualAidRequestDocument, MutualAidRequestStatusHistory, MutualAidReview, User
-from app.services.mutual_aid import DEFAULT_MUTUAL_AID_FUND_NAME, record_mutual_aid_notification
+from app.services.mutual_aid import DEFAULT_MUTUAL_AID_FUND_NAME, MUTUAL_AID_ACTIVATION_THRESHOLD, MUTUAL_AID_BUILDING_STATUS, mutual_aid_feature_flags, record_mutual_aid_notification
 
 router = APIRouter(prefix="/mutual-aid", tags=["Mutual Aid"])
 
@@ -77,6 +77,59 @@ class DocumentMetadataPayload(BaseModel):
     content_type: str = Field(default="", max_length=128)
     file_size: int = Field(default=0, ge=0)
     storage_key: str = Field(default="", max_length=1024)
+
+
+
+
+def _mutual_aid_route_paths():
+    return sorted({getattr(route, "path", "") for route in router.routes if getattr(route, "path", "")})
+
+
+def _live_money_route_findings():
+    forbidden_terms = ("payment", "payments", "payout", "payouts", "wallet", "wallets")
+    findings = []
+    for path in _mutual_aid_route_paths():
+        normalized = path.lower()
+        matched = [term for term in forbidden_terms if term in normalized]
+        if matched:
+            findings.append({"path": f"/mutual-aid{path}", "matched_terms": matched})
+    return findings
+
+
+def _readiness_check(key, label, passed, detail):
+    return {"key": key, "label": label, "passed": bool(passed), "detail": detail}
+
+
+@router.get("/admin/pilot-readiness/verification")
+def pilot_readiness_verification(current_user: User = Depends(require_permission("mutual_aid:read_requests_admin")), db: Session = Depends(get_db)):
+    flags = mutual_aid_feature_flags()
+    fund = db.query(MutualAidFund).filter(MutualAidFund.name == DEFAULT_MUTUAL_AID_FUND_NAME).one_or_none()
+    money_route_findings = _live_money_route_findings()
+    checks = [
+        _readiness_check("runtime_foundation_enabled", "Runtime foundation enabled", flags["ENABLE_MUTUAL_AID_RUNTIME_FOUNDATION"], "ENABLE_MUTUAL_AID_RUNTIME_FOUNDATION must be true."),
+        _readiness_check("request_intake_enabled", "Request intake enabled", flags["MUTUAL_AID_REQUESTS_ENABLED"] and flags["ENABLE_MUTUAL_AID_REQUEST_INTAKE"], "MUTUAL_AID_REQUESTS_ENABLED / ENABLE_MUTUAL_AID_REQUEST_INTAKE must be true."),
+        _readiness_check("review_workflow_enabled", "Review workflow enabled", flags["MUTUAL_AID_REVIEW_ENABLED"] and flags["ENABLE_MUTUAL_AID_REVIEW_WORKFLOW"], "MUTUAL_AID_REVIEW_ENABLED / ENABLE_MUTUAL_AID_REVIEW_WORKFLOW must be true."),
+        _readiness_check("decision_workflow_enabled", "Decision workflow enabled", flags["MUTUAL_AID_DECISIONS_ENABLED"], "MUTUAL_AID_DECISIONS_ENABLED must be true."),
+        _readiness_check("financial_controls_enabled", "Financial controls enabled", flags["MUTUAL_AID_FINANCIAL_CONTROLS_ENABLED"], "MUTUAL_AID_FINANCIAL_CONTROLS_ENABLED must be true."),
+        _readiness_check("disbursement_tracking_enabled", "Disbursement tracking enabled", flags["MUTUAL_AID_DISBURSEMENT_TRACKING_ENABLED"], "MUTUAL_AID_DISBURSEMENT_TRACKING_ENABLED must be true."),
+        _readiness_check("notifications_enabled", "Notifications enabled", flags["MUTUAL_AID_NOTIFICATIONS_ENABLED"], "MUTUAL_AID_NOTIFICATIONS_ENABLED must be true."),
+        _readiness_check("appeals_enabled", "Appeals enabled", flags["MUTUAL_AID_APPEALS_ENABLED"], "MUTUAL_AID_APPEALS_ENABLED must be true."),
+        _readiness_check("payments_disabled", "Payments disabled", not flags["ENABLE_MUTUAL_AID_PAYMENTS"], "ENABLE_MUTUAL_AID_PAYMENTS must remain false."),
+        _readiness_check("activation_status_building", "Activation status is still Building Toward Activation", bool(fund and fund.status == MUTUAL_AID_BUILDING_STATUS), f"Expected {MUTUAL_AID_BUILDING_STATUS}."),
+        _readiness_check("activation_threshold_20000", "Activation threshold is still 20000", bool(fund and fund.activation_threshold == MUTUAL_AID_ACTIVATION_THRESHOLD), f"Expected {MUTUAL_AID_ACTIVATION_THRESHOLD}."),
+        _readiness_check("no_live_money_routes", "No live payment/payout/wallet routes exist", not money_route_findings, "Mutual Aid routes must not expose payment, payout, or wallet endpoints."),
+    ]
+    return {
+        "ok": True,
+        "pilot_hardening_enabled": flags["MUTUAL_AID_PILOT_HARDENING_ENABLED"],
+        "ready": all(check["passed"] for check in checks),
+        "activation_status": fund.status if fund else None,
+        "activation_threshold": fund.activation_threshold if fund else None,
+        "checks": checks,
+        "money_route_findings": money_route_findings,
+        "mutual_aid_routes": [f"/mutual-aid{path}" for path in _mutual_aid_route_paths()],
+        "guardrails": ["No payment processors connected", "No money movement", "No payout execution", "No wallet balances", "No distributions before activation"],
+    }
 
 
 def _ensure_enabled():

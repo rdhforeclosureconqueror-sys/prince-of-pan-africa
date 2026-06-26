@@ -1,5 +1,7 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { api } from "../api/api";
+import { ENABLE_MUTUAL_AID_PILOT_HARDENING } from "../config";
 import { formatMutualAidCurrency, MUTUAL_AID_ACTIVATION_THRESHOLD, MUTUAL_AID_STATUS } from "../mutualAidFundProgress";
 import "../styles/mutualAid.css";
 
@@ -42,6 +44,18 @@ const referenceDocs = [
 ];
 
 export default function MutualAidPilotReadinessPage() {
+  const [verification, setVerification] = useState(null);
+  const [verificationError, setVerificationError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!ENABLE_MUTUAL_AID_PILOT_HARDENING) return undefined;
+    api("/mutual-aid/admin/pilot-readiness/verification")
+      .then((data) => { if (!cancelled) setVerification(data); })
+      .catch((error) => { if (!cancelled) setVerificationError(error.message || "Unable to load readiness verification."); });
+    return () => { cancelled = true; };
+  }, []);
+
   return (
     <main className="mutual-aid-page mutual-aid-page--admin mutual-aid-page--readiness">
       <section className="mutual-aid-hero cosmic-readable-shell" aria-labelledby="mutual-aid-readiness-title">
@@ -83,6 +97,32 @@ export default function MutualAidPilotReadinessPage() {
             Allowlisted request intake pilot, not active yet. A later approved phase must add any live intake process.
           </p>
           <button className="mutual-aid-disabled-button" type="button" disabled>Intake not active</button>
+        </article>
+
+        <article className="mutual-aid-card mutual-aid-card--wide">
+          <h2>Phase 8 readiness verification</h2>
+          <p>
+            Pilot hardening flag: <strong>{ENABLE_MUTUAL_AID_PILOT_HARDENING ? "enabled" : "disabled"}</strong>.
+            This flag defaults off and gates the live admin verification call.
+          </p>
+          {!ENABLE_MUTUAL_AID_PILOT_HARDENING ? (
+            <p className="mutual-aid-note">Enable VITE_ENABLE_MUTUAL_AID_PILOT_HARDENING to query the admin-only readiness endpoint.</p>
+          ) : verificationError ? (
+            <p className="mutual-aid-note">Verification unavailable: {verificationError}</p>
+          ) : verification ? (
+            <>
+              <p><strong>Overall result:</strong> {verification.ready ? "Ready for controlled pilot verification" : "Not ready"}</p>
+              <ul className="mutual-aid-list">
+                {verification.checks.map((check) => (
+                  <li key={check.key}>
+                    <strong>{check.passed ? "Pass" : "Needs attention"}: {check.label}</strong> — {check.detail}
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : (
+            <p className="mutual-aid-note">Loading readiness verification...</p>
+          )}
         </article>
 
         <article className="mutual-aid-card mutual-aid-card--wide">
