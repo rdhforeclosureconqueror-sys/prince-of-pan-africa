@@ -2,13 +2,14 @@ from datetime import datetime
 
 from fastapi import APIRouter, Body, Depends, HTTPException, status
 from pydantic import BaseModel, Field
+from sqlalchemy import inspect
 from sqlalchemy.orm import Session
 
 from app.authz import user_has_permission
 from app.config import settings
 from app.database import get_db
 from app.dependencies.auth import require_permission
-from app.models import MutualAidAppeal, MutualAidAuditLog, MutualAidCategoryBudget, MutualAidConflictDisclosure, MutualAidDecision, MutualAidDisbursement, MutualAidDisbursementStatusHistory, MutualAidFund, MutualAidNotification, MutualAidReconciliationReport, MutualAidRequest, MutualAidRequestDocument, MutualAidRequestStatusHistory, MutualAidReview, User
+from app.models import MutualAidAppeal, MutualAidAuditLog, MutualAidCategoryBudget, MutualAidCommitteeMember, MutualAidConflictDisclosure, MutualAidDecision, MutualAidDisbursement, MutualAidDisbursementStatusHistory, MutualAidFund, MutualAidMemberAcceptance, MutualAidNotification, MutualAidPolicyVersion, MutualAidReconciliationReport, MutualAidRequest, MutualAidRequestDocument, MutualAidRequestStatusHistory, MutualAidReview, User
 from app.services.mutual_aid import DEFAULT_MUTUAL_AID_FUND_NAME, MUTUAL_AID_ACTIVATION_THRESHOLD, MUTUAL_AID_BUILDING_STATUS, mutual_aid_feature_flags, record_mutual_aid_notification
 
 router = APIRouter(prefix="/mutual-aid", tags=["Mutual Aid"])
@@ -130,6 +131,74 @@ def pilot_readiness_verification(current_user: User = Depends(require_permission
         "mutual_aid_routes": [f"/mutual-aid{path}" for path in _mutual_aid_route_paths()],
         "guardrails": ["No payment processors connected", "No money movement", "No payout execution", "No wallet balances", "No distributions before activation"],
     }
+
+
+
+REQUIRED_LAUNCH_LOCK_FLAGS = (
+    "ENABLE_MUTUAL_AID_RUNTIME_FOUNDATION",
+    "MUTUAL_AID_REQUESTS_ENABLED",
+    "ENABLE_MUTUAL_AID_REQUEST_INTAKE",
+    "MUTUAL_AID_REVIEW_ENABLED",
+    "ENABLE_MUTUAL_AID_REVIEW_WORKFLOW",
+    "MUTUAL_AID_DECISIONS_ENABLED",
+    "MUTUAL_AID_FINANCIAL_CONTROLS_ENABLED",
+    "MUTUAL_AID_DISBURSEMENT_TRACKING_ENABLED",
+    "MUTUAL_AID_NOTIFICATIONS_ENABLED",
+    "MUTUAL_AID_APPEALS_ENABLED",
+    "MUTUAL_AID_PILOT_HARDENING_ENABLED",
+    "MUTUAL_AID_PILOT_LAUNCH_LOCK_ENABLED",
+)
+REQUIRED_LAUNCH_LOCK_ROLES = {"reviewer", "treasurer", "governance"}
+REQUIRED_LAUNCH_LOCK_TABLES = {"mutual_aid_audit_logs", "mutual_aid_request_status_history", "mutual_aid_notifications"}
+SAFE_PRE_ACTIVATION_DISBURSEMENT_STATUSES = {"not_started", "pending", "scheduled", "cancelled", "reversed", "failed", "closed"}
+
+
+def _table_available(db, table_name):
+    return inspect(db.bind).has_table(table_name)
+
+
+def _launch_lock_response(db):
+    flags = mutual_aid_feature_flags()
+    fund = db.query(MutualAidFund).filter(MutualAidFund.name == DEFAULT_MUTUAL_AID_FUND_NAME).one_or_none()
+    money_route_findings = _live_money_route_findings()
+    phase8 = pilot_readiness_verification(db=db)
+    active_roles = {
+        (row.role or "").strip().lower()
+        for row in db.query(MutualAidCommitteeMember).filter(MutualAidCommitteeMember.status == "active").all()
+    }
+    missing_roles = sorted(REQUIRED_LAUNCH_LOCK_ROLES - active_roles)
+    missing_tables = sorted(table for table in REQUIRED_LAUNCH_LOCK_TABLES if not _table_available(db, table))
+    policy_count = db.query(MutualAidPolicyVersion).count() if _table_available(db, "mutual_aid_policy_versions") else 0
+    acceptance_count = db.query(MutualAidMemberAcceptance).count() if _table_available(db, "mutual_aid_member_acceptances") else 0
+    unsafe_distribution_count = db.query(MutualAidDisbursement).filter(~MutualAidDisbursement.status.in_(SAFE_PRE_ACTIVATION_DISBURSEMENT_STATUSES)).count()
+    missing_flags = [key for key in REQUIRED_LAUNCH_LOCK_FLAGS if not flags.get(key)]
+    checks = [
+        _readiness_check("phase8_readiness_passes", "Phase 8 readiness passes", phase8["ready"], "Existing Phase 8 readiness verification must pass."),
+        _readiness_check("payments_disabled", "Payments remain disabled", not flags["ENABLE_MUTUAL_AID_PAYMENTS"], "ENABLE_MUTUAL_AID_PAYMENTS must remain false."),
+        _readiness_check("fund_building", "Fund status remains Building Toward Activation", bool(fund and fund.status == MUTUAL_AID_BUILDING_STATUS), f"Expected {MUTUAL_AID_BUILDING_STATUS}."),
+        _readiness_check("no_distributions_before_activation", "No distributions before activation", unsafe_distribution_count == 0, "No paid/completed Mutual Aid distributions may exist before activation."),
+        _readiness_check("policies_acknowledged", "Required docs/policies are acknowledged", policy_count > 0 and acceptance_count > 0, "At least one Mutual Aid policy version and member acceptance must be recorded."),
+        _readiness_check("roles_exist", "Committee/reviewer/treasurer/governance roles exist", not missing_roles, f"Missing roles: {', '.join(missing_roles) or 'none'}."),
+        _readiness_check("tables_available", "Audit/status-history/notification tables are available", not missing_tables, f"Missing tables: {', '.join(missing_tables) or 'none'}."),
+        _readiness_check("required_flags_present", "Required launch-lock flags are enabled", not missing_flags, f"Missing flags: {', '.join(missing_flags) or 'none'}."),
+        _readiness_check("no_live_money_routes", "No payment/payout/wallet routes exist", not money_route_findings, "No Mutual Aid payment, payout, or wallet routes may be registered."),
+    ]
+    blockers = [check for check in checks if not check["passed"]]
+    return {
+        "ok": True,
+        "ready": not blockers,
+        "status": "go" if not blockers else "no-go",
+        "next_required_action": "Maintain pilot-safe controls and collect final operator signoff." if not blockers else blockers[0]["detail"],
+        "blockers": blockers,
+        "checks": checks,
+        "phase8_readiness": phase8,
+        "guardrails": ["No money movement", "No payment processors", "No payout execution", "No wallet balances", "No distributions before activation"],
+    }
+
+
+@router.get("/admin/pilot-launch-lock/verification")
+def pilot_launch_lock_verification(current_user: User = Depends(require_permission("mutual_aid:read_requests_admin")), db: Session = Depends(get_db)):
+    return _launch_lock_response(db)
 
 
 def _ensure_enabled():

@@ -46,6 +46,7 @@ class Settings:
     MUTUAL_AID_NOTIFICATIONS_ENABLED: bool = os.getenv("MUTUAL_AID_NOTIFICATIONS_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
     MUTUAL_AID_APPEALS_ENABLED: bool = os.getenv("MUTUAL_AID_APPEALS_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
     MUTUAL_AID_PILOT_HARDENING_ENABLED: bool = os.getenv("MUTUAL_AID_PILOT_HARDENING_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
+    MUTUAL_AID_PILOT_LAUNCH_LOCK_ENABLED: bool = os.getenv("MUTUAL_AID_PILOT_LAUNCH_LOCK_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
 
 
 settings = Settings()
