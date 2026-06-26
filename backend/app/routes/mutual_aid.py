@@ -149,6 +149,7 @@ REQUIRED_LAUNCH_LOCK_FLAGS = (
     "MUTUAL_AID_PILOT_LAUNCH_LOCK_ENABLED",
 )
 REQUIRED_RUNBOOK_FLAGS = REQUIRED_LAUNCH_LOCK_FLAGS + ("MUTUAL_AID_PILOT_RUNBOOK_ENABLED",)
+REQUIRED_SMOKE_TEST_FLAGS = REQUIRED_RUNBOOK_FLAGS + ("MUTUAL_AID_PILOT_SMOKE_TESTS_ENABLED",)
 REQUIRED_LAUNCH_LOCK_ROLES = {"reviewer", "treasurer", "governance"}
 REQUIRED_LAUNCH_LOCK_TABLES = {"mutual_aid_audit_logs", "mutual_aid_request_status_history", "mutual_aid_notifications"}
 SAFE_PRE_ACTIVATION_DISBURSEMENT_STATUSES = {"not_started", "pending", "scheduled", "cancelled", "reversed", "failed", "closed"}
@@ -252,6 +253,67 @@ def _pilot_runbook_response(db):
 @router.get("/admin/pilot-runbook/verification")
 def pilot_runbook_verification(current_user: User = Depends(require_permission("mutual_aid:read_requests_admin")), db: Session = Depends(get_db)):
     return _pilot_runbook_response(db)
+
+
+def _pilot_smoke_tests_response(db):
+    flags = mutual_aid_feature_flags()
+    fund = db.query(MutualAidFund).filter(MutualAidFund.name == DEFAULT_MUTUAL_AID_FUND_NAME).one_or_none()
+    phase8 = pilot_readiness_verification(db=db)
+    launch_lock = _launch_lock_response(db)
+    runbook = _pilot_runbook_response(db)
+    money_route_findings = _live_money_route_findings()
+    missing_flags = [key for key in REQUIRED_SMOKE_TEST_FLAGS if not flags.get(key)]
+    checks = [
+        _readiness_check("request_intake_flag", "Request intake flag enabled", flags["MUTUAL_AID_REQUESTS_ENABLED"] and flags["ENABLE_MUTUAL_AID_REQUEST_INTAKE"], "Request intake must be enabled for the pilot smoke test."),
+        _readiness_check("review_flag", "Review flag enabled", flags["MUTUAL_AID_REVIEW_ENABLED"] and flags["ENABLE_MUTUAL_AID_REVIEW_WORKFLOW"], "Review workflow must be enabled for the pilot smoke test."),
+        _readiness_check("decision_flag", "Decision flag enabled", flags["MUTUAL_AID_DECISIONS_ENABLED"], "Decision workflow must be enabled for the pilot smoke test."),
+        _readiness_check("financial_controls_flag", "Financial controls flag enabled", flags["MUTUAL_AID_FINANCIAL_CONTROLS_ENABLED"], "Financial controls must be enabled for the pilot smoke test."),
+        _readiness_check("disbursement_tracking_flag", "Disbursement tracking flag enabled", flags["MUTUAL_AID_DISBURSEMENT_TRACKING_ENABLED"], "Disbursement tracking must be enabled as record-only tracking."),
+        _readiness_check("notifications_flag", "Notifications flag enabled", flags["MUTUAL_AID_NOTIFICATIONS_ENABLED"], "Internal recorded-only notifications must be enabled."),
+        _readiness_check("appeals_flag", "Appeals flag enabled", flags["MUTUAL_AID_APPEALS_ENABLED"], "Appeals workflow must be enabled for the pilot smoke test."),
+        _readiness_check("hardening_flag", "Hardening flag enabled", flags["MUTUAL_AID_PILOT_HARDENING_ENABLED"], "Pilot hardening must be enabled."),
+        _readiness_check("launch_lock_flag", "Launch lock flag enabled", flags["MUTUAL_AID_PILOT_LAUNCH_LOCK_ENABLED"], "Pilot launch lock must be enabled."),
+        _readiness_check("runbook_flag", "Runbook flag enabled", flags["MUTUAL_AID_PILOT_RUNBOOK_ENABLED"], "Pilot runbook must be enabled."),
+        _readiness_check("smoke_tests_flag", "Smoke tests flag enabled", flags["MUTUAL_AID_PILOT_SMOKE_TESTS_ENABLED"], "Pilot smoke tests must be explicitly enabled."),
+        _readiness_check("payments_disabled", "Payments disabled", not flags["ENABLE_MUTUAL_AID_PAYMENTS"], "ENABLE_MUTUAL_AID_PAYMENTS must remain false."),
+        _readiness_check("no_money_routes", "No payment/payout/wallet routes", not money_route_findings, "No Mutual Aid payment, payout, or wallet routes may be registered."),
+        _readiness_check("fund_status_building", "Fund status is Building Toward Activation", bool(fund and fund.status == MUTUAL_AID_BUILDING_STATUS), f"Expected {MUTUAL_AID_BUILDING_STATUS}."),
+        _readiness_check("activation_threshold_20000", "Activation threshold is 20000", bool(fund and fund.activation_threshold == MUTUAL_AID_ACTIVATION_THRESHOLD), f"Expected {MUTUAL_AID_ACTIVATION_THRESHOLD}."),
+        _readiness_check("phase8_readiness_passes", "Phase 8 readiness passes", phase8["ready"], "Phase 8 readiness must pass."),
+        _readiness_check("phase9_launch_lock_passes", "Phase 9 launch lock passes", launch_lock["ready"], "Phase 9 launch lock must pass."),
+        _readiness_check("phase10_runbook_passes", "Phase 10 runbook passes", runbook["ready"], "Phase 10 runbook must pass."),
+    ]
+    blockers = [check for check in checks if not check["passed"]]
+    if missing_flags:
+        blockers.append(_readiness_check("required_phase_flag_missing", "Required phase flag missing", False, f"Missing flags: {', '.join(missing_flags)}."))
+    passed = not blockers
+    return {
+        "ok": True,
+        "phase": "Phase 11 pilot operations smoke tests",
+        "read_only": True,
+        "persisted": False,
+        "status": "pass" if passed else "fail",
+        "passed": passed,
+        "blockers": blockers,
+        "next_action": "Proceed with read-only pilot operations monitoring; do not enable money movement." if passed else blockers[0]["detail"],
+        "pilot_safe_warnings": [
+            "No live submissions are created by this smoke test.",
+            "No money movement, payment processing, payout execution, or wallet balances are available.",
+            "No STAR, Black Dollar, ownership, partner reimbursement, payment, payout, or wallet integrations are checked in.",
+        ],
+        "no_persistence_warning": "This endpoint performs read-only verification only and does not persist smoke test results, signoff, exports, submissions, disbursements, or notifications.",
+        "checks": checks,
+        "money_route_findings": money_route_findings,
+        "mutual_aid_routes": [f"/mutual-aid{path}" for path in _mutual_aid_route_paths()],
+        "fund_status": fund.status if fund else None,
+        "activation_threshold": fund.activation_threshold if fund else None,
+        "required_flags": list(REQUIRED_SMOKE_TEST_FLAGS) + ["ENABLE_MUTUAL_AID_PAYMENTS=false"],
+    }
+
+
+@router.get("/admin/pilot-smoke-tests/verification")
+def pilot_smoke_tests_verification(current_user: User = Depends(require_permission("mutual_aid:read_requests_admin")), db: Session = Depends(get_db)):
+    return _pilot_smoke_tests_response(db)
 
 
 def _ensure_enabled():

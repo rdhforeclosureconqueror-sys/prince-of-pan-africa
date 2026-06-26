@@ -70,3 +70,7 @@ export function getMutualAidPilotLaunchLock() {
 export function getMutualAidPilotRunbook() {
   return get("/mutual-aid/admin/pilot-runbook/verification");
 }
+
+export function getMutualAidPilotSmokeTests() {
+  return get("/mutual-aid/admin/pilot-smoke-tests/verification");
+}
