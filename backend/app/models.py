@@ -752,10 +752,17 @@ class MutualAidAppeal(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     request_id: Mapped[int] = mapped_column(ForeignKey("mutual_aid_requests.id"), nullable=False, index=True)
+    decision_id: Mapped[int | None] = mapped_column(ForeignKey("mutual_aid_decisions.id"), nullable=True, index=True)
     appellant_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
-    status: Mapped[str] = mapped_column(String(64), nullable=False, default="not_started")
+    status: Mapped[str] = mapped_column(String(64), nullable=False, default="submitted", index=True)
     reason: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    explanation: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    reviewed_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    review_notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, onupdate=datetime.utcnow)
 
 
 class MutualAidFraudReview(Base):

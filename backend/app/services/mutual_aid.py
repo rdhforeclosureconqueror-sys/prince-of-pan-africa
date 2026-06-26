@@ -35,6 +35,7 @@ def mutual_aid_feature_flags() -> dict[str, bool]:
         "MUTUAL_AID_FINANCIAL_CONTROLS_ENABLED": settings.MUTUAL_AID_FINANCIAL_CONTROLS_ENABLED,
         "MUTUAL_AID_DISBURSEMENT_TRACKING_ENABLED": settings.MUTUAL_AID_DISBURSEMENT_TRACKING_ENABLED,
         "MUTUAL_AID_NOTIFICATIONS_ENABLED": settings.MUTUAL_AID_NOTIFICATIONS_ENABLED,
+        "MUTUAL_AID_APPEALS_ENABLED": settings.MUTUAL_AID_APPEALS_ENABLED,
     }
 
 
@@ -79,6 +80,10 @@ MUTUAL_AID_NOTIFICATION_COPY = {
     "receipt_needed": ("Receipt needed", "Please provide a receipt or confirmation for your Mutual Aid support record."),
     "admin_receipt_needed": ("Receipt needed", "A Mutual Aid disbursement record is marked as needing a receipt."),
     "appeal_window_reminder": ("Appeal window reminder", "This scaffold records that an appeal window reminder may be needed."),
+    "appeal_submitted": ("Appeal submitted", "Your Mutual Aid appeal was submitted for governance review."),
+    "admin_appeal_submitted": ("Appeal submitted", "A member submitted a Mutual Aid appeal for governance review."),
+    "appeal_status_changed": ("Appeal status changed", "A governance reviewer updated your Mutual Aid appeal."),
+    "admin_appeal_status_changed": ("Appeal status changed", "A Mutual Aid appeal was updated by governance review."),
 }
 
 
