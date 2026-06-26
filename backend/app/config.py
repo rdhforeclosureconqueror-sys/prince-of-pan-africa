@@ -48,6 +48,7 @@ class Settings:
     MUTUAL_AID_PILOT_HARDENING_ENABLED: bool = os.getenv("MUTUAL_AID_PILOT_HARDENING_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
     MUTUAL_AID_PILOT_LAUNCH_LOCK_ENABLED: bool = os.getenv("MUTUAL_AID_PILOT_LAUNCH_LOCK_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
     MUTUAL_AID_PILOT_RUNBOOK_ENABLED: bool = os.getenv("MUTUAL_AID_PILOT_RUNBOOK_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
+    MUTUAL_AID_PILOT_SMOKE_TESTS_ENABLED: bool = os.getenv("MUTUAL_AID_PILOT_SMOKE_TESTS_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
 
 
 settings = Settings()

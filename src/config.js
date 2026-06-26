@@ -120,6 +120,7 @@ const MUTUAL_AID_APPEALS_FLAG = import.meta.env.VITE_ENABLE_MUTUAL_AID_APPEALS;
 const MUTUAL_AID_PILOT_HARDENING_FLAG = import.meta.env.VITE_ENABLE_MUTUAL_AID_PILOT_HARDENING;
 const MUTUAL_AID_PILOT_LAUNCH_LOCK_FLAG = import.meta.env.VITE_ENABLE_MUTUAL_AID_PILOT_LAUNCH_LOCK;
 const MUTUAL_AID_PILOT_RUNBOOK_FLAG = import.meta.env.VITE_ENABLE_MUTUAL_AID_PILOT_RUNBOOK;
+const MUTUAL_AID_PILOT_SMOKE_TESTS_FLAG = import.meta.env.VITE_ENABLE_MUTUAL_AID_PILOT_SMOKE_TESTS;
 const normalizedTextBookOrganizerFlag = String(TEXT_BOOK_ORGANIZER_FLAG || "").trim().toLowerCase();
 const normalizedMutualAidOverviewFlag = String(MUTUAL_AID_OVERVIEW_FLAG || "").trim().toLowerCase();
 const normalizedMutualAidAdminPlanningFlag = String(MUTUAL_AID_ADMIN_PLANNING_FLAG || "").trim().toLowerCase();
@@ -138,6 +139,7 @@ const normalizedMutualAidAppealsFlag = String(MUTUAL_AID_APPEALS_FLAG || "").tri
 const normalizedMutualAidPilotHardeningFlag = String(MUTUAL_AID_PILOT_HARDENING_FLAG || "").trim().toLowerCase();
 const normalizedMutualAidPilotLaunchLockFlag = String(MUTUAL_AID_PILOT_LAUNCH_LOCK_FLAG || "").trim().toLowerCase();
 const normalizedMutualAidPilotRunbookFlag = String(MUTUAL_AID_PILOT_RUNBOOK_FLAG || "").trim().toLowerCase();
+const normalizedMutualAidPilotSmokeTestsFlag = String(MUTUAL_AID_PILOT_SMOKE_TESTS_FLAG || "").trim().toLowerCase();
 
 export const ENABLE_TEXT_BOOK_ORGANIZER = TEXT_BOOK_ORGANIZER_FLAG === undefined
   ? !isDev
@@ -210,6 +212,10 @@ export const ENABLE_MUTUAL_AID_PILOT_LAUNCH_LOCK = MUTUAL_AID_PILOT_LAUNCH_LOCK_
 export const ENABLE_MUTUAL_AID_PILOT_RUNBOOK = MUTUAL_AID_PILOT_RUNBOOK_FLAG === undefined
   ? false
   : ["1", "true", "yes", "on"].includes(normalizedMutualAidPilotRunbookFlag);
+
+export const ENABLE_MUTUAL_AID_PILOT_SMOKE_TESTS = MUTUAL_AID_PILOT_SMOKE_TESTS_FLAG === undefined
+  ? false
+  : ["1", "true", "yes", "on"].includes(normalizedMutualAidPilotSmokeTestsFlag);
 
 export const MUTUAL_AID_ACTIVATION_THRESHOLD = 20000;
 export const MUTUAL_AID_CURRENT_PROGRESS = 0;

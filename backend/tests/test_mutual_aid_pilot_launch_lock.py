@@ -22,6 +22,7 @@ def build_app(payments="false", status="Building Toward Activation", flags=True)
         "MUTUAL_AID_PILOT_HARDENING_ENABLED": "true",
         "MUTUAL_AID_PILOT_LAUNCH_LOCK_ENABLED": "true" if flags else "false",
         "MUTUAL_AID_PILOT_RUNBOOK_ENABLED": "true" if flags else "false",
+        "MUTUAL_AID_PILOT_SMOKE_TESTS_ENABLED": "true" if flags else "false",
         "ENABLE_MUTUAL_AID_PAYMENTS": payments,
         "SESSION_SECRET": "test-session-secret",
     }
