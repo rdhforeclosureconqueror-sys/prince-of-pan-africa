@@ -61,3 +61,8 @@ export function createMutualAidDisbursement(requestId, payload) {
 export function updateMutualAidDisbursementStatus(disbursementId, payload) {
   return post(`/mutual-aid/admin/disbursements/${disbursementId}/status`, payload);
 }
+
+
+export function getMutualAidPilotLaunchLock() {
+  return get("/mutual-aid/admin/pilot-launch-lock/verification");
+}
