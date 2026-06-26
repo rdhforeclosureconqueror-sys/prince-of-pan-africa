@@ -473,3 +473,45 @@
   padding: 1rem;
   background: rgba(255, 255, 255, 0.06);
 }
+
+.mutual-aid-page--allowlist .mutual-aid-hero {
+  border-color: rgba(251, 146, 60, 0.44);
+}
+
+.mutual-aid-status--warning {
+  border-color: rgba(251, 146, 60, 0.48);
+  background: rgba(124, 45, 18, 0.36);
+  color: #fed7aa;
+}
+
+.mutual-aid-status--warning .mutual-aid-status__dot {
+  background: #fb923c;
+  box-shadow: 0 0 18px rgba(251, 146, 60, 0.9);
+}
+
+.mutual-aid-table--allowlist .mutual-aid-table__row {
+  grid-template-columns: 1.2fr 1fr 1.3fr 0.8fr auto;
+}
+
+.mutual-aid-table__row--header {
+  background: rgba(15, 23, 42, 0.74);
+  color: #fde68a;
+}
+
+.mutual-aid-example-badge {
+  display: inline-flex;
+  justify-content: center;
+  border: 1px solid rgba(251, 146, 60, 0.38);
+  border-radius: 999px;
+  padding: 0.35rem 0.55rem;
+  background: rgba(124, 45, 18, 0.28);
+  color: #fed7aa;
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+@media (max-width: 760px) {
+  .mutual-aid-table--allowlist .mutual-aid-table__row {
+    grid-template-columns: 1fr;
+  }
+}

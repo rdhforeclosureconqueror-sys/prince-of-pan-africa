@@ -27,6 +27,7 @@ import CommunityPreparednessPage from "./pages/CommunityPreparednessPage";
 import MutualAidOverviewPage from "./pages/MutualAidOverviewPage";
 import MutualAidAdminPlanningPage from "./pages/MutualAidAdminPlanningPage";
 import MutualAidPilotReadinessPage from "./pages/MutualAidPilotReadinessPage";
+import MutualAidAllowlistPreviewPage from "./pages/MutualAidAllowlistPreviewPage";
 import {
   MutualAidDisbursementsPreviewPage,
   MutualAidNominatePreviewPage,
@@ -36,7 +37,7 @@ import {
   MutualAidReviewPreviewPage,
 } from "./pages/MutualAidPilotPreviews";
 import { getBackgroundForPath } from "./utils/backgroundSystem";
-import { API_DEBUG, AUTH_DEBUG, ENABLE_MUTUAL_AID_ADMIN_PLANNING, ENABLE_MUTUAL_AID_OVERVIEW, ENABLE_MUTUAL_AID_PILOT_READINESS_SHELL, ENABLE_MUTUAL_AID_PILOT_UI_SHELL, ENABLE_TEXT_BOOK_ORGANIZER } from "./config";
+import { API_DEBUG, AUTH_DEBUG, ENABLE_MUTUAL_AID_ADMIN_PLANNING, ENABLE_MUTUAL_AID_ALLOWLIST_SHELL, ENABLE_MUTUAL_AID_OVERVIEW, ENABLE_MUTUAL_AID_PILOT_READINESS_SHELL, ENABLE_MUTUAL_AID_PILOT_UI_SHELL, ENABLE_TEXT_BOOK_ORGANIZER } from "./config";
 import { api } from "./api/api";
 import { canAccessTextBookOrganizer, isAdminUser } from "./authz";
 import "./styles/backgroundSystem.css";
@@ -203,6 +204,25 @@ function AdminPilotReadinessRoute({ authChecked, user, isAdmin }) {
   return <MutualAidPilotReadinessPage />;
 }
 
+function AdminAllowlistPreviewRoute({ authChecked, user, isAdmin }) {
+  if (!ENABLE_MUTUAL_AID_ALLOWLIST_SHELL) {
+    return <PilotDeferredPage title="Mutual Aid allowlist shell is not enabled" />;
+  }
+
+  if (!authChecked) return <div className="admin-loading">Checking admin access...</div>;
+  if (!user) return <Navigate to="/?auth=login" replace />;
+  if (!isAdmin) {
+    return (
+      <PilotDeferredPage
+        title="Admin access required"
+        detail="This static Mutual Aid allowlist pilot access shell is available only to admin users."
+      />
+    );
+  }
+
+  return <MutualAidAllowlistPreviewPage />;
+}
+
 function MutualAidPilotShellRoute({ children }) {
   if (!ENABLE_MUTUAL_AID_PILOT_UI_SHELL) {
     return <PilotDeferredPage title="Mutual Aid pilot UI shell is not enabled" />;
@@ -243,6 +263,7 @@ function AppRoutes({ user, rbac, isAdmin, canAccessOrganizer, authChecked, refre
         <Route path="/admin" element={<Navigate to="/dashboard" replace />} />
         <Route path="/admin/mutual-aid" element={<AdminPlanningRoute authChecked={authChecked} user={user} isAdmin={isAdmin} />} />
         <Route path="/admin/mutual-aid/pilot-readiness" element={<AdminPilotReadinessRoute authChecked={authChecked} user={user} isAdmin={isAdmin} />} />
+        <Route path="/admin/mutual-aid/allowlist-preview" element={<AdminAllowlistPreviewRoute authChecked={authChecked} user={user} isAdmin={isAdmin} />} />
         <Route path="/admin-legacy" element={<Navigate to="/dashboard" replace />} />
         <Route
           path="/fitness"
