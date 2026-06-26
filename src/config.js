@@ -113,6 +113,7 @@ const MUTUAL_AID_GOVERNANCE_CENTER_FLAG = import.meta.env.VITE_ENABLE_MUTUAL_AID
 const MUTUAL_AID_EXECUTIVE_DASHBOARD_FLAG = import.meta.env.VITE_ENABLE_MUTUAL_AID_EXECUTIVE_DASHBOARD;
 const MUTUAL_AID_REQUESTS_FLAG = import.meta.env.VITE_MUTUAL_AID_REQUESTS_ENABLED;
 const MUTUAL_AID_REVIEW_WORKFLOW_FLAG = import.meta.env.VITE_ENABLE_MUTUAL_AID_REVIEW_WORKFLOW;
+const MUTUAL_AID_DECISION_WORKFLOW_FLAG = import.meta.env.VITE_ENABLE_MUTUAL_AID_DECISION_WORKFLOW;
 const normalizedTextBookOrganizerFlag = String(TEXT_BOOK_ORGANIZER_FLAG || "").trim().toLowerCase();
 const normalizedMutualAidOverviewFlag = String(MUTUAL_AID_OVERVIEW_FLAG || "").trim().toLowerCase();
 const normalizedMutualAidAdminPlanningFlag = String(MUTUAL_AID_ADMIN_PLANNING_FLAG || "").trim().toLowerCase();
@@ -124,6 +125,7 @@ const normalizedMutualAidGovernanceCenterFlag = String(MUTUAL_AID_GOVERNANCE_CEN
 const normalizedMutualAidExecutiveDashboardFlag = String(MUTUAL_AID_EXECUTIVE_DASHBOARD_FLAG || "").trim().toLowerCase();
 const normalizedMutualAidRequestsFlag = String(MUTUAL_AID_REQUESTS_FLAG || "").trim().toLowerCase();
 const normalizedMutualAidReviewWorkflowFlag = String(MUTUAL_AID_REVIEW_WORKFLOW_FLAG || "").trim().toLowerCase();
+const normalizedMutualAidDecisionWorkflowFlag = String(MUTUAL_AID_DECISION_WORKFLOW_FLAG || "").trim().toLowerCase();
 
 export const ENABLE_TEXT_BOOK_ORGANIZER = TEXT_BOOK_ORGANIZER_FLAG === undefined
   ? !isDev
@@ -168,6 +170,10 @@ export const MUTUAL_AID_REQUESTS_ENABLED = MUTUAL_AID_REQUESTS_FLAG === undefine
 export const ENABLE_MUTUAL_AID_REVIEW_WORKFLOW = MUTUAL_AID_REVIEW_WORKFLOW_FLAG === undefined
   ? false
   : ["1", "true", "yes", "on"].includes(normalizedMutualAidReviewWorkflowFlag);
+
+export const ENABLE_MUTUAL_AID_DECISION_WORKFLOW = MUTUAL_AID_DECISION_WORKFLOW_FLAG === undefined
+  ? false
+  : ["1", "true", "yes", "on"].includes(normalizedMutualAidDecisionWorkflowFlag);
 
 export const MUTUAL_AID_ACTIVATION_THRESHOLD = 20000;
 export const MUTUAL_AID_CURRENT_PROGRESS = 0;

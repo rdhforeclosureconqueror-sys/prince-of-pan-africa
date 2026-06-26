@@ -621,7 +621,11 @@ class MutualAidDecision(Base):
     decision: Mapped[str] = mapped_column(String(64), nullable=False, default="pending")
     decided_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
     amount_approved: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    reason_code: Mapped[str] = mapped_column(String(128), nullable=False, default="")
     rationale: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    appeal_eligible: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    appeal_deadline: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    appeal_instructions: Mapped[str] = mapped_column(Text, nullable=False, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
 

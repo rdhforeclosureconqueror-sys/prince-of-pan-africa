@@ -59,6 +59,7 @@ DEFAULT_PERMISSION_NAMES = (
     "mutual_aid:read_request_self",
     "mutual_aid:read_requests_admin",
     "mutual_aid:review_requests",
+    "mutual_aid:decide_requests",
 )
 
 BOOK_ORGANIZER_PERMISSION_NAMES = {
@@ -113,6 +114,7 @@ ADMIN_EXTRA_PERMISSION_NAMES = {
     "assessment:read_analytics",
     "mutual_aid:read_requests_admin",
     "mutual_aid:review_requests",
+    "mutual_aid:decide_requests",
 }
 
 

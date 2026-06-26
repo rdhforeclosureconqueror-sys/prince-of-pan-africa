@@ -8,7 +8,7 @@ from app.authz import user_has_permission
 from app.config import settings
 from app.database import get_db
 from app.dependencies.auth import require_permission
-from app.models import MutualAidAuditLog, MutualAidConflictDisclosure, MutualAidFund, MutualAidRequest, MutualAidRequestDocument, MutualAidRequestStatusHistory, MutualAidReview, User
+from app.models import MutualAidAuditLog, MutualAidConflictDisclosure, MutualAidDecision, MutualAidFund, MutualAidRequest, MutualAidRequestDocument, MutualAidRequestStatusHistory, MutualAidReview, User
 from app.services.mutual_aid import DEFAULT_MUTUAL_AID_FUND_NAME
 
 router = APIRouter(prefix="/mutual-aid", tags=["Mutual Aid"])
@@ -16,6 +16,9 @@ router = APIRouter(prefix="/mutual-aid", tags=["Mutual Aid"])
 CATEGORIES = {"housing", "utilities", "food", "transportation", "medical", "childcare", "emergency", "other"}
 URGENCIES = {"standard", "urgent", "emergency"}
 SUPPORT_METHODS = {"direct_vendor", "member_follow_up", "resource_referral", "community_follow_up", "other"}
+DECISIONS = {"approve", "partial_approve", "not_approved", "close"}
+DECISION_REASON_CODES = {"eligible_need", "partial_need", "insufficient_documentation", "outside_policy", "duplicate_request", "withdrawn", "unable_to_contact", "closed_by_admin", "other"}
+DECISION_STATUS = {"approve": "approved", "partial_approve": "partially_approved", "not_approved": "not_approved", "close": "closed"}
 
 class RequestPayload(BaseModel):
     category: str
@@ -38,6 +41,15 @@ class MoreInfoPayload(BaseModel):
 class ConflictDisclosurePayload(BaseModel):
     disclosure: str = Field(min_length=3, max_length=5000)
 
+class DecisionPayload(BaseModel):
+    decision: str
+    reason_code: str
+    notes: str = Field(min_length=3, max_length=5000)
+    approved_amount: int = Field(default=0, ge=0, le=1000000)
+    appeal_eligible: bool = False
+    appeal_deadline: datetime | None = None
+    appeal_instructions: str = Field(default="", max_length=5000)
+
 class DocumentMetadataPayload(BaseModel):
     document_type: str = Field(default="supporting", max_length=128)
     filename: str = Field(min_length=1, max_length=255)
@@ -55,6 +67,11 @@ def _ensure_review_enabled():
     _ensure_enabled()
     if not settings.MUTUAL_AID_REVIEW_ENABLED:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mutual Aid review workflow is not enabled")
+
+def _ensure_decisions_enabled():
+    _ensure_review_enabled()
+    if not settings.MUTUAL_AID_DECISIONS_ENABLED:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mutual Aid decision workflow is not enabled")
 
 
 def _fund(db):
@@ -113,6 +130,9 @@ def _serialize_review(row: MutualAidReview):
 
 def _serialize_conflict(row: MutualAidConflictDisclosure):
     return {"id": row.id, "request_id": row.request_id, "committee_member_id": row.committee_member_id, "disclosure": row.disclosure, "status": row.status, "created_at": row.created_at.isoformat() if row.created_at else None}
+
+def _serialize_decision(row: MutualAidDecision):
+    return {"id": row.id, "request_id": row.request_id, "decision": row.decision, "decided_by_user_id": row.decided_by_user_id, "approved_amount": row.amount_approved, "reason_code": row.reason_code, "notes": row.rationale, "appeal_eligible": row.appeal_eligible, "appeal_deadline": row.appeal_deadline.isoformat() if row.appeal_deadline else None, "appeal_instructions": row.appeal_instructions, "created_at": row.created_at.isoformat() if row.created_at else None}
 
 def _is_admin(db, user):
     return user_has_permission(db, user, "mutual_aid:read_requests_admin")
@@ -184,8 +204,33 @@ def admin_request_detail(request_id: int, current_user: User = Depends(require_p
     reviews = db.query(MutualAidReview).filter(MutualAidReview.request_id == req.id).order_by(MutualAidReview.created_at.desc()).all()
     history = db.query(MutualAidRequestStatusHistory).filter(MutualAidRequestStatusHistory.request_id == req.id).order_by(MutualAidRequestStatusHistory.created_at.desc()).all()
     conflicts = db.query(MutualAidConflictDisclosure).filter(MutualAidConflictDisclosure.request_id == req.id).order_by(MutualAidConflictDisclosure.created_at.desc()).all()
+    decisions = db.query(MutualAidDecision).filter(MutualAidDecision.request_id == req.id).order_by(MutualAidDecision.created_at.desc()).all()
     requester = db.query(User).filter(User.id == req.requester_user_id).first() if req.requester_user_id else None
-    return {"ok": True, "request": _serialize(req), "requester": _serialize_user(requester), "reviews": [_serialize_review(r) for r in reviews], "status_history": [_serialize_history(h) for h in history], "conflicts": [_serialize_conflict(c) for c in conflicts]}
+    return {"ok": True, "request": _serialize(req), "requester": _serialize_user(requester), "reviews": [_serialize_review(r) for r in reviews], "status_history": [_serialize_history(h) for h in history], "conflicts": [_serialize_conflict(c) for c in conflicts], "decisions": [_serialize_decision(d) for d in decisions], "decision_reason_codes": sorted(DECISION_REASON_CODES)}
+
+
+@router.post("/admin/requests/{request_id}/decision")
+def record_decision(request_id: int, payload: DecisionPayload, current_user: User = Depends(require_permission("mutual_aid:decide_requests")), db: Session = Depends(get_db)):
+    _ensure_decisions_enabled()
+    req = db.query(MutualAidRequest).filter(MutualAidRequest.id == request_id).first()
+    if not req: raise HTTPException(status_code=404, detail="Request not found")
+    decision_value = payload.decision.strip().lower()
+    reason_code = payload.reason_code.strip().lower()
+    if decision_value not in DECISIONS: raise HTTPException(status_code=422, detail="Unsupported Mutual Aid decision")
+    if reason_code not in DECISION_REASON_CODES: raise HTTPException(status_code=422, detail="Unsupported Mutual Aid decision reason code")
+    if decision_value in {"approve", "partial_approve"} and payload.approved_amount <= 0: raise HTTPException(status_code=422, detail="Approved decisions require an approved amount")
+    if decision_value in {"not_approved", "close"} and payload.approved_amount != 0: raise HTTPException(status_code=422, detail="Non-approval decisions cannot record an approved amount")
+    if _has_open_conflict(db, req.id, current_user.id): raise HTTPException(status_code=409, detail="Conflicted reviewers cannot decide")
+    before = _serialize(req)
+    next_status = DECISION_STATUS[decision_value]
+    decision = MutualAidDecision(request_id=req.id, decision=decision_value, decided_by_user_id=current_user.id, amount_approved=payload.approved_amount, reason_code=reason_code, rationale=payload.notes.strip(), appeal_eligible=payload.appeal_eligible, appeal_deadline=payload.appeal_deadline, appeal_instructions=payload.appeal_instructions.strip())
+    req.status = next_status
+    db.add(decision); db.flush()
+    db.add(MutualAidRequestStatusHistory(request_id=req.id, from_status=before["status"], to_status=next_status, changed_by_user_id=current_user.id, reason=f"decision:{decision_value}:{reason_code}"))
+    _audit(db, current_user.id, req.id, "decision_recorded", before=before, after={"request": _serialize(req), "decision": _serialize_decision(decision)})
+    _audit(db, current_user.id, req.id, "status_changed", before={"status": before["status"]}, after={"status": next_status})
+    db.commit(); db.refresh(decision); db.refresh(req)
+    return {"ok": True, "request": _serialize(req), "decision": _serialize_decision(decision)}
 
 @router.post("/admin/requests/{request_id}/assign-reviewer")
 def assign_reviewer(request_id: int, payload: AssignReviewerPayload, current_user: User = Depends(require_permission("mutual_aid:read_requests_admin")), db: Session = Depends(get_db)):
