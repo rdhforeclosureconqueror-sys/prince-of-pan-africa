@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { formatMutualAidCurrency, MUTUAL_AID_ACTIVATION_THRESHOLD, MUTUAL_AID_STATUS } from "../mutualAidFundProgress";
 import "../styles/mutualAid.css";
 
-const readinessStages = [
+export const readinessStages = [
   "Documentation approved",
   "Policy approved",
   "Committee appointed",
