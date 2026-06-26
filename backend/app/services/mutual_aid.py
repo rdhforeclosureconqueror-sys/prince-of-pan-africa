@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.models import MutualAidAuditLog, MutualAidFund
+from app.models import MutualAidAuditLog, MutualAidFund, MutualAidNotification
 
 DEFAULT_MUTUAL_AID_FUND_NAME = "Simba Mutual Aid Society"
 MUTUAL_AID_BUILDING_STATUS = "Building Toward Activation"
@@ -34,6 +34,7 @@ def mutual_aid_feature_flags() -> dict[str, bool]:
         "ENABLE_MUTUAL_AID_PAYMENTS": settings.ENABLE_MUTUAL_AID_PAYMENTS,
         "MUTUAL_AID_FINANCIAL_CONTROLS_ENABLED": settings.MUTUAL_AID_FINANCIAL_CONTROLS_ENABLED,
         "MUTUAL_AID_DISBURSEMENT_TRACKING_ENABLED": settings.MUTUAL_AID_DISBURSEMENT_TRACKING_ENABLED,
+        "MUTUAL_AID_NOTIFICATIONS_ENABLED": settings.MUTUAL_AID_NOTIFICATIONS_ENABLED,
     }
 
 
@@ -64,3 +65,56 @@ def build_mutual_aid_audit_log(entry: MutualAidAuditEntry) -> MutualAidAuditLog:
         before=entry.before or {},
         after=entry.after or {},
     )
+
+
+MUTUAL_AID_NOTIFICATION_COPY = {
+    "request_submitted": ("Request submitted", "Your Mutual Aid request was submitted and is ready for review."),
+    "admin_request_submitted": ("New Mutual Aid request", "A member submitted a Mutual Aid request for review."),
+    "more_information_requested": ("More information requested", "The Mutual Aid review team requested more information for your request."),
+    "admin_more_information_requested": ("More information requested", "A reviewer requested more information from the member."),
+    "decision_recorded": ("Decision recorded", "A decision was recorded for your Mutual Aid request."),
+    "admin_decision_recorded": ("Decision recorded", "A Mutual Aid decision was recorded by the review team."),
+    "disbursement_record_created": ("Disbursement record created", "An internal disbursement tracking record was created for your approved Mutual Aid request."),
+    "admin_disbursement_record_created": ("Disbursement record created", "An internal disbursement tracking record was created."),
+    "receipt_needed": ("Receipt needed", "Please provide a receipt or confirmation for your Mutual Aid support record."),
+    "admin_receipt_needed": ("Receipt needed", "A Mutual Aid disbursement record is marked as needing a receipt."),
+    "appeal_window_reminder": ("Appeal window reminder", "This scaffold records that an appeal window reminder may be needed."),
+}
+
+
+def _notification_copy(event_type: str) -> tuple[str, str]:
+    return MUTUAL_AID_NOTIFICATION_COPY.get(event_type, (event_type.replace("_", " ").title(), "Mutual Aid status update recorded."))
+
+
+def record_mutual_aid_notification(
+    db: Session,
+    *,
+    event_type: str,
+    request_id: int | None,
+    recipient_user_id: int | None,
+    actor_user_id: int | None = None,
+    audience: str = "member",
+    disbursement_id: int | None = None,
+    payload: dict | None = None,
+    title: str | None = None,
+    message: str | None = None,
+) -> MutualAidNotification | None:
+    """Persist an internal notification record only; never dispatch external email/SMS/push."""
+    if not settings.MUTUAL_AID_NOTIFICATIONS_ENABLED:
+        return None
+    default_title, default_message = _notification_copy(event_type)
+    row = MutualAidNotification(
+        request_id=request_id,
+        disbursement_id=disbursement_id,
+        recipient_user_id=recipient_user_id,
+        actor_user_id=actor_user_id,
+        audience=audience,
+        event_type=event_type,
+        title=title or default_title,
+        message=message or default_message,
+        delivery_status="recorded_only",
+        channels=[],
+        payload=payload or {},
+    )
+    db.add(row)
+    return row

@@ -662,6 +662,24 @@ class MutualAidDisbursementStatusHistory(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
 
+class MutualAidNotification(Base):
+    __tablename__ = "mutual_aid_notifications"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    request_id: Mapped[int | None] = mapped_column(ForeignKey("mutual_aid_requests.id"), nullable=True, index=True)
+    disbursement_id: Mapped[int | None] = mapped_column(ForeignKey("mutual_aid_disbursements.id"), nullable=True, index=True)
+    recipient_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    actor_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    audience: Mapped[str] = mapped_column(String(64), nullable=False, default="member", index=True)
+    event_type: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    message: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    delivery_status: Mapped[str] = mapped_column(String(64), nullable=False, default="recorded_only", index=True)
+    channels: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    payload: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
 class MutualAidPolicyVersion(Base):
     __tablename__ = "mutual_aid_policy_versions"
 

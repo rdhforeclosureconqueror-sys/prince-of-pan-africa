@@ -8,8 +8,8 @@ from app.authz import user_has_permission
 from app.config import settings
 from app.database import get_db
 from app.dependencies.auth import require_permission
-from app.models import MutualAidAuditLog, MutualAidCategoryBudget, MutualAidConflictDisclosure, MutualAidDecision, MutualAidDisbursement, MutualAidDisbursementStatusHistory, MutualAidFund, MutualAidReconciliationReport, MutualAidRequest, MutualAidRequestDocument, MutualAidRequestStatusHistory, MutualAidReview, User
-from app.services.mutual_aid import DEFAULT_MUTUAL_AID_FUND_NAME
+from app.models import MutualAidAuditLog, MutualAidCategoryBudget, MutualAidConflictDisclosure, MutualAidDecision, MutualAidDisbursement, MutualAidDisbursementStatusHistory, MutualAidFund, MutualAidNotification, MutualAidReconciliationReport, MutualAidRequest, MutualAidRequestDocument, MutualAidRequestStatusHistory, MutualAidReview, User
+from app.services.mutual_aid import DEFAULT_MUTUAL_AID_FUND_NAME, record_mutual_aid_notification
 
 router = APIRouter(prefix="/mutual-aid", tags=["Mutual Aid"])
 
@@ -146,6 +146,12 @@ def _serialize_conflict(row: MutualAidConflictDisclosure):
 def _serialize_decision(row: MutualAidDecision):
     return {"id": row.id, "request_id": row.request_id, "decision": row.decision, "decided_by_user_id": row.decided_by_user_id, "approved_amount": row.amount_approved, "reason_code": row.reason_code, "notes": row.rationale, "appeal_eligible": row.appeal_eligible, "appeal_deadline": row.appeal_deadline.isoformat() if row.appeal_deadline else None, "appeal_instructions": row.appeal_instructions, "created_at": row.created_at.isoformat() if row.created_at else None}
 
+def _serialize_notification(row: MutualAidNotification):
+    return {"id": row.id, "request_id": row.request_id, "disbursement_id": row.disbursement_id, "recipient_user_id": row.recipient_user_id, "actor_user_id": row.actor_user_id, "audience": row.audience, "event_type": row.event_type, "title": row.title, "message": row.message, "delivery_status": row.delivery_status, "channels": row.channels, "payload": row.payload, "created_at": row.created_at.isoformat() if row.created_at else None}
+
+def _request_notifications(db, request_id):
+    return db.query(MutualAidNotification).filter(MutualAidNotification.request_id == request_id).order_by(MutualAidNotification.created_at.desc()).all()
+
 def _is_admin(db, user):
     return user_has_permission(db, user, "mutual_aid:read_requests_admin")
 
@@ -214,6 +220,8 @@ def submit_request(request_id: int, current_user: User = Depends(require_permiss
     before = _serialize(req); req.status = "submitted"; req.submitted_at = datetime.utcnow()
     db.add(MutualAidRequestStatusHistory(request_id=req.id, from_status="draft", to_status="submitted", changed_by_user_id=current_user.id, reason="member submitted request"))
     _audit(db, current_user.id, req.id, "submitted", before=before, after=_serialize(req)); _audit(db, current_user.id, req.id, "status_changed", before={"status":"draft"}, after={"status":"submitted"})
+    record_mutual_aid_notification(db, event_type="request_submitted", request_id=req.id, recipient_user_id=current_user.id, actor_user_id=current_user.id, payload={"status": "submitted"})
+    record_mutual_aid_notification(db, event_type="admin_request_submitted", request_id=req.id, recipient_user_id=None, actor_user_id=current_user.id, audience="admin", payload={"requester_user_id": current_user.id, "status": "submitted"})
     db.commit(); db.refresh(req)
     return {"ok": True, "request": _serialize(req)}
 
@@ -225,7 +233,8 @@ def get_request(request_id: int, current_user: User = Depends(require_permission
     if not req: raise HTTPException(status_code=404, detail="Request not found")
     if req.requester_user_id != current_user.id and not user_has_permission(db, current_user, "mutual_aid:read_requests_admin"):
         raise HTTPException(status_code=404, detail="Request not found")
-    return {"ok": True, "request": _serialize(req)}
+    notifications = db.query(MutualAidNotification).filter(MutualAidNotification.request_id == req.id, MutualAidNotification.recipient_user_id == current_user.id).order_by(MutualAidNotification.created_at.desc()).all()
+    return {"ok": True, "request": _serialize(req), "notifications": [_serialize_notification(n) for n in notifications]}
 
 
 @router.get("/admin/requests")
@@ -246,7 +255,8 @@ def admin_request_detail(request_id: int, current_user: User = Depends(require_p
     conflicts = db.query(MutualAidConflictDisclosure).filter(MutualAidConflictDisclosure.request_id == req.id).order_by(MutualAidConflictDisclosure.created_at.desc()).all()
     decisions = db.query(MutualAidDecision).filter(MutualAidDecision.request_id == req.id).order_by(MutualAidDecision.created_at.desc()).all()
     requester = db.query(User).filter(User.id == req.requester_user_id).first() if req.requester_user_id else None
-    return {"ok": True, "request": _serialize(req), "requester": _serialize_user(requester), "reviews": [_serialize_review(r) for r in reviews], "status_history": [_serialize_history(h) for h in history], "conflicts": [_serialize_conflict(c) for c in conflicts], "decisions": [_serialize_decision(d) for d in decisions], "decision_reason_codes": sorted(DECISION_REASON_CODES)}
+    notifications = _request_notifications(db, req.id)
+    return {"ok": True, "request": _serialize(req), "requester": _serialize_user(requester), "reviews": [_serialize_review(r) for r in reviews], "status_history": [_serialize_history(h) for h in history], "conflicts": [_serialize_conflict(c) for c in conflicts], "decisions": [_serialize_decision(d) for d in decisions], "notifications": [_serialize_notification(n) for n in notifications], "decision_reason_codes": sorted(DECISION_REASON_CODES)}
 
 
 @router.post("/admin/requests/{request_id}/decision")
@@ -268,6 +278,10 @@ def record_decision(request_id: int, payload: DecisionPayload, current_user: Use
     db.add(decision); db.flush()
     db.add(MutualAidRequestStatusHistory(request_id=req.id, from_status=before["status"], to_status=next_status, changed_by_user_id=current_user.id, reason=f"decision:{decision_value}:{reason_code}"))
     _audit(db, current_user.id, req.id, "decision_recorded", before=before, after={"request": _serialize(req), "decision": _serialize_decision(decision)})
+    record_mutual_aid_notification(db, event_type="decision_recorded", request_id=req.id, recipient_user_id=req.requester_user_id, actor_user_id=current_user.id, payload={"decision": decision_value, "status": next_status, "appeal_eligible": payload.appeal_eligible})
+    record_mutual_aid_notification(db, event_type="admin_decision_recorded", request_id=req.id, recipient_user_id=None, actor_user_id=current_user.id, audience="admin", payload={"decision": decision_value, "status": next_status})
+    if payload.appeal_eligible:
+        record_mutual_aid_notification(db, event_type="appeal_window_reminder", request_id=req.id, recipient_user_id=req.requester_user_id, actor_user_id=current_user.id, payload={"appeal_deadline": payload.appeal_deadline.isoformat() if payload.appeal_deadline else None})
     _audit(db, current_user.id, req.id, "status_changed", before={"status": before["status"]}, after={"status": next_status})
     db.commit(); db.refresh(decision); db.refresh(req)
     return {"ok": True, "request": _serialize(req), "decision": _serialize_decision(decision)}
@@ -310,6 +324,8 @@ def request_more_info(request_id: int, payload: MoreInfoPayload, current_user: U
     before = {"status": req.status}; req.status = "more_info_requested"
     db.add(MutualAidRequestStatusHistory(request_id=req.id, from_status=before["status"], to_status=req.status, changed_by_user_id=current_user.id, reason=payload.message.strip()))
     _audit(db, current_user.id, req.id, "more_info_requested", before=before, after={"status": req.status, "message": payload.message.strip()})
+    record_mutual_aid_notification(db, event_type="more_information_requested", request_id=req.id, recipient_user_id=req.requester_user_id, actor_user_id=current_user.id, payload={"status": req.status, "message": payload.message.strip()})
+    record_mutual_aid_notification(db, event_type="admin_more_information_requested", request_id=req.id, recipient_user_id=None, actor_user_id=current_user.id, audience="admin", payload={"status": req.status})
     db.commit(); db.refresh(req)
     return {"ok": True, "request": _serialize(req)}
 
@@ -372,6 +388,11 @@ def create_disbursement(request_id: int, payload: DisbursementPayload, current_u
     db.add(row); db.flush()
     db.add(MutualAidDisbursementStatusHistory(disbursement_id=row.id, from_status=None, to_status=normalized_status, changed_by_user_id=current_user.id, reason="administrative tracking record created"))
     _audit(db, current_user.id, row.id, "disbursement_record_created", after=_serialize_disbursement(row))
+    record_mutual_aid_notification(db, event_type="disbursement_record_created", request_id=req.id, disbursement_id=row.id, recipient_user_id=req.requester_user_id, actor_user_id=current_user.id, payload={"status": normalized_status, "receipt_required": payload.receipt_required})
+    record_mutual_aid_notification(db, event_type="admin_disbursement_record_created", request_id=req.id, disbursement_id=row.id, recipient_user_id=None, actor_user_id=current_user.id, audience="admin", payload={"status": normalized_status, "amount": payload.amount})
+    if payload.receipt_required or normalized_status == "needs_receipt":
+        record_mutual_aid_notification(db, event_type="receipt_needed", request_id=req.id, disbursement_id=row.id, recipient_user_id=req.requester_user_id, actor_user_id=current_user.id, payload={"status": normalized_status})
+        record_mutual_aid_notification(db, event_type="admin_receipt_needed", request_id=req.id, disbursement_id=row.id, recipient_user_id=None, actor_user_id=current_user.id, audience="admin", payload={"status": normalized_status})
     db.commit(); db.refresh(row)
     return {"ok": True, "disbursement": _serialize_disbursement(row)}
 
@@ -384,6 +405,10 @@ def update_disbursement_status(disbursement_id: int, payload: DisbursementStatus
     if normalized_status not in DISBURSEMENT_STATUSES: raise HTTPException(status_code=422, detail="Unsupported disbursement status")
     before = _serialize_disbursement(row); old = row.status; row.status = normalized_status
     if normalized_status == "closed": row.closed_at = datetime.utcnow()
+    req = db.query(MutualAidRequest).filter(MutualAidRequest.id == row.request_id).first()
+    if normalized_status == "needs_receipt" and req:
+        record_mutual_aid_notification(db, event_type="receipt_needed", request_id=req.id, disbursement_id=row.id, recipient_user_id=req.requester_user_id, actor_user_id=current_user.id, payload={"status": normalized_status, "reason": payload.reason.strip()})
+        record_mutual_aid_notification(db, event_type="admin_receipt_needed", request_id=req.id, disbursement_id=row.id, recipient_user_id=None, actor_user_id=current_user.id, audience="admin", payload={"status": normalized_status})
     db.add(MutualAidDisbursementStatusHistory(disbursement_id=row.id, from_status=old, to_status=normalized_status, changed_by_user_id=current_user.id, reason=payload.reason.strip()))
     _audit(db, current_user.id, row.id, "disbursement_status_changed", before=before, after=_serialize_disbursement(row))
     db.commit(); db.refresh(row)
