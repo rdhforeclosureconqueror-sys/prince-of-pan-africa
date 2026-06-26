@@ -32,6 +32,7 @@ import MutualAidOperationsDashboard from "./pages/MutualAidOperationsDashboard";
 import MutualAidGovernanceCenter from "./pages/MutualAidGovernanceCenter";
 import MutualAidExecutiveDashboard from "./pages/MutualAidExecutiveDashboard";
 import { MutualAidRequestFormPage, MutualAidRequestStatusPage } from "./pages/MutualAidRequestPage";
+import { MutualAidAdminRequestDetailPage, MutualAidAdminReviewQueuePage } from "./pages/MutualAidAdminReviewPage";
 import {
   MutualAidDisbursementsPreviewPage,
   MutualAidNominatePreviewPage,
@@ -41,7 +42,7 @@ import {
   MutualAidReviewPreviewPage,
 } from "./pages/MutualAidPilotPreviews";
 import { getBackgroundForPath } from "./utils/backgroundSystem";
-import { API_DEBUG, AUTH_DEBUG, ENABLE_MUTUAL_AID_ADMIN_PLANNING, ENABLE_MUTUAL_AID_ALLOWLIST_SHELL, ENABLE_MUTUAL_AID_EXECUTIVE_DASHBOARD, ENABLE_MUTUAL_AID_GOVERNANCE_CENTER, ENABLE_MUTUAL_AID_OPERATIONS_DASHBOARD, ENABLE_MUTUAL_AID_OVERVIEW, ENABLE_MUTUAL_AID_PILOT_READINESS_SHELL, MUTUAL_AID_REQUESTS_ENABLED, ENABLE_MUTUAL_AID_PILOT_UI_SHELL, ENABLE_TEXT_BOOK_ORGANIZER } from "./config";
+import { API_DEBUG, AUTH_DEBUG, ENABLE_MUTUAL_AID_ADMIN_PLANNING, ENABLE_MUTUAL_AID_ALLOWLIST_SHELL, ENABLE_MUTUAL_AID_EXECUTIVE_DASHBOARD, ENABLE_MUTUAL_AID_GOVERNANCE_CENTER, ENABLE_MUTUAL_AID_OPERATIONS_DASHBOARD, ENABLE_MUTUAL_AID_OVERVIEW, ENABLE_MUTUAL_AID_PILOT_READINESS_SHELL, MUTUAL_AID_REQUESTS_ENABLED, ENABLE_MUTUAL_AID_REVIEW_WORKFLOW, ENABLE_MUTUAL_AID_PILOT_UI_SHELL, ENABLE_TEXT_BOOK_ORGANIZER } from "./config";
 import { api } from "./api/api";
 import { canAccessTextBookOrganizer, isAdminUser } from "./authz";
 import "./styles/backgroundSystem.css";
@@ -273,6 +274,28 @@ function AdminMutualAidExecutiveDashboardRoute({ authChecked, user, isAdmin }) {
   return <MutualAidExecutiveDashboard />;
 }
 
+
+function AdminMutualAidReviewWorkflowRoute({ authChecked, user, rbac, isAdmin, children }) {
+  if (!ENABLE_MUTUAL_AID_REVIEW_WORKFLOW) {
+    return <PilotDeferredPage title="Mutual Aid review workflow is not enabled" />;
+  }
+
+  if (!authChecked) return <div className="admin-loading">Checking Mutual Aid review access...</div>;
+  if (!user) return <Navigate to="/?auth=login" replace />;
+  const permissions = Array.isArray(rbac?.permissions) ? rbac.permissions : [];
+  const canReview = isAdmin || permissions.includes("mutual_aid:review_requests");
+  if (!canReview) {
+    return (
+      <PilotDeferredPage
+        title="Admin or reviewer access required"
+        detail="Mutual Aid review screens are restricted and do not expose private member requests to other members."
+      />
+    );
+  }
+
+  return children;
+}
+
 function MutualAidPilotShellRoute({ children }) {
   if (!ENABLE_MUTUAL_AID_PILOT_UI_SHELL) {
     return <PilotDeferredPage title="Mutual Aid pilot UI shell is not enabled" />;
@@ -369,6 +392,8 @@ function AppRoutes({ user, rbac, isAdmin, canAccessOrganizer, authChecked, refre
 
         <Route path="/mutual-aid/request" element={MUTUAL_AID_REQUESTS_ENABLED && user ? <MutualAidRequestFormPage /> : <PilotDeferredPage title="Mutual Aid request intake is not enabled" />} />
         <Route path="/mutual-aid/requests/:requestId" element={MUTUAL_AID_REQUESTS_ENABLED && user ? <MutualAidRequestStatusPage /> : <PilotDeferredPage title="Mutual Aid request status is not enabled" />} />
+        <Route path="/admin/mutual-aid/review" element={<AdminMutualAidReviewWorkflowRoute authChecked={authChecked} user={user} rbac={rbac} isAdmin={isAdmin}><MutualAidAdminReviewQueuePage /></AdminMutualAidReviewWorkflowRoute>} />
+        <Route path="/admin/mutual-aid/review/:requestId" element={<AdminMutualAidReviewWorkflowRoute authChecked={authChecked} user={user} rbac={rbac} isAdmin={isAdmin}><MutualAidAdminRequestDetailPage /></AdminMutualAidReviewWorkflowRoute>} />
         <Route path="/mutual-aid/request-preview" element={<MutualAidPilotShellRoute><MutualAidRequestPreviewPage /></MutualAidPilotShellRoute>} />
         <Route path="/mutual-aid/nominate-preview" element={<MutualAidPilotShellRoute><MutualAidNominatePreviewPage /></MutualAidPilotShellRoute>} />
         <Route path="/mutual-aid/requests-preview" element={<MutualAidPilotShellRoute><MutualAidRequestsPreviewPage /></MutualAidPilotShellRoute>} />
