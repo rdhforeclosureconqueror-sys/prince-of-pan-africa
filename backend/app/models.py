@@ -580,6 +580,10 @@ class MutualAidRequest(Base):
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="USD")
     status: Mapped[str] = mapped_column(String(64), nullable=False, default="draft")
     narrative: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    urgency: Mapped[str] = mapped_column(String(64), nullable=False, default="standard")
+    preferred_support_method: Mapped[str] = mapped_column(String(128), nullable=False, default="community_follow_up")
+    policy_consent: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, onupdate=datetime.utcnow)
 
@@ -591,6 +595,9 @@ class MutualAidRequestDocument(Base):
     request_id: Mapped[int] = mapped_column(ForeignKey("mutual_aid_requests.id"), nullable=False, index=True)
     document_type: Mapped[str] = mapped_column(String(128), nullable=False, default="supporting")
     storage_key: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    filename: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    content_type: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    file_size: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     status: Mapped[str] = mapped_column(String(64), nullable=False, default="pending")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
