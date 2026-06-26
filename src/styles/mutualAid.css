@@ -779,3 +779,156 @@
     grid-template-columns: 1fr;
   }
 }
+
+.mutual-aid-page--executive .mutual-aid-hero {
+  border-color: rgba(45, 212, 191, 0.48);
+}
+
+.mutual-aid-executive-kpi-grid,
+.mutual-aid-readiness-scorecards,
+.mutual-aid-dependency-grid,
+.mutual-aid-launch-checklist,
+.mutual-aid-executive-decisions {
+  display: grid;
+  gap: 1rem;
+}
+
+.mutual-aid-executive-kpi-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.mutual-aid-executive-summary-card,
+.mutual-aid-dependency-card,
+.mutual-aid-executive-decisions > div {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 1rem;
+}
+
+.mutual-aid-executive-summary-card {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.mutual-aid-executive-summary-card span,
+.mutual-aid-readiness-score span,
+.mutual-aid-executive-decisions small {
+  color: #bfdbfe;
+  font-weight: 900;
+}
+
+.mutual-aid-executive-summary-card strong {
+  color: #fef3c7;
+  font-size: clamp(1.6rem, 4vw, 2.4rem);
+  line-height: 1;
+}
+
+.mutual-aid-executive-summary-card small,
+.mutual-aid-executive-decisions p,
+.mutual-aid-dependency-card p {
+  color: #dbeafe;
+}
+
+.mutual-aid-dependency-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.mutual-aid-dependency-card {
+  color: #e2e8f0;
+  text-decoration: none;
+}
+
+.mutual-aid-dependency-card h3,
+.mutual-aid-executive-decisions h3 {
+  margin: 0 0 0.6rem;
+  color: #fef3c7;
+}
+
+.mutual-aid-launch-checklist {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.mutual-aid-milestone-timeline {
+  display: grid;
+  gap: 0.85rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: milestone;
+}
+
+.mutual-aid-milestone-timeline li {
+  position: relative;
+  border-left: 3px solid rgba(45, 212, 191, 0.55);
+  padding: 0.35rem 0 0.35rem 2.2rem;
+  color: #e0f2fe;
+  font-weight: 900;
+  counter-increment: milestone;
+}
+
+.mutual-aid-milestone-timeline li::before {
+  position: absolute;
+  left: -0.9rem;
+  top: 0.2rem;
+  display: grid;
+  place-items: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 999px;
+  background: #0f766e;
+  color: #ecfeff;
+  content: counter(milestone);
+  font-size: 0.78rem;
+}
+
+.mutual-aid-readiness-score {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.mutual-aid-readiness-score > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.mutual-aid-readiness-score progress {
+  width: 100%;
+  height: 0.9rem;
+  overflow: hidden;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.78);
+}
+
+.mutual-aid-readiness-score progress::-webkit-progress-bar {
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.78);
+}
+
+.mutual-aid-readiness-score progress::-webkit-progress-value {
+  border-radius: 999px;
+  background: linear-gradient(90deg, #2dd4bf, #facc15);
+}
+
+.mutual-aid-readiness-score progress::-moz-progress-bar {
+  border-radius: 999px;
+  background: linear-gradient(90deg, #2dd4bf, #facc15);
+}
+
+@media (max-width: 900px) {
+  .mutual-aid-executive-kpi-grid,
+  .mutual-aid-dependency-grid,
+  .mutual-aid-launch-checklist {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .mutual-aid-executive-kpi-grid,
+  .mutual-aid-dependency-grid,
+  .mutual-aid-launch-checklist {
+    grid-template-columns: 1fr;
+  }
+}
