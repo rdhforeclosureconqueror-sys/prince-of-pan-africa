@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.authz import user_has_permission
 from app.config import settings
 from app.database import get_db
-from app.dependencies.auth import require_permission
+from app.dependencies.auth import require_auth, require_permission
 from app.models import MutualAidAppeal, MutualAidAuditLog, MutualAidCategoryBudget, MutualAidCommitteeMember, MutualAidConflictDisclosure, MutualAidDecision, MutualAidDisbursement, MutualAidDisbursementStatusHistory, MutualAidFund, MutualAidMemberAcceptance, MutualAidNotification, MutualAidPolicyVersion, MutualAidReconciliationReport, MutualAidRequest, MutualAidRequestDocument, MutualAidRequestStatusHistory, MutualAidReview, User
 from app.services.mutual_aid import DEFAULT_MUTUAL_AID_FUND_NAME, MUTUAL_AID_ACTIVATION_THRESHOLD, MUTUAL_AID_BUILDING_STATUS, mutual_aid_feature_flags, record_mutual_aid_notification
 
@@ -314,6 +314,104 @@ def _pilot_smoke_tests_response(db):
 @router.get("/admin/pilot-smoke-tests/verification")
 def pilot_smoke_tests_verification(current_user: User = Depends(require_permission("mutual_aid:read_requests_admin")), db: Session = Depends(get_db)):
     return _pilot_smoke_tests_response(db)
+
+
+def _pct(numerator, denominator):
+    return round((numerator / denominator) * 100, 2) if denominator else 0
+
+
+def _avg_hours(deltas):
+    values = [delta.total_seconds() / 3600 for delta in deltas if delta]
+    return round(sum(values) / len(values), 2) if values else 0
+
+
+def _count_by(rows, attr, allowed=None):
+    keys = list(allowed or [])
+    counts = {key: 0 for key in keys}
+    for row in rows:
+        key = (getattr(row, attr, None) or "unknown").strip().lower()
+        counts[key] = counts.get(key, 0) + 1
+    return counts
+
+
+def _analytics_allowed(db, user):
+    if user_has_permission(db, user, "mutual_aid:read_analytics"):
+        return True
+    if (user.role or "").strip().lower() == "governance":
+        return True
+    return db.query(MutualAidCommitteeMember).filter(
+        MutualAidCommitteeMember.user_id == user.id,
+        MutualAidCommitteeMember.status == "active",
+        MutualAidCommitteeMember.role.in_(["governance", "treasurer"]),
+    ).first() is not None
+
+
+def _require_analytics_access(current_user: User = Depends(require_auth), db: Session = Depends(get_db)):
+    if not _analytics_allowed(db, current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    return current_user
+
+
+def _mutual_aid_analytics_response(db):
+    requests = db.query(MutualAidRequest).all()
+    decisions = db.query(MutualAidDecision).all()
+    appeals = db.query(MutualAidAppeal).all()
+    notifications = db.query(MutualAidNotification).all()
+    audits = db.query(MutualAidAuditLog).all()
+    disbursements = db.query(MutualAidDisbursement).all()
+    fund = db.query(MutualAidFund).filter(MutualAidFund.name == DEFAULT_MUTUAL_AID_FUND_NAME).one_or_none()
+    budgets = db.query(MutualAidCategoryBudget).filter(MutualAidCategoryBudget.fund_id == fund.id).all() if fund else []
+    status_counts = _count_by(requests, "status", ["draft", "submitted", "under_review", "more_info_requested", "approved", "partially_approved", "not_approved", "closed"])
+    approval_count = status_counts.get("approved", 0) + status_counts.get("partially_approved", 0)
+    decision_deltas = []
+    review_deltas = []
+    for req in requests:
+        first_review = db.query(MutualAidRequestStatusHistory).filter(MutualAidRequestStatusHistory.request_id == req.id, MutualAidRequestStatusHistory.to_status == "under_review").order_by(MutualAidRequestStatusHistory.created_at.asc()).first()
+        first_decision = db.query(MutualAidDecision).filter(MutualAidDecision.request_id == req.id).order_by(MutualAidDecision.created_at.asc()).first()
+        if req.submitted_at and first_review and first_review.created_at:
+            review_deltas.append(first_review.created_at - req.submitted_at)
+        if req.submitted_at and first_decision and first_decision.created_at:
+            decision_deltas.append(first_decision.created_at - req.submitted_at)
+    disbursement_by_status = _count_by(disbursements, "status", DISBURSEMENT_STATUSES)
+    disbursement_amounts = {status_key: sum(row.amount for row in disbursements if row.status == status_key) for status_key in disbursement_by_status}
+    category_budget_utilization = []
+    for budget in budgets:
+        spent = sum(d.amount for d in disbursements if d.status not in {"cancelled", "reversed", "failed"} and db.query(MutualAidRequest).filter(MutualAidRequest.id == d.request_id, MutualAidRequest.category == budget.category).first())
+        category_budget_utilization.append({"category": budget.category, "budget_amount": budget.budget_amount, "reserved_amount": budget.reserved_amount, "tracked_amount": spent, "utilization_rate": _pct(budget.reserved_amount + spent, budget.budget_amount), "currency": budget.currency})
+    reserve_floor = (fund.current_balance * fund.reserve_percent // 100) if fund else 0
+    reserved = sum(row.amount for row in disbursements if row.status in {"pending", "scheduled", "needs_receipt"})
+    activation_percent = _pct(fund.current_balance if fund else 0, fund.activation_threshold if fund else MUTUAL_AID_ACTIVATION_THRESHOLD)
+    report = {
+        "ok": True, "read_only": True, "persisted": False,
+        "feature_enabled": settings.MUTUAL_AID_ANALYTICS_ENABLED,
+        "guardrails": ["No payment processors", "No money movement", "No payout execution", "No wallet balances", "No reimbursement logic", "No STAR, Black Dollar, ownership, or partner reimbursement integration"],
+        "totals": {"total_requests": len(requests), "draft_requests": status_counts.get("draft", 0), "submitted_requests": status_counts.get("submitted", 0), "under_review": status_counts.get("under_review", 0), "more_info_requests": status_counts.get("more_info_requested", 0), "approved": status_counts.get("approved", 0), "partially_approved": status_counts.get("partially_approved", 0), "denied": status_counts.get("not_approved", 0), "appealed": len(appeals), "closed": status_counts.get("closed", 0)},
+        "timing": {"average_review_time_hours": _avg_hours(review_deltas), "average_decision_time_hours": _avg_hours(decision_deltas)},
+        "volume": {"by_category": _count_by(requests, "category", CATEGORIES), "by_urgency": _count_by(requests, "urgency", URGENCIES), "by_status": status_counts},
+        "rates": {"approval_rate": _pct(approval_count, len(decisions) or len(requests)), "appeal_rate": _pct(len(appeals), len(decisions) or len(requests))},
+        "notifications": {"total": len(notifications), "by_event_type": _count_by(notifications, "event_type"), "by_delivery_status": _count_by(notifications, "delivery_status")},
+        "audit_activity": {"total": len(audits), "by_action": _count_by(audits, "action")},
+        "disbursements": {"total_records": len(disbursements), "by_status": disbursement_by_status, "amounts_by_status": disbursement_amounts},
+        "budgets": {"category_budget_utilization": category_budget_utilization, "reserve_utilization": {"current_balance": fund.current_balance if fund else 0, "reserve_percent": fund.reserve_percent if fund else 0, "reserve_floor": reserve_floor, "reserved_tracking_total": reserved, "utilization_rate": _pct(reserved, reserve_floor), "currency": fund.currency if fund else "USD"}},
+        "activation": {"status": fund.status if fund else MUTUAL_AID_BUILDING_STATUS, "building_toward_activation": bool(fund and fund.status == MUTUAL_AID_BUILDING_STATUS), "current_progress": fund.current_balance if fund else 0, "activation_threshold": fund.activation_threshold if fund else MUTUAL_AID_ACTIVATION_THRESHOLD, "progress_percent": activation_percent},
+        "executive_kpis": [
+            {"label": "Total Requests", "value": len(requests), "detail": "All Mutual Aid requests in the read-only analytics window."},
+            {"label": "Approval Rate", "value": f"{_pct(approval_count, len(decisions) or len(requests))}%", "detail": "Approved or partially approved share."},
+            {"label": "Appeal Rate", "value": f"{_pct(len(appeals), len(decisions) or len(requests))}%", "detail": "Appeals compared with decisions or request volume."},
+            {"label": "Activation Progress", "value": f"{activation_percent}%", "detail": "Building Toward Activation threshold progress."},
+            {"label": "Notifications", "value": len(notifications), "detail": "Recorded-only notification events."},
+            {"label": "Audit Events", "value": len(audits), "detail": "Governance audit activity records."},
+        ],
+        "reporting": {"printable_executive_report": True, "csv_export_scaffold": True, "pdf_export_scaffold": True, "file_storage": False, "persistence": False, "scheduled_reports": False},
+    }
+    return report
+
+
+@router.get("/admin/analytics/executive")
+def executive_analytics(current_user: User = Depends(_require_analytics_access), db: Session = Depends(get_db)):
+    if not settings.MUTUAL_AID_ANALYTICS_ENABLED:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mutual Aid analytics are not enabled")
+    return _mutual_aid_analytics_response(db)
 
 
 def _ensure_enabled():
