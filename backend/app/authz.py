@@ -66,6 +66,10 @@ DEFAULT_PERMISSION_NAMES = (
     "mutual_aid:read_analytics",
     "mutual_aid:read_security",
     "mutual_aid:read_compliance",
+    "mutual_aid:read_documentation",
+    "mutual_aid:read_reviewer_documentation",
+    "mutual_aid:read_treasurer_documentation",
+    "mutual_aid:read_governance_documentation",
 )
 
 BOOK_ORGANIZER_PERMISSION_NAMES = {
@@ -126,15 +130,19 @@ ADMIN_EXTRA_PERMISSION_NAMES = {
     "mutual_aid:read_analytics",
     "mutual_aid:read_security",
     "mutual_aid:read_compliance",
+    "mutual_aid:read_documentation",
+    "mutual_aid:read_reviewer_documentation",
+    "mutual_aid:read_treasurer_documentation",
+    "mutual_aid:read_governance_documentation",
 }
 
 
 ROLE_PERMISSION_NAMES = {
     "community_member": MEMBER_PERMISSION_NAMES,
     "builder_member": BUILDER_PERMISSION_NAMES,
-    "mutual_aid_reviewer": MEMBER_PERMISSION_NAMES | {"mutual_aid:review_requests"},
-    "mutual_aid_treasurer": MEMBER_PERMISSION_NAMES | {"mutual_aid:read_financial_controls", "mutual_aid:manage_disbursements", "mutual_aid:read_analytics"},
-    "mutual_aid_governance": MEMBER_PERMISSION_NAMES | {"mutual_aid:read_analytics", "mutual_aid:read_compliance"},
+    "mutual_aid_reviewer": MEMBER_PERMISSION_NAMES | {"mutual_aid:review_requests", "mutual_aid:read_reviewer_documentation"},
+    "mutual_aid_treasurer": MEMBER_PERMISSION_NAMES | {"mutual_aid:read_financial_controls", "mutual_aid:manage_disbursements", "mutual_aid:read_analytics", "mutual_aid:read_treasurer_documentation"},
+    "mutual_aid_governance": MEMBER_PERMISSION_NAMES | {"mutual_aid:read_analytics", "mutual_aid:read_compliance", "mutual_aid:read_governance_documentation"},
     "admin": BUILDER_PERMISSION_NAMES | ADMIN_EXTRA_PERMISSION_NAMES,
     "superadmin": set(DEFAULT_PERMISSION_NAMES),
 }
