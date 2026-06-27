@@ -87,3 +87,16 @@ export function getMutualAidRbacAudit() {
 export function getMutualAidComplianceChecklist() {
   return get("/mutual-aid/admin/compliance/checklist");
 }
+
+
+export function getMutualAidDocumentationIndex() {
+  return get("/mutual-aid/documentation");
+}
+
+export function getMutualAidFinalReadiness() {
+  return get("/mutual-aid/admin/final-readiness/verification");
+}
+
+export function getMutualAidCompletionDashboard() {
+  return get("/mutual-aid/admin/completion-dashboard");
+}

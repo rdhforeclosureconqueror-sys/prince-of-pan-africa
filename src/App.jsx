@@ -37,6 +37,7 @@ import MutualAidPilotLaunchLockPage from "./pages/MutualAidPilotLaunchLockPage";
 import MutualAidPilotRunbookPage from "./pages/MutualAidPilotRunbookPage";
 import MutualAidPilotSmokeTestsPage from "./pages/MutualAidPilotSmokeTestsPage";
 import MutualAidSecurityDashboard from "./pages/MutualAidSecurityDashboard";
+import MutualAidDocumentationDashboard from "./pages/MutualAidDocumentationDashboard";
 import { MutualAidRequestFormPage, MutualAidRequestStatusPage } from "./pages/MutualAidRequestPage";
 import { MutualAidAdminRequestDetailPage, MutualAidAdminReviewQueuePage } from "./pages/MutualAidAdminReviewPage";
 import {
@@ -48,7 +49,7 @@ import {
   MutualAidReviewPreviewPage,
 } from "./pages/MutualAidPilotPreviews";
 import { getBackgroundForPath } from "./utils/backgroundSystem";
-import { API_DEBUG, AUTH_DEBUG, ENABLE_MUTUAL_AID_ADMIN_PLANNING, ENABLE_MUTUAL_AID_ALLOWLIST_SHELL, ENABLE_MUTUAL_AID_EXECUTIVE_DASHBOARD, ENABLE_MUTUAL_AID_GOVERNANCE_CENTER, ENABLE_MUTUAL_AID_OPERATIONS_DASHBOARD, ENABLE_MUTUAL_AID_OVERVIEW, ENABLE_MUTUAL_AID_PILOT_READINESS_SHELL, ENABLE_MUTUAL_AID_PILOT_LAUNCH_LOCK, ENABLE_MUTUAL_AID_PILOT_RUNBOOK, ENABLE_MUTUAL_AID_PILOT_SMOKE_TESTS, MUTUAL_AID_REQUESTS_ENABLED, ENABLE_MUTUAL_AID_REVIEW_WORKFLOW, ENABLE_MUTUAL_AID_FINANCIAL_CONTROLS, ENABLE_MUTUAL_AID_PILOT_UI_SHELL, ENABLE_MUTUAL_AID_ANALYTICS, ENABLE_MUTUAL_AID_SECURITY, ENABLE_MUTUAL_AID_OBSERVABILITY, ENABLE_TEXT_BOOK_ORGANIZER } from "./config";
+import { API_DEBUG, AUTH_DEBUG, ENABLE_MUTUAL_AID_ADMIN_PLANNING, ENABLE_MUTUAL_AID_ALLOWLIST_SHELL, ENABLE_MUTUAL_AID_EXECUTIVE_DASHBOARD, ENABLE_MUTUAL_AID_GOVERNANCE_CENTER, ENABLE_MUTUAL_AID_OPERATIONS_DASHBOARD, ENABLE_MUTUAL_AID_OVERVIEW, ENABLE_MUTUAL_AID_PILOT_READINESS_SHELL, ENABLE_MUTUAL_AID_PILOT_LAUNCH_LOCK, ENABLE_MUTUAL_AID_PILOT_RUNBOOK, ENABLE_MUTUAL_AID_PILOT_SMOKE_TESTS, MUTUAL_AID_REQUESTS_ENABLED, ENABLE_MUTUAL_AID_REVIEW_WORKFLOW, ENABLE_MUTUAL_AID_FINANCIAL_CONTROLS, ENABLE_MUTUAL_AID_PILOT_UI_SHELL, ENABLE_MUTUAL_AID_ANALYTICS, ENABLE_MUTUAL_AID_SECURITY, ENABLE_MUTUAL_AID_OBSERVABILITY, ENABLE_MUTUAL_AID_DOCUMENTATION, ENABLE_TEXT_BOOK_ORGANIZER } from "./config";
 import { api } from "./api/api";
 import { canAccessTextBookOrganizer, isAdminUser } from "./authz";
 import "./styles/backgroundSystem.css";
@@ -473,6 +474,9 @@ function AppRoutes({ user, rbac, isAdmin, canAccessOrganizer, authChecked, refre
         <Route path="/admin/mutual-aid/pilot-smoke-tests" element={<AdminPilotSmokeTestsRoute authChecked={authChecked} user={user} isAdmin={isAdmin} />} />
         <Route path="/admin/mutual-aid/analytics" element={<AdminMutualAidAnalyticsRoute authChecked={authChecked} user={user} rbac={rbac} isAdmin={isAdmin} />} />
         <Route path="/admin/mutual-aid/security" element={<AdminMutualAidSecurityRoute authChecked={authChecked} user={user} rbac={rbac} isAdmin={isAdmin} />} />
+        {ENABLE_MUTUAL_AID_DOCUMENTATION ? (
+          <Route path="/admin/mutual-aid/completion" element={isAdmin ? <MutualAidDocumentationDashboard /> : <PilotDeferredPage title="Mutual Aid documentation is admin-only" />} />
+        ) : null}
         <Route path="/mutual-aid/request-preview" element={<MutualAidPilotShellRoute><MutualAidRequestPreviewPage /></MutualAidPilotShellRoute>} />
         <Route path="/mutual-aid/nominate-preview" element={<MutualAidPilotShellRoute><MutualAidNominatePreviewPage /></MutualAidPilotShellRoute>} />
         <Route path="/mutual-aid/requests-preview" element={<MutualAidPilotShellRoute><MutualAidRequestsPreviewPage /></MutualAidPilotShellRoute>} />

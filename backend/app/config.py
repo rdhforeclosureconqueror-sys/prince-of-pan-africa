@@ -52,6 +52,7 @@ class Settings:
     MUTUAL_AID_ANALYTICS_ENABLED: bool = os.getenv("MUTUAL_AID_ANALYTICS_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
     MUTUAL_AID_SECURITY_ENABLED: bool = os.getenv("MUTUAL_AID_SECURITY_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
     MUTUAL_AID_OBSERVABILITY_ENABLED: bool = os.getenv("MUTUAL_AID_OBSERVABILITY_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
+    MUTUAL_AID_DOCUMENTATION_ENABLED: bool = os.getenv("MUTUAL_AID_DOCUMENTATION_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
 
 
 settings = Settings()

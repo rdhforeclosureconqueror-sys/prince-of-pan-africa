@@ -928,6 +928,110 @@ def compliance_checklist(current_user: User = Depends(require_permission("mutual
     ]
     return {"ok": True, "read_only": True, "passed": all(item["passed"] for item in checklist), "checklist": checklist, "retention_policy": report["retention_policy"], "guardrails": ["No payment processors", "No money movement", "No payout execution", "No wallet balances", "No reimbursement logic", "No STAR", "No Black Dollar", "No ownership systems", "No banking APIs"]}
 
+DOCUMENTATION_GUARDRAILS = [
+    "No payment processors connected", "No money movement", "No payout execution", "No wallet balances",
+    "No reimbursement logic", "No STAR integration", "No Black Dollar integration", "No ownership systems", "No banking APIs",
+    "Documentation and completion dashboards are read-only and generated inside the application.",
+]
+
+DOCS = {
+    "administrator-operations-manual": {"title": "Administrator Operations Manual", "audience": "admin", "sections": ["Verify feature flags before pilot activity.", "Manage roles and review queues without altering financial systems.", "Use only read-only dashboards and record-only workflows."]},
+    "reviewer-training-guide": {"title": "Reviewer Training Guide", "audience": "reviewer", "sections": ["Review eligibility, urgency, documentation, conflicts, and policy fit.", "Record recommendations with clear notes.", "Escalate conflicts and missing information before decisions."]},
+    "treasurer-operations-guide": {"title": "Treasurer Operations Guide", "audience": "treasurer", "sections": ["Monitor fund controls, reserve rules, and reconciliation records.", "Maintain manual accounting separation.", "Do not execute payouts or connect payment systems."]},
+    "governance-decision-handbook": {"title": "Governance Decision Handbook", "audience": "governance", "sections": ["Apply policy consistently, document rationale, and preserve appeal rights.", "Review aggregate analytics only.", "Maintain activation and guardrail decisions in governance records."]},
+    "member-request-guide": {"title": "Member Request Guide", "audience": "member", "sections": ["Explain eligible categories, consent, documentation metadata, and request statuses.", "Support is reviewed and not guaranteed."]},
+    "appeal-process-documentation": {"title": "Appeal Process Documentation", "audience": "member", "sections": ["Appeals must reference the decision, reason, and additional context.", "Governance/admin reviewers update appeal status in record-only workflow."]},
+    "mutual-aid-policy-reference": {"title": "Mutual Aid Policy Reference", "audience": "member", "sections": ["Activation threshold, eligibility, privacy, conflicts, documentation, decisions, and appeals."]},
+    "feature-flag-documentation": {"title": "Feature Flag Documentation", "audience": "admin", "sections": ["MUTUAL_AID_DOCUMENTATION_ENABLED defaults false.", "VITE_ENABLE_MUTUAL_AID_DOCUMENTATION defaults false.", "ENABLE_MUTUAL_AID_PAYMENTS must remain false."]},
+    "api-endpoint-documentation": {"title": "API Endpoint Documentation", "audience": "admin", "sections": ["Documents are served at /mutual-aid/documentation and /mutual-aid/documentation/{slug}.", "Final readiness is served at /mutual-aid/admin/final-readiness/verification.", "Completion dashboard is served at /mutual-aid/admin/completion-dashboard."]},
+    "rbac-permission-matrix": {"title": "RBAC Permission Matrix", "audience": "admin", "sections": ["Admin can access all documentation.", "Reviewer can access reviewer training only.", "Treasurer can access treasurer operations only.", "Governance can access governance handbook only.", "Members cannot access admin documentation."]},
+    "audit-event-catalog": {"title": "Audit Event Catalog", "audience": "admin", "sections": ["request_created, request_submitted, reviewer_assigned, recommendation_recorded, decision_recorded, appeal_submitted, disbursement_record_created, disbursement_status_changed."]},
+    "notification-event-catalog": {"title": "Notification Event Catalog", "audience": "admin", "sections": ["request_submitted, admin_request_submitted, more_info_requested, decision_recorded, appeal_submitted, appeal_status_updated, receipt_needed. Recorded-only events; no external dispatch."]},
+    "deployment-checklist": {"title": "Deployment Checklist", "audience": "admin", "sections": ["Set documentation flags intentionally.", "Confirm migrations and RBAC seed complete.", "Verify no forbidden integration routes exist."]},
+    "production-readiness-checklist": {"title": "Production Readiness Checklist", "audience": "admin", "sections": ["Security headers, RBAC, audit integrity, documentation, observability, backup, restore, DR, and pilot report reviewed."]},
+    "disaster-recovery-checklist": {"title": "Disaster Recovery Checklist", "audience": "admin", "sections": ["Identify owner, freeze writes if needed, restore from backup, verify audit/request/documentation endpoints, and publish internal status."]},
+    "backup-and-restore-documentation": {"title": "Backup and Restore Documentation", "audience": "admin", "sections": ["Backup application database and environment configuration.", "Restore in staging first and validate read-only Mutual Aid endpoints."]},
+    "operational-runbooks": {"title": "Operational Runbooks", "audience": "admin", "sections": ["Intake issue, review backlog, decision dispute, notification review, audit review, and route guardrail incident runbooks."]},
+    "maintenance-schedule": {"title": "Maintenance Schedule", "audience": "admin", "sections": ["Daily health check, weekly RBAC/audit review, monthly backup restore drill, quarterly policy review."]},
+    "pilot-completion-report": {"title": "Pilot Completion Report", "audience": "admin", "sections": ["Phase 15 closes documentation/training/readiness as read-only.", "Pilot remains safe because money movement and external finance integrations are absent."]},
+}
+
+DOC_ACCESS = {
+    "admin": set(DOCS), "superadmin": set(DOCS),
+    "mutual_aid_reviewer": {"reviewer-training-guide"},
+    "mutual_aid_treasurer": {"treasurer-operations-guide"},
+    "mutual_aid_governance": {"governance-decision-handbook"},
+    "governance": {"governance-decision-handbook"},
+}
+
+REQUIRED_COMPLETION_DOCS = set(DOCS)
+
+
+def _documentation_enabled():
+    if not settings.MUTUAL_AID_DOCUMENTATION_ENABLED:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mutual Aid documentation is not enabled")
+
+
+def _documentation_slugs_for_user(db, user):
+    slugs = set()
+    for role in get_user_role_names(db, user):
+        slugs.update(DOC_ACCESS.get(role, set()))
+    return slugs
+
+
+def _serialize_doc(slug, doc):
+    return {"slug": slug, **doc, "read_only": True, "guardrails": DOCUMENTATION_GUARDRAILS}
+
+
+@router.get("/documentation")
+def documentation_index(current_user: User = Depends(require_auth), db: Session = Depends(get_db)):
+    _documentation_enabled()
+    slugs = _documentation_slugs_for_user(db, current_user)
+    if not slugs:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    return {"ok": True, "read_only": True, "documents": [_serialize_doc(slug, DOCS[slug]) for slug in sorted(slugs)]}
+
+
+@router.get("/documentation/{slug}")
+def documentation_detail(slug: str, current_user: User = Depends(require_auth), db: Session = Depends(get_db)):
+    _documentation_enabled()
+    allowed = _documentation_slugs_for_user(db, current_user)
+    if slug not in DOCS or slug not in allowed:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    return {"ok": True, "document": _serialize_doc(slug, DOCS[slug])}
+
+
+def _forbidden_phase15_route_findings():
+    forbidden = ("payment", "payments", "payout", "payouts", "wallet", "wallets", "reimbursement", "star", "black-dollar", "black_dollar", "ownership", "banking")
+    return [{"path": f"/mutual-aid{path}", "matched_terms": [term for term in forbidden if term in path.lower()]} for path in _mutual_aid_route_paths() if any(term in path.lower() for term in forbidden)]
+
+
+def _final_completion_response(db):
+    flags = mutual_aid_feature_flags()
+    forbidden = _forbidden_phase15_route_findings()
+    docs_complete = REQUIRED_COMPLETION_DOCS == set(DOCS)
+    checks = [
+        _readiness_check("documentation_flag", "Documentation flag enabled", settings.MUTUAL_AID_DOCUMENTATION_ENABLED, "MUTUAL_AID_DOCUMENTATION_ENABLED must be true."),
+        _readiness_check("all_docs_present", "All Phase 15 documents present", docs_complete, "All documentation/training/checklist/catalog/report documents must be available."),
+        _readiness_check("payments_disabled", "Payments disabled", not flags["ENABLE_MUTUAL_AID_PAYMENTS"], "ENABLE_MUTUAL_AID_PAYMENTS must remain false."),
+        _readiness_check("no_forbidden_routes", "No forbidden finance/integration routes exist", not forbidden, "No payment, payout, wallet, reimbursement, STAR, Black Dollar, ownership, or banking routes may exist."),
+        _readiness_check("dashboard_read_only", "Completion dashboard read-only", True, "Dashboard exposes no mutation controls."),
+    ]
+    return {"ok": True, "read_only": True, "complete": all(c["passed"] for c in checks), "status": "complete" if all(c["passed"] for c in checks) else "incomplete", "checks": checks, "document_count": len(DOCS), "documents": sorted(DOCS), "forbidden_route_findings": forbidden, "guardrails": DOCUMENTATION_GUARDRAILS}
+
+
+@router.get("/admin/final-readiness/verification")
+def final_readiness_verification(current_user: User = Depends(require_permission("mutual_aid:read_documentation")), db: Session = Depends(get_db)):
+    _documentation_enabled()
+    return _final_completion_response(db)
+
+
+@router.get("/admin/completion-dashboard")
+def completion_dashboard(current_user: User = Depends(require_permission("mutual_aid:read_documentation")), db: Session = Depends(get_db)):
+    _documentation_enabled()
+    data = _final_completion_response(db)
+    return data | {"dashboard": {"title": "Mutual Aid Phase 15 Completion Dashboard", "mutations_enabled": False, "write_actions": [], "reports": ["pilot-completion-report", "production-readiness-checklist", "disaster-recovery-checklist"]}}
+
 OBSERVABILITY_GUARDRAILS = [
     "No payment processors connected",
     "No money movement",
