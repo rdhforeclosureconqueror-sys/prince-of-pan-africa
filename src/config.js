@@ -123,6 +123,7 @@ const MUTUAL_AID_PILOT_RUNBOOK_FLAG = import.meta.env.VITE_ENABLE_MUTUAL_AID_PIL
 const MUTUAL_AID_PILOT_SMOKE_TESTS_FLAG = import.meta.env.VITE_ENABLE_MUTUAL_AID_PILOT_SMOKE_TESTS;
 const MUTUAL_AID_ANALYTICS_FLAG = import.meta.env.VITE_ENABLE_MUTUAL_AID_ANALYTICS;
 const MUTUAL_AID_SECURITY_FLAG = import.meta.env.VITE_ENABLE_MUTUAL_AID_SECURITY;
+const MUTUAL_AID_OBSERVABILITY_FLAG = import.meta.env.VITE_ENABLE_MUTUAL_AID_OBSERVABILITY;
 const normalizedTextBookOrganizerFlag = String(TEXT_BOOK_ORGANIZER_FLAG || "").trim().toLowerCase();
 const normalizedMutualAidOverviewFlag = String(MUTUAL_AID_OVERVIEW_FLAG || "").trim().toLowerCase();
 const normalizedMutualAidAdminPlanningFlag = String(MUTUAL_AID_ADMIN_PLANNING_FLAG || "").trim().toLowerCase();
@@ -144,6 +145,7 @@ const normalizedMutualAidPilotRunbookFlag = String(MUTUAL_AID_PILOT_RUNBOOK_FLAG
 const normalizedMutualAidPilotSmokeTestsFlag = String(MUTUAL_AID_PILOT_SMOKE_TESTS_FLAG || "").trim().toLowerCase();
 const normalizedMutualAidAnalyticsFlag = String(MUTUAL_AID_ANALYTICS_FLAG || "").trim().toLowerCase();
 const normalizedMutualAidSecurityFlag = String(MUTUAL_AID_SECURITY_FLAG || "").trim().toLowerCase();
+const normalizedMutualAidObservabilityFlag = String(MUTUAL_AID_OBSERVABILITY_FLAG || "").trim().toLowerCase();
 
 export const ENABLE_TEXT_BOOK_ORGANIZER = TEXT_BOOK_ORGANIZER_FLAG === undefined
   ? !isDev
@@ -228,6 +230,10 @@ export const ENABLE_MUTUAL_AID_ANALYTICS = MUTUAL_AID_ANALYTICS_FLAG === undefin
 export const ENABLE_MUTUAL_AID_SECURITY = MUTUAL_AID_SECURITY_FLAG === undefined
   ? false
   : ["1", "true", "yes", "on"].includes(normalizedMutualAidSecurityFlag);
+
+export const ENABLE_MUTUAL_AID_OBSERVABILITY = MUTUAL_AID_OBSERVABILITY_FLAG === undefined
+  ? false
+  : ["1", "true", "yes", "on"].includes(normalizedMutualAidObservabilityFlag);
 
 export const MUTUAL_AID_ACTIVATION_THRESHOLD = 20000;
 export const MUTUAL_AID_CURRENT_PROGRESS = 0;

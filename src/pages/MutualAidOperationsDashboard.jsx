@@ -1,223 +1,62 @@
-import React from "react";
-import MutualAidFundProgressCard from "../components/MutualAidFundProgressCard";
-import { MUTUAL_AID_STATUS } from "../mutualAidFundProgress";
-import { readinessStages } from "./MutualAidPilotReadinessPage";
+import React, { useEffect, useState } from "react";
+import { api } from "../api/api";
 import "../styles/mutualAid.css";
 
-const executiveSummaryCards = [
-  { label: "Pilot Status", value: "Planning Only", detail: "Static readiness view" },
-  { label: "Fund Status", value: "Not Active", detail: "No distributions before activation" },
-  { label: "Activation Progress", value: "0%", detail: "Example progress only" },
-  { label: "Readiness Score", value: "6 / 12", detail: "Illustrative internal score" },
-  { label: "Documents Complete", value: "8", detail: "Example document count" },
-  { label: "Remaining Tasks", value: "14", detail: "Example planning tasks" },
-];
+const emptyOps = {
+  health: {}, request_lifecycle: {}, review_metrics: {}, decision_metrics: {}, appeal_metrics: {},
+  notification_delivery_statistics: {}, financial_operational_metrics: {}, audit_event_metrics: {},
+  performance_latency_reporting: {}, error_rate_reporting: {}, feature_flags: {}, operational_alerts_scaffold: {},
+  export_scaffold: {}, guardrails: [],
+};
 
-const timelineSteps = [
-  "Planning",
-  "Documentation",
-  "Internal Review",
-  "Committee Review",
-  "Pilot Preparation",
-  "Activation Review",
-  "Pilot Launch",
-];
+function MetricCard({ label, value, detail }) {
+  return <div className="mutual-aid-metric-card"><span>{label}</span><strong>{value}</strong><small>{detail}</small></div>;
+}
 
-const blockers = [
-  "Funding threshold not reached",
-  "Documentation review pending",
-  "Governance approval pending",
-  "Pilot participants not selected",
-  "Training incomplete",
-];
+function BarList({ title, data = {} }) {
+  const entries = Object.entries(data || {});
+  const max = Math.max(1, ...entries.map(([, value]) => Number(value) || 0));
+  return <article className="mutual-aid-card"><h2>{title}</h2><div className="mutual-aid-analytics-bars">{entries.map(([label, value]) => <div key={label}><span>{label.replaceAll("_", " ")}</span><strong>{value}</strong><progress value={value} max={max}>{value}</progress></div>)}</div></article>;
+}
 
-const governanceChecklist = [
-  "Operating appendix reviewed",
-  "Committee charter reviewed",
-  "Conflict policy acknowledged",
-  "Privacy safeguards reviewed",
-  "Activation stop conditions reviewed",
-  "Launch communications reviewed",
-];
-
-const committeeMembers = [
-  { name: "Example Steward A", role: "Committee Chair", status: "Training planned" },
-  { name: "Example Steward B", role: "Documentation Lead", status: "Review pending" },
-  { name: "Example Steward C", role: "Member Support", status: "Pilot briefing pending" },
-  { name: "Example Steward D", role: "Finance Observer", status: "Controls review pending" },
-];
-
-const riskRows = [
-  { risk: "Members mistake planning screens for active aid", severity: "High", mitigation: "Prominent preview-only notices", status: "Monitoring" },
-  { risk: "Governance review incomplete", severity: "High", mitigation: "Require committee review before activation", status: "Pending" },
-  { risk: "Training materials not finalized", severity: "Medium", mitigation: "Complete pilot briefing packet", status: "Drafting" },
-  { risk: "Launch messaging unclear", severity: "Medium", mitigation: "Review FAQ, terms, and announcement copy", status: "Planned" },
-];
-
-const communicationChecklist = [
-  "FAQ prepared",
-  "Member announcement drafted",
-  "Terms reviewed",
-  "Launch announcement",
-  "Pilot briefing",
-];
-
-const kpiCards = [
-  { label: "Eligible Members", value: "120" },
-  { label: "Preview Requests", value: "18" },
-  { label: "Planned Reviews", value: "6" },
-  { label: "Planned Reports", value: "4" },
-  { label: "Pilot Size", value: "25 members" },
-  { label: "Target Launch Window", value: "TBD" },
-];
-
-const notices = [
-  "Preview Only",
-  "Not Active",
-  "Building Toward Activation",
-  "No distributions before activation",
-  "Support is reviewed and never guaranteed",
-  "Pilot planning interface only",
-];
-
-function DisabledChecklist({ items }) {
-  return (
-    <div className="mutual-aid-dashboard-checklist">
-      {items.map((item) => (
-        <label className="mutual-aid-check" key={item}>
-          <input type="checkbox" disabled />
-          <span>{item}</span>
-        </label>
-      ))}
-    </div>
-  );
+function previewExport() {
+  window.alert("Operations report export scaffold preview only: no file is generated, stored, scheduled, or delivered.");
 }
 
 export default function MutualAidOperationsDashboard() {
+  const [state, setState] = useState({ loading: true, error: "", data: emptyOps });
+  useEffect(() => {
+    api("/mutual-aid/admin/operations/dashboard", { method: "GET" })
+      .then((data) => setState({ loading: false, error: "", data }))
+      .catch((err) => setState({ loading: false, error: err.message || "Unable to load Mutual Aid operations metrics.", data: emptyOps }));
+  }, []);
+  const data = state.data || emptyOps;
+  const requestLifecycle = data.request_lifecycle || {};
+  const financial = data.financial_operational_metrics || {};
+  const alerts = data.operational_alerts_scaffold?.alerts || [];
+
   return (
     <main className="mutual-aid-page mutual-aid-page--admin mutual-aid-page--operations">
       <section className="mutual-aid-hero cosmic-readable-shell" aria-labelledby="mutual-aid-operations-title">
-        <p className="mutual-aid-kicker">Admin Only · Planning Dashboard</p>
-        <h1 id="mutual-aid-operations-title">Mutual Aid Operations Dashboard</h1>
-        <p className="mutual-aid-subtitle">
-          Static pilot readiness dashboard for previewing Mutual Aid operations planning in one place. No requests,
-          reviews, uploads, approvals, payments, ledgers, wallets, or backend integrations are active here.
-        </p>
-        <div className="mutual-aid-status" aria-label="Current status">
-          <span className="mutual-aid-status__dot" aria-hidden="true" />
-          <span>Status: {MUTUAL_AID_STATUS}</span>
-        </div>
+        <p className="mutual-aid-kicker">Admin Only · Read-Only Observability</p>
+        <h1 id="mutual-aid-operations-title">Mutual Aid Observability & Operations Dashboard</h1>
+        <p className="mutual-aid-subtitle">Operational metrics for request lifecycles, reviews, decisions, appeals, notifications, tracking records, audit activity, latency, errors, feature flags, and health. No external monitoring, alert delivery, payment processors, payouts, wallets, reimbursements, STAR, Black Dollars, ownership, or banking integrations.</p>
+        <div className="mutual-aid-report-actions"><button onClick={() => window.print()}>Print operations view</button><button onClick={previewExport}>Preview export scaffold</button></div>
       </section>
 
-      <section className="mutual-aid-warning cosmic-readable-shell" aria-label="Operations dashboard notices">
-        <div className="mutual-aid-notice-grid">
-          {notices.map((notice) => <strong key={notice}>{notice}</strong>)}
-        </div>
-      </section>
+      {state.loading ? <p className="mutual-aid-warning">Loading operations metrics…</p> : null}
+      {state.error ? <p className="mutual-aid-warning">{state.error}</p> : null}
 
-      <section className="mutual-aid-dashboard-grid" aria-label="Mutual Aid operations planning dashboard">
-        <article className="mutual-aid-card mutual-aid-card--wide">
-          <h2>Executive Summary</h2>
-          <div className="mutual-aid-executive-grid">
-            {executiveSummaryCards.map((card) => (
-              <div className="mutual-aid-metric-card" key={card.label}>
-                <span>{card.label}</span>
-                <strong>{card.value}</strong>
-                <small>{card.detail}</small>
-              </div>
-            ))}
-          </div>
-        </article>
-
-        <MutualAidFundProgressCard />
-
-        <article className="mutual-aid-card">
-          <h2>Pilot Timeline</h2>
-          <ol className="mutual-aid-timeline">
-            {timelineSteps.map((step) => <li key={step}>{step}</li>)}
-          </ol>
-          <p className="mutual-aid-note">Current step: <strong>Building Toward Activation</strong></p>
-        </article>
-
-        <article className="mutual-aid-card mutual-aid-card--wide">
-          <h2>Readiness Summary</h2>
-          <div className="mutual-aid-readiness-board">
-            {readinessStages.map((stage, index) => (
-              <div className="mutual-aid-readiness-stage" key={stage}>
-                <input type="checkbox" disabled />
-                <span className="mutual-aid-readiness-stage__number">{index + 1}</span>
-                <span>{stage}</span>
-                <em>Read-only operations summary</em>
-              </div>
-            ))}
-          </div>
-        </article>
-
-        <article className="mutual-aid-card">
-          <h2>Activation Blockers</h2>
-          <div className="mutual-aid-blocker-list">
-            {blockers.map((blocker) => <div className="mutual-aid-blocker-card" key={blocker}>{blocker}</div>)}
-          </div>
-        </article>
-
-        <article className="mutual-aid-card">
-          <h2>Governance Checklist</h2>
-          <DisabledChecklist items={governanceChecklist} />
-        </article>
-
-        <article className="mutual-aid-card">
-          <h2>Committee</h2>
-          <div className="mutual-aid-committee-list">
-            {committeeMembers.map((member) => (
-              <div key={member.name}>
-                <strong>{member.name}</strong>
-                <span>{member.role}</span>
-                <small>{member.status}</small>
-              </div>
-            ))}
-          </div>
-        </article>
-
-        <article className="mutual-aid-card">
-          <h2>Communication Checklist</h2>
-          <DisabledChecklist items={communicationChecklist} />
-        </article>
-
-        <article className="mutual-aid-card mutual-aid-card--wide">
-          <h2>Risk Register</h2>
-          <div className="mutual-aid-risk-table" role="table" aria-label="Static risk register">
-            <div className="mutual-aid-risk-row mutual-aid-risk-row--header" role="row">
-              <span>Risk</span><span>Severity</span><span>Mitigation</span><span>Status</span>
-            </div>
-            {riskRows.map((row) => (
-              <div className="mutual-aid-risk-row" role="row" key={row.risk}>
-                <span>{row.risk}</span><span>{row.severity}</span><span>{row.mitigation}</span><span>{row.status}</span>
-              </div>
-            ))}
-          </div>
-        </article>
-
-        <article className="mutual-aid-card mutual-aid-card--wide">
-          <h2>KPI Cards</h2>
-          <div className="mutual-aid-executive-grid">
-            {kpiCards.map((card) => (
-              <div className="mutual-aid-metric-card" key={card.label}>
-                <span>{card.label}</span>
-                <strong>{card.value}</strong>
-                <small>Example metric only</small>
-              </div>
-            ))}
-          </div>
-        </article>
-
-        <article className="mutual-aid-card mutual-aid-card--wide">
-          <h2>Next Steps</h2>
-          <p>
-            The next implementation phase may plan requests, review workflow, document upload, and disbursement workflow.
-            Those features are not implemented in this dashboard and require separate approval before any live Mutual Aid
-            operations can begin.
-          </p>
-        </article>
+      <section className="mutual-aid-dashboard-grid" aria-label="Mutual Aid read-only operations metrics">
+        <article className="mutual-aid-card mutual-aid-card--wide"><h2>System Health</h2><div className="mutual-aid-executive-grid"><MetricCard label="Health" value={data.health?.status || "unknown"} detail="Backend health endpoint status" /><MetricCard label="Feature Flag" value={String(data.feature_enabled || false)} detail="MUTUAL_AID_OBSERVABILITY_ENABLED" /><MetricCard label="Requests" value={requestLifecycle.total_requests || 0} detail="Lifecycle records" /><MetricCard label="Tracking Records" value={financial.disbursement_tracking_records || 0} detail="Disbursement records only; no execution" /></div></article>
+        <BarList title="Request Lifecycle by Status" data={requestLifecycle.by_status} />
+        <BarList title="Requests by Category" data={requestLifecycle.by_category} />
+        <BarList title="Notifications by Delivery Status" data={data.notification_delivery_statistics?.by_delivery_status} />
+        <BarList title="Audit Events by Action" data={data.audit_event_metrics?.by_action} />
+        <article className="mutual-aid-card"><h2>Latency Reporting</h2><p>Review average: <strong>{data.performance_latency_reporting?.request_review_latency?.average_hours || 0} hours</strong></p><p>Decision p95: <strong>{data.performance_latency_reporting?.request_decision_latency?.p95_hours || 0} hours</strong></p><p>Appeal average: <strong>{data.performance_latency_reporting?.appeal_processing_latency?.average_hours || 0} hours</strong></p></article>
+        <article className="mutual-aid-card"><h2>Error Rate Reporting</h2><p>Request error rate: <strong>{data.error_rate_reporting?.request_error_rate || 0}%</strong></p><p>Notification error records: <strong>{data.error_rate_reporting?.notification_error_records || 0}</strong></p><p>Route guardrail violations: <strong>{data.error_rate_reporting?.route_guardrail_violations || 0}</strong></p></article>
+        <article className="mutual-aid-card mutual-aid-card--wide"><h2>Operational Alerts Scaffold</h2>{alerts.map((alert) => <p key={alert.key}><strong>{alert.status}</strong>: {alert.message}</p>)}<p>No email, SMS, Slack, PagerDuty, webhook, or external alert integration is configured.</p></article>
+        <article className="mutual-aid-card mutual-aid-card--wide"><h2>Feature Flag Status</h2><div className="mutual-aid-notice-grid">{Object.entries(data.feature_flags || {}).map(([key, value]) => <strong key={key}>{key}: {String(value)}</strong>)}</div></article>
       </section>
     </main>
   );

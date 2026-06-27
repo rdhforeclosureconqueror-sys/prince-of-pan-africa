@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy import inspect
 from sqlalchemy.orm import Session
@@ -927,3 +927,153 @@ def compliance_checklist(current_user: User = Depends(require_permission("mutual
         _readiness_check("document_metadata_validation", "Sensitive document metadata validation active", True, "Metadata endpoint validates type, MIME, size, and path traversal."),
     ]
     return {"ok": True, "read_only": True, "passed": all(item["passed"] for item in checklist), "checklist": checklist, "retention_policy": report["retention_policy"], "guardrails": ["No payment processors", "No money movement", "No payout execution", "No wallet balances", "No reimbursement logic", "No STAR", "No Black Dollar", "No ownership systems", "No banking APIs"]}
+
+OBSERVABILITY_GUARDRAILS = [
+    "No payment processors connected",
+    "No money movement",
+    "No payout execution",
+    "No wallet balances",
+    "No reimbursement logic",
+    "No STAR, Black Dollar, ownership, or banking integrations",
+    "No external monitoring or alert delivery integrations",
+]
+
+
+def _ensure_observability_enabled():
+    if not settings.MUTUAL_AID_OBSERVABILITY_ENABLED:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mutual Aid observability is not enabled")
+
+
+def _observability_role(user):
+    return (user.role or "").strip().lower()
+
+
+def _observability_access(db, user):
+    role = _observability_role(user)
+    if role in {"admin", "superadmin", "governance", "mutual_aid_governance", "mutual_aid_treasurer"}:
+        return True
+    return user_has_permission(db, user, "mutual_aid:read_analytics") or user_has_permission(db, user, "mutual_aid:read_financial_controls")
+
+
+def _require_observability_access(current_user: User = Depends(require_auth), db: Session = Depends(get_db)):
+    if not _observability_access(db, current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    return current_user
+
+
+def _require_observability_admin(current_user: User = Depends(require_auth), db: Session = Depends(get_db)):
+    if _observability_role(current_user) not in {"admin", "superadmin"} and not user_has_permission(db, current_user, "admin:read_dashboard"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    return current_user
+
+
+def _duration_stats(hours):
+    values = sorted([round(value, 2) for value in hours if value is not None])
+    if not values:
+        return {"count": 0, "average_hours": 0, "min_hours": 0, "max_hours": 0, "p95_hours": 0}
+    p95_index = min(len(values) - 1, int(round((len(values) - 1) * 0.95)))
+    return {"count": len(values), "average_hours": round(sum(values) / len(values), 2), "min_hours": values[0], "max_hours": values[-1], "p95_hours": values[p95_index]}
+
+
+def _hours_between(start, end):
+    if not start or not end:
+        return None
+    return (end - start).total_seconds() / 3600
+
+
+def _observability_response(db, *, financial_only=False):
+    requests = db.query(MutualAidRequest).all()
+    reviews = db.query(MutualAidReview).all()
+    decisions = db.query(MutualAidDecision).all()
+    appeals = db.query(MutualAidAppeal).all()
+    notifications = db.query(MutualAidNotification).all()
+    disbursements = db.query(MutualAidDisbursement).all()
+    audits = db.query(MutualAidAuditLog).all()
+    request_status = _count_by(requests, "status", ["draft", "submitted", "under_review", "more_info_requested", "approved", "partially_approved", "not_approved", "closed"])
+    decision_hours = [_hours_between(req.submitted_at, next((d.created_at for d in decisions if d.request_id == req.id), None)) for req in requests]
+    review_hours = []
+    for req in requests:
+        first_review = db.query(MutualAidRequestStatusHistory).filter(MutualAidRequestStatusHistory.request_id == req.id, MutualAidRequestStatusHistory.to_status == "under_review").order_by(MutualAidRequestStatusHistory.created_at.asc()).first()
+        review_hours.append(_hours_between(req.submitted_at, first_review.created_at if first_review else None))
+    appeal_hours = [_hours_between(a.created_at, a.reviewed_at or a.closed_at) for a in appeals]
+    disbursement_status = _count_by(disbursements, "status", DISBURSEMENT_STATUSES)
+    notification_status = _count_by(notifications, "delivery_status")
+    route_findings = _live_money_route_findings()
+    core = {
+        "ok": True,
+        "read_only": True,
+        "feature_enabled": settings.MUTUAL_AID_OBSERVABILITY_ENABLED,
+        "generated_at": datetime.utcnow().isoformat() + "Z",
+        "guardrails": OBSERVABILITY_GUARDRAILS,
+        "health": {"status": "healthy", "database": "reachable", "feature_flag": settings.MUTUAL_AID_OBSERVABILITY_ENABLED, "money_route_findings": route_findings},
+        "feature_flags": mutual_aid_feature_flags(),
+        "financial_operational_metrics": {"disbursement_tracking_records": len(disbursements), "disbursement_by_status": disbursement_status, "tracked_amount_by_status": {key: sum(row.amount for row in disbursements if row.status == key) for key in disbursement_status}, "execution_enabled": False},
+        "export_scaffold": {"preview_only": True, "file_storage": False, "scheduled_delivery": False, "external_delivery": False},
+    }
+    if financial_only:
+        core["scope"] = "financial_operational_metrics_only"
+        return core
+    total = len(requests) or 1
+    error_statuses = request_status.get("closed", 0) + request_status.get("not_approved", 0)
+    core.update({
+        "scope": "full_operations",
+        "request_lifecycle": {"total_requests": len(requests), "by_status": request_status, "by_category": _count_by(requests, "category", CATEGORIES), "by_urgency": _count_by(requests, "urgency", URGENCIES)},
+        "review_metrics": {"review_records": len(reviews), "time_to_first_review": _duration_stats(review_hours)},
+        "decision_metrics": {"decision_records": len(decisions), "by_decision": _count_by(decisions, "decision"), "time_to_decision": _duration_stats(decision_hours)},
+        "appeal_metrics": {"appeal_records": len(appeals), "by_status": _count_by(appeals, "status", APPEAL_STATUSES), "processing_duration": _duration_stats(appeal_hours)},
+        "notification_delivery_statistics": {"total_records": len(notifications), "by_event_type": _count_by(notifications, "event_type"), "by_delivery_status": notification_status, "recorded_only": True, "external_dispatch": False},
+        "audit_event_metrics": {"total_events": len(audits), "by_action": _count_by(audits, "action"), "integrity": _audit_integrity(db)},
+        "performance_latency_reporting": {"request_review_latency": _duration_stats(review_hours), "request_decision_latency": _duration_stats(decision_hours), "appeal_processing_latency": _duration_stats(appeal_hours)},
+        "error_rate_reporting": {"request_error_rate": _pct(error_statuses, total), "notification_error_records": notification_status.get("failed", 0), "route_guardrail_violations": len(route_findings)},
+        "operational_alerts_scaffold": {"enabled": True, "external_integrations": False, "alerts": [{"key": "money_routes", "status": "ok" if not route_findings else "warning", "message": "No forbidden money movement routes detected." if not route_findings else "Forbidden route terms detected."}, {"key": "notification_delivery", "status": "ok", "message": "Notifications are recorded only; no external dispatch configured."}]},
+    })
+    return core
+
+
+@router.get("/admin/operations/health")
+def operations_health(current_user: User = Depends(_require_observability_access), db: Session = Depends(get_db)):
+    _ensure_observability_enabled()
+    data = _observability_response(db, financial_only=_observability_role(current_user) == "mutual_aid_treasurer")
+    return data["health"] | {"ok": True}
+
+
+@router.get("/admin/operations/dashboard")
+def operations_dashboard(current_user: User = Depends(_require_observability_admin), db: Session = Depends(get_db)):
+    _ensure_observability_enabled()
+    return _observability_response(db)
+
+
+@router.get("/admin/operations/reports")
+def operations_reports(current_user: User = Depends(_require_observability_access), db: Session = Depends(get_db)):
+    _ensure_observability_enabled()
+    return _observability_response(db, financial_only=_observability_role(current_user) == "mutual_aid_treasurer")
+
+
+@router.get("/admin/operations/report-preview")
+def operations_report_preview(current_user: User = Depends(_require_observability_access), db: Session = Depends(get_db)):
+    _ensure_observability_enabled()
+    return {"ok": True, "preview_only": True, "persisted": False, "download_url": None, "data": _observability_response(db, financial_only=_observability_role(current_user) == "mutual_aid_treasurer")}
+
+
+@router.get("/admin/operations/metrics")
+def operations_metrics(current_user: User = Depends(_require_observability_access), db: Session = Depends(get_db)):
+    _ensure_observability_enabled()
+    return _observability_response(db, financial_only=_observability_role(current_user) == "mutual_aid_treasurer")
+
+
+@router.get("/admin/operations/prometheus")
+def operations_prometheus_metrics(current_user: User = Depends(_require_observability_access), db: Session = Depends(get_db)):
+    _ensure_observability_enabled()
+    data = _observability_response(db, financial_only=_observability_role(current_user) == "mutual_aid_treasurer")
+    lines = [
+        "# HELP mutual_aid_requests_total Mutual Aid request records.",
+        "# TYPE mutual_aid_requests_total gauge",
+        f"mutual_aid_requests_total {data.get('request_lifecycle', {}).get('total_requests', 0)}",
+        "# HELP mutual_aid_disbursement_tracking_records Mutual Aid disbursement tracking records only.",
+        "# TYPE mutual_aid_disbursement_tracking_records gauge",
+        f"mutual_aid_disbursement_tracking_records {data['financial_operational_metrics']['disbursement_tracking_records']}",
+        "# HELP mutual_aid_feature_observability_enabled Feature flag state for Mutual Aid observability.",
+        "# TYPE mutual_aid_feature_observability_enabled gauge",
+        f"mutual_aid_feature_observability_enabled {1 if settings.MUTUAL_AID_OBSERVABILITY_ENABLED else 0}",
+    ]
+    return Response("\n".join(lines) + "\n", media_type="text/plain; version=0.0.4")
