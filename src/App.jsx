@@ -31,6 +31,7 @@ import MutualAidAllowlistPreviewPage from "./pages/MutualAidAllowlistPreviewPage
 import MutualAidOperationsDashboard from "./pages/MutualAidOperationsDashboard";
 import MutualAidGovernanceCenter from "./pages/MutualAidGovernanceCenter";
 import MutualAidExecutiveDashboard from "./pages/MutualAidExecutiveDashboard";
+import MutualAidExecutiveAnalyticsPage from "./pages/MutualAidExecutiveAnalyticsPage";
 import MutualAidFinancialControlsPage from "./pages/MutualAidFinancialControlsPage";
 import MutualAidPilotLaunchLockPage from "./pages/MutualAidPilotLaunchLockPage";
 import MutualAidPilotRunbookPage from "./pages/MutualAidPilotRunbookPage";
@@ -46,7 +47,7 @@ import {
   MutualAidReviewPreviewPage,
 } from "./pages/MutualAidPilotPreviews";
 import { getBackgroundForPath } from "./utils/backgroundSystem";
-import { API_DEBUG, AUTH_DEBUG, ENABLE_MUTUAL_AID_ADMIN_PLANNING, ENABLE_MUTUAL_AID_ALLOWLIST_SHELL, ENABLE_MUTUAL_AID_EXECUTIVE_DASHBOARD, ENABLE_MUTUAL_AID_GOVERNANCE_CENTER, ENABLE_MUTUAL_AID_OPERATIONS_DASHBOARD, ENABLE_MUTUAL_AID_OVERVIEW, ENABLE_MUTUAL_AID_PILOT_READINESS_SHELL, ENABLE_MUTUAL_AID_PILOT_LAUNCH_LOCK, ENABLE_MUTUAL_AID_PILOT_RUNBOOK, ENABLE_MUTUAL_AID_PILOT_SMOKE_TESTS, MUTUAL_AID_REQUESTS_ENABLED, ENABLE_MUTUAL_AID_REVIEW_WORKFLOW, ENABLE_MUTUAL_AID_FINANCIAL_CONTROLS, ENABLE_MUTUAL_AID_PILOT_UI_SHELL, ENABLE_TEXT_BOOK_ORGANIZER } from "./config";
+import { API_DEBUG, AUTH_DEBUG, ENABLE_MUTUAL_AID_ADMIN_PLANNING, ENABLE_MUTUAL_AID_ALLOWLIST_SHELL, ENABLE_MUTUAL_AID_EXECUTIVE_DASHBOARD, ENABLE_MUTUAL_AID_GOVERNANCE_CENTER, ENABLE_MUTUAL_AID_OPERATIONS_DASHBOARD, ENABLE_MUTUAL_AID_OVERVIEW, ENABLE_MUTUAL_AID_PILOT_READINESS_SHELL, ENABLE_MUTUAL_AID_PILOT_LAUNCH_LOCK, ENABLE_MUTUAL_AID_PILOT_RUNBOOK, ENABLE_MUTUAL_AID_PILOT_SMOKE_TESTS, MUTUAL_AID_REQUESTS_ENABLED, ENABLE_MUTUAL_AID_REVIEW_WORKFLOW, ENABLE_MUTUAL_AID_FINANCIAL_CONTROLS, ENABLE_MUTUAL_AID_PILOT_UI_SHELL, ENABLE_MUTUAL_AID_ANALYTICS, ENABLE_TEXT_BOOK_ORGANIZER } from "./config";
 import { api } from "./api/api";
 import { canAccessTextBookOrganizer, isAdminUser } from "./authz";
 import "./styles/backgroundSystem.css";
@@ -344,6 +345,17 @@ function AdminMutualAidFinancialControlsRoute({ authChecked, user, rbac, isAdmin
   return <MutualAidFinancialControlsPage />;
 }
 
+function AdminMutualAidAnalyticsRoute({ authChecked, user, rbac, isAdmin }) {
+  if (!ENABLE_MUTUAL_AID_ANALYTICS) return <PilotDeferredPage title="Mutual Aid executive analytics are not enabled" />;
+  if (!authChecked) return <div className="admin-loading">Checking Mutual Aid analytics access...</div>;
+  if (!user) return <Navigate to="/?auth=login" replace />;
+  const permissions = Array.isArray(rbac?.permissions) ? rbac.permissions : [];
+  const role = String(user?.role || "").toLowerCase();
+  const canView = isAdmin || role === "governance" || permissions.includes("mutual_aid:read_analytics");
+  if (!canView) return <PilotDeferredPage title="Executive analytics access required" detail="Members and reviewers cannot view Mutual Aid executive analytics unless explicitly authorized." />;
+  return <MutualAidExecutiveAnalyticsPage />;
+}
+
 function MutualAidPilotShellRoute({ children }) {
   if (!ENABLE_MUTUAL_AID_PILOT_UI_SHELL) {
     return <PilotDeferredPage title="Mutual Aid pilot UI shell is not enabled" />;
@@ -446,6 +458,7 @@ function AppRoutes({ user, rbac, isAdmin, canAccessOrganizer, authChecked, refre
         <Route path="/admin/mutual-aid/pilot-launch-lock" element={<AdminPilotLaunchLockRoute authChecked={authChecked} user={user} isAdmin={isAdmin} />} />
         <Route path="/admin/mutual-aid/pilot-runbook" element={<AdminPilotRunbookRoute authChecked={authChecked} user={user} isAdmin={isAdmin} />} />
         <Route path="/admin/mutual-aid/pilot-smoke-tests" element={<AdminPilotSmokeTestsRoute authChecked={authChecked} user={user} isAdmin={isAdmin} />} />
+        <Route path="/admin/mutual-aid/analytics" element={<AdminMutualAidAnalyticsRoute authChecked={authChecked} user={user} rbac={rbac} isAdmin={isAdmin} />} />
         <Route path="/mutual-aid/request-preview" element={<MutualAidPilotShellRoute><MutualAidRequestPreviewPage /></MutualAidPilotShellRoute>} />
         <Route path="/mutual-aid/nominate-preview" element={<MutualAidPilotShellRoute><MutualAidNominatePreviewPage /></MutualAidPilotShellRoute>} />
         <Route path="/mutual-aid/requests-preview" element={<MutualAidPilotShellRoute><MutualAidRequestsPreviewPage /></MutualAidPilotShellRoute>} />

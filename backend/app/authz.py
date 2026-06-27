@@ -62,6 +62,7 @@ DEFAULT_PERMISSION_NAMES = (
     "mutual_aid:decide_requests",
     "mutual_aid:read_financial_controls",
     "mutual_aid:manage_disbursements",
+    "mutual_aid:read_analytics",
 )
 
 BOOK_ORGANIZER_PERMISSION_NAMES = {
@@ -119,6 +120,7 @@ ADMIN_EXTRA_PERMISSION_NAMES = {
     "mutual_aid:decide_requests",
     "mutual_aid:read_financial_controls",
     "mutual_aid:manage_disbursements",
+    "mutual_aid:read_analytics",
 }
 
 
@@ -126,7 +128,7 @@ ROLE_PERMISSION_NAMES = {
     "community_member": MEMBER_PERMISSION_NAMES,
     "builder_member": BUILDER_PERMISSION_NAMES,
     "mutual_aid_reviewer": MEMBER_PERMISSION_NAMES | {"mutual_aid:review_requests"},
-    "mutual_aid_treasurer": MEMBER_PERMISSION_NAMES | {"mutual_aid:read_financial_controls", "mutual_aid:manage_disbursements"},
+    "mutual_aid_treasurer": MEMBER_PERMISSION_NAMES | {"mutual_aid:read_financial_controls", "mutual_aid:manage_disbursements", "mutual_aid:read_analytics"},
     "admin": BUILDER_PERMISSION_NAMES | ADMIN_EXTRA_PERMISSION_NAMES,
     "superadmin": set(DEFAULT_PERMISSION_NAMES),
 }
