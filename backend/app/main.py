@@ -107,6 +107,30 @@ app.add_middleware(
 )
 
 
+
+@app.middleware("http")
+async def mutual_aid_security_headers_and_csrf(request: Request, call_next):
+    is_mutual_aid = request.url.path.startswith("/mutual-aid")
+    if is_mutual_aid and request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+        origin = request.headers.get("origin")
+        referer = request.headers.get("referer")
+        allowed = set(allowed_origins)
+        if origin and origin.rstrip("/") not in allowed:
+            from fastapi.responses import JSONResponse
+            return JSONResponse(status_code=403, content={"detail": "Mutual Aid CSRF/CORS origin verification failed"})
+        if not origin and referer and not any(referer.startswith(base) for base in allowed):
+            from fastapi.responses import JSONResponse
+            return JSONResponse(status_code=403, content={"detail": "Mutual Aid CSRF/CORS referer verification failed"})
+
+    response = await call_next(request)
+    if is_mutual_aid:
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), payment=()"
+        response.headers["Cache-Control"] = "no-store"
+    return response
+
 @app.middleware("http")
 async def log_tts_preflight(request: Request, call_next):
     if request.method == "OPTIONS" and request.url.path == "/chat/tts":

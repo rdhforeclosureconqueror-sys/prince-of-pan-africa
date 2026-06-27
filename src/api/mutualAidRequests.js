@@ -74,3 +74,16 @@ export function getMutualAidPilotRunbook() {
 export function getMutualAidPilotSmokeTests() {
   return get("/mutual-aid/admin/pilot-smoke-tests/verification");
 }
+
+
+export function getMutualAidSecurityHealth() {
+  return get("/mutual-aid/admin/security/health");
+}
+
+export function getMutualAidRbacAudit() {
+  return get("/mutual-aid/admin/security/rbac-audit");
+}
+
+export function getMutualAidComplianceChecklist() {
+  return get("/mutual-aid/admin/compliance/checklist");
+}

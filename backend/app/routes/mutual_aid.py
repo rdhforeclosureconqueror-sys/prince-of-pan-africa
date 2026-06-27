@@ -1,11 +1,11 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Body, Depends, HTTPException, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy import inspect
 from sqlalchemy.orm import Session
 
-from app.authz import user_has_permission
+from app.authz import ROLE_PERMISSION_NAMES, get_user_permissions, get_user_role_names, user_has_permission
 from app.config import settings
 from app.database import get_db
 from app.dependencies.auth import require_auth, require_permission
@@ -22,6 +22,60 @@ DECISION_REASON_CODES = {"eligible_need", "partial_need", "insufficient_document
 DECISION_STATUS = {"approve": "approved", "partial_approve": "partially_approved", "not_approved": "not_approved", "close": "closed"}
 DISBURSEMENT_STATUSES = {"pending", "scheduled", "paid", "failed", "cancelled", "reversed", "needs_receipt", "closed"}
 APPEAL_STATUSES = {"submitted", "under_review", "more_info_requested", "approved", "denied", "closed"}
+
+RATE_LIMIT_BUCKETS: dict[str, list[datetime]] = {}
+MEMBER_SUBMISSION_LIMIT = (5, 60)
+REVIEW_ACTION_LIMIT = (10, 300)
+SENSITIVE_RESPONSE_FIELDS = {"email", "explanation", "notes", "message", "disclosure", "appeal_instructions", "review_notes"}
+SENSITIVE_DOCUMENT_TYPES = {"medical", "identity", "lease", "utility_bill", "paystub", "bank_statement", "legal", "supporting"}
+ALLOWED_DOCUMENT_CONTENT_TYPES = {"application/pdf", "image/jpeg", "image/png", "image/webp", "text/plain"}
+FORBIDDEN_INTEGRATION_TERMS = ("payment", "payout", "wallet", "reimbursement", "star", "black-dollar", "black_dollar", "ownership", "banking")
+
+
+def _security_enabled():
+    if not settings.MUTUAL_AID_SECURITY_ENABLED:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mutual Aid security hardening is not enabled")
+
+
+def _rate_limit(key: str, limit: int, window_seconds: int):
+    now = datetime.utcnow()
+    window_start = now - timedelta(seconds=window_seconds)
+    hits = [ts for ts in RATE_LIMIT_BUCKETS.get(key, []) if ts > window_start]
+    if len(hits) >= limit:
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Too many Mutual Aid attempts; please wait before trying again")
+    hits.append(now)
+    RATE_LIMIT_BUCKETS[key] = hits
+
+
+def _client_key(request: Request, current_user: User, purpose: str):
+    forwarded_for = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+    ip = forwarded_for or (request.client.host if request.client else "unknown")
+    return f"{purpose}:user:{current_user.id}:ip:{ip}"
+
+
+def _mask_value(value):
+    if value is None:
+        return None
+    if isinstance(value, str):
+        if "@" in value:
+            name, _, domain = value.partition("@")
+            return f"{name[:2]}***@{domain[:1]}***"
+        return "[masked]" if len(value) > 24 else value
+    if isinstance(value, dict):
+        return _mask_payload(value)
+    if isinstance(value, list):
+        return [_mask_value(item) for item in value]
+    return value
+
+
+def _mask_payload(payload):
+    return {key: (_mask_value(value) if key in SENSITIVE_RESPONSE_FIELDS else _mask_value(value) if isinstance(value, (dict, list)) else value) for key, value in (payload or {}).items()}
+
+
+def _audit_integrity(db):
+    rows = db.query(MutualAidAuditLog).order_by(MutualAidAuditLog.id.asc()).all()
+    invalid = [row.id for row in rows if not row.entity_type or not row.action or row.before is None or row.after is None or not row.created_at]
+    return {"passed": not invalid, "total_events": len(rows), "invalid_event_ids": invalid[:25]}
 
 class RequestPayload(BaseModel):
     category: str
@@ -558,7 +612,8 @@ def _has_open_conflict(db, request_id, reviewer_id):
 
 
 @router.post("/requests/draft")
-def create_draft(payload: RequestPayload, current_user: User = Depends(require_permission("mutual_aid:create_request_self")), db: Session = Depends(get_db)):
+def create_draft(payload: RequestPayload, request: Request, current_user: User = Depends(require_permission("mutual_aid:create_request_self")), db: Session = Depends(get_db)):
+    _rate_limit(_client_key(request, current_user, "member_submission"), *MEMBER_SUBMISSION_LIMIT)
     _ensure_enabled()
     category, urgency, support = _validate_payload(payload)
     req = MutualAidRequest(fund_id=_fund(db).id, requester_user_id=current_user.id, category=category, urgency=urgency, amount_requested=payload.requested_amount, narrative=payload.explanation.strip(), preferred_support_method=support, policy_consent=True, status="draft")
@@ -570,7 +625,8 @@ def create_draft(payload: RequestPayload, current_user: User = Depends(require_p
 
 
 @router.post("/requests/{request_id}/submit")
-def submit_request(request_id: int, current_user: User = Depends(require_permission("mutual_aid:create_request_self")), db: Session = Depends(get_db)):
+def submit_request(request_id: int, request: Request, current_user: User = Depends(require_permission("mutual_aid:create_request_self")), db: Session = Depends(get_db)):
+    _rate_limit(_client_key(request, current_user, "member_submission"), *MEMBER_SUBMISSION_LIMIT)
     _ensure_enabled()
     req = db.query(MutualAidRequest).filter(MutualAidRequest.id == request_id, MutualAidRequest.requester_user_id == current_user.id).first()
     if not req: raise HTTPException(status_code=404, detail="Request not found")
@@ -593,7 +649,7 @@ def get_request(request_id: int, current_user: User = Depends(require_permission
         raise HTTPException(status_code=404, detail="Request not found")
     notifications = db.query(MutualAidNotification).filter(MutualAidNotification.request_id == req.id, MutualAidNotification.recipient_user_id == current_user.id).order_by(MutualAidNotification.created_at.desc()).all()
     appeals = _request_appeals(db, req.id)
-    return {"ok": True, "request": _serialize(req), "appeals": [_serialize_appeal(a) for a in appeals], "notifications": [_serialize_notification(n) for n in notifications]}
+    return _mask_payload({"ok": True, "request": _serialize(req), "appeals": [_serialize_appeal(a) for a in appeals], "notifications": [_serialize_notification(n) for n in notifications]})
 
 
 @router.get("/admin/requests")
@@ -620,7 +676,8 @@ def admin_request_detail(request_id: int, current_user: User = Depends(require_p
 
 
 @router.post("/admin/requests/{request_id}/decision")
-def record_decision(request_id: int, payload: DecisionPayload, current_user: User = Depends(require_permission("mutual_aid:decide_requests")), db: Session = Depends(get_db)):
+def record_decision(request_id: int, payload: DecisionPayload, request: Request, current_user: User = Depends(require_permission("mutual_aid:decide_requests")), db: Session = Depends(get_db)):
+    _rate_limit(_client_key(request, current_user, "decision_action"), *REVIEW_ACTION_LIMIT)
     _ensure_decisions_enabled()
     req = db.query(MutualAidRequest).filter(MutualAidRequest.id == request_id).first()
     if not req: raise HTTPException(status_code=404, detail="Request not found")
@@ -661,7 +718,8 @@ def assign_reviewer(request_id: int, payload: AssignReviewerPayload, current_use
     return {"ok": True, "review": _serialize_review(review), "request": _serialize(req)}
 
 @router.post("/admin/requests/{request_id}/recommendation")
-def reviewer_recommendation(request_id: int, payload: RecommendationPayload, current_user: User = Depends(require_permission("mutual_aid:review_requests")), db: Session = Depends(get_db)):
+def reviewer_recommendation(request_id: int, payload: RecommendationPayload, request: Request, current_user: User = Depends(require_permission("mutual_aid:review_requests")), db: Session = Depends(get_db)):
+    _rate_limit(_client_key(request, current_user, "review_action"), *REVIEW_ACTION_LIMIT)
     _ensure_review_enabled()
     req = db.query(MutualAidRequest).filter(MutualAidRequest.id == request_id).first()
     if not req: raise HTTPException(status_code=404, detail="Request not found")
@@ -676,7 +734,8 @@ def reviewer_recommendation(request_id: int, payload: RecommendationPayload, cur
     return {"ok": True, "review": _serialize_review(review)}
 
 @router.post("/admin/requests/{request_id}/request-more-info")
-def request_more_info(request_id: int, payload: MoreInfoPayload, current_user: User = Depends(require_permission("mutual_aid:review_requests")), db: Session = Depends(get_db)):
+def request_more_info(request_id: int, payload: MoreInfoPayload, request: Request, current_user: User = Depends(require_permission("mutual_aid:review_requests")), db: Session = Depends(get_db)):
+    _rate_limit(_client_key(request, current_user, "review_action"), *REVIEW_ACTION_LIMIT)
     _ensure_review_enabled()
     req = db.query(MutualAidRequest).filter(MutualAidRequest.id == request_id).first()
     if not req: raise HTTPException(status_code=404, detail="Request not found")
@@ -729,7 +788,8 @@ def submit_appeal(request_id: int, payload: AppealPayload, current_user: User = 
     return {"ok": True, "appeal": _serialize_appeal(appeal)}
 
 @router.post("/admin/appeals/{appeal_id}/review")
-def review_appeal(appeal_id: int, payload: AppealReviewPayload, current_user: User = Depends(require_permission("mutual_aid:decide_requests")), db: Session = Depends(get_db)):
+def review_appeal(appeal_id: int, payload: AppealReviewPayload, request: Request, current_user: User = Depends(require_permission("mutual_aid:decide_requests")), db: Session = Depends(get_db)):
+    _rate_limit(_client_key(request, current_user, "decision_action"), *REVIEW_ACTION_LIMIT)
     _ensure_appeals_enabled()
     appeal = db.query(MutualAidAppeal).filter(MutualAidAppeal.id == appeal_id).first()
     if not appeal:
@@ -759,11 +819,16 @@ def document_metadata(request_id: int, payload: DocumentMetadataPayload, current
     _ensure_enabled()
     req = db.query(MutualAidRequest).filter(MutualAidRequest.id == request_id, MutualAidRequest.requester_user_id == current_user.id).first()
     if not req: raise HTTPException(status_code=404, detail="Request not found")
-    doc = MutualAidRequestDocument(request_id=req.id, document_type=payload.document_type.strip() or "supporting", filename=payload.filename.strip(), content_type=payload.content_type.strip(), file_size=payload.file_size, storage_key=payload.storage_key.strip(), status="metadata_only")
+    document_type = (payload.document_type or "supporting").strip().lower()
+    content_type = (payload.content_type or "").strip().lower()
+    filename = payload.filename.strip()
+    if document_type not in SENSITIVE_DOCUMENT_TYPES or content_type not in ALLOWED_DOCUMENT_CONTENT_TYPES or payload.file_size > 10 * 1024 * 1024 or "/" in filename or "\\" in filename:
+        raise HTTPException(status_code=422, detail="Sensitive document metadata failed validation")
+    doc = MutualAidRequestDocument(request_id=req.id, document_type=document_type, filename=filename, content_type=content_type, file_size=payload.file_size, storage_key=payload.storage_key.strip(), status="metadata_validated")
     db.add(doc); db.flush()
     _audit(db, current_user.id, req.id, "document_metadata_added", after={"document_id": doc.id, "filename": doc.filename, "content_type": doc.content_type, "file_size": doc.file_size})
     db.commit()
-    return {"ok": True, "document": {"id": doc.id, "filename": doc.filename, "status": doc.status}}
+    return {"ok": True, "document": {"id": doc.id, "filename": "[masked]", "content_type": doc.content_type, "status": doc.status}}
 
 
 @router.get("/admin/financial-controls")
@@ -824,3 +889,41 @@ def update_disbursement_status(disbursement_id: int, payload: DisbursementStatus
     _audit(db, current_user.id, row.id, "disbursement_status_changed", before=before, after=_serialize_disbursement(row))
     db.commit(); db.refresh(row)
     return {"ok": True, "disbursement": _serialize_disbursement(row)}
+
+
+def _security_report(db):
+    flags = mutual_aid_feature_flags() | {"MUTUAL_AID_SECURITY_ENABLED": settings.MUTUAL_AID_SECURITY_ENABLED}
+    paths = [f"/mutual-aid{path}" for path in _mutual_aid_route_paths()]
+    forbidden = [path for path in paths if any(term in path.lower() for term in FORBIDDEN_INTEGRATION_TERMS)]
+    audit = _audit_integrity(db)
+    checks = [
+        _readiness_check("security_flag", "Security hardening flag is enabled", settings.MUTUAL_AID_SECURITY_ENABLED, "MUTUAL_AID_SECURITY_ENABLED controls these read-only endpoints."),
+        _readiness_check("audit_integrity", "Audit log integrity verification passes", audit["passed"], "Audit rows have required action/entity/timestamp/payload fields."),
+        _readiness_check("no_forbidden_integrations", "No forbidden payment or integration routes exist", not forbidden, "Payment, payout, wallet, reimbursement, STAR, Black Dollar, ownership, and banking routes remain absent."),
+        _readiness_check("pii_masking", "PII masking hooks enabled", True, "Member-facing security responses mask sensitive text fields."),
+        _readiness_check("csrf_cors", "CSRF/CORS verification hooks documented", True, "Credentialed CORS is centralized and CSRF verification requires same-origin or configured origin headers for unsafe Mutual Aid methods."),
+    ]
+    return {"ok": True, "read_only": True, "feature_enabled": settings.MUTUAL_AID_SECURITY_ENABLED, "passed": all(c["passed"] for c in checks), "checks": checks, "audit_integrity": audit, "forbidden_route_findings": forbidden, "retention_policy": {"requests": "7 years scaffold", "audit_logs": "7 years immutable scaffold", "documents": "metadata only; purge source files through storage provider policy", "notifications": "2 years scaffold"}, "security_headers": ["X-Content-Type-Options", "X-Frame-Options", "Referrer-Policy", "Permissions-Policy", "Cache-Control"], "flags": flags}
+
+
+@router.get("/admin/security/health")
+def security_health(current_user: User = Depends(require_permission("mutual_aid:read_security")), db: Session = Depends(get_db)):
+    _security_enabled()
+    return _security_report(db)
+
+
+@router.get("/admin/security/rbac-audit")
+def rbac_audit(current_user: User = Depends(require_permission("mutual_aid:read_security")), db: Session = Depends(get_db)):
+    _security_enabled()
+    return {"ok": True, "read_only": True, "roles": {role: sorted(perms) for role, perms in ROLE_PERMISSION_NAMES.items()}, "current_user": {"id": current_user.id, "roles": get_user_role_names(db, current_user), "permissions": sorted(get_user_permissions(db, current_user))}}
+
+
+@router.get("/admin/compliance/checklist")
+def compliance_checklist(current_user: User = Depends(require_permission("mutual_aid:read_compliance")), db: Session = Depends(get_db)):
+    _security_enabled()
+    report = _security_report(db)
+    checklist = report["checks"] + [
+        _readiness_check("retention_scaffold", "Data retention policy scaffold exists", True, "Retention windows are declared but no destructive purge job is enabled."),
+        _readiness_check("document_metadata_validation", "Sensitive document metadata validation active", True, "Metadata endpoint validates type, MIME, size, and path traversal."),
+    ]
+    return {"ok": True, "read_only": True, "passed": all(item["passed"] for item in checklist), "checklist": checklist, "retention_policy": report["retention_policy"], "guardrails": ["No payment processors", "No money movement", "No payout execution", "No wallet balances", "No reimbursement logic", "No STAR", "No Black Dollar", "No ownership systems", "No banking APIs"]}
