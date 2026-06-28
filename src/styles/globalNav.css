@@ -65,7 +65,20 @@
     display: none;
     width: 100%;
     flex-direction: column;
+    flex-wrap: nowrap;
     margin-top: 12px;
+    max-height: calc(100dvh - 86px - env(safe-area-inset-bottom, 0px));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+    scrollbar-gutter: stable;
+  }
+
+  @supports not (height: 100dvh) {
+    .global-nav__links {
+      max-height: calc(100vh - 86px);
+    }
   }
 
   .global-nav__links.is-open {

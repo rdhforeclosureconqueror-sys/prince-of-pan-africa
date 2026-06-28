@@ -5,8 +5,8 @@ from pathlib import Path
 class DashboardOrganizerNavigationStaticTests(unittest.TestCase):
     def test_global_nav_uses_centralized_helpers_and_logged_out_sign_in_only(self):
         src = Path("src/components/GlobalNav.jsx").read_text()
-        self.assertIn('import { getDashboardLabel, isAdminUser } from "../authz";', src)
-        self.assertIn('import { AUTH_DEBUG, ENABLE_TEXT_BOOK_ORGANIZER } from "../config";', src)
+        self.assertIn('import { canAccessSocietyBuilder, getDashboardLabel, isAdminUser } from "../authz";', src)
+        self.assertIn('import { AUTH_DEBUG, ENABLE_MUTUAL_AID_OVERVIEW, ENABLE_MUTUAL_AID_PILOT_UI_SHELL, ENABLE_TEXT_BOOK_ORGANIZER, SOCIETY_BUILDER_ENABLED } from "../config";', src)
         self.assertIn('[auth-debug] global nav decision', src)
         self.assertIn('authChecked && user ? (', src)
         self.assertIn('getDashboardLabel(user, rbac)', src)
@@ -62,8 +62,8 @@ class DashboardOrganizerNavigationStaticTests(unittest.TestCase):
     def test_home_and_library_keep_organizer_entry_points_permission_gated_by_props(self):
         home = Path("src/pages/Home.jsx").read_text()
         library = Path("src/pages/LibraryDecolonize.jsx").read_text()
-        self.assertIn('Format a Book', home)
-        self.assertIn('Upload Book Text', home)
+        self.assertIn('Builder Access', home)
+        self.assertIn('Open Builder Tools', home)
         self.assertIn('authChecked && user', home)
         self.assertIn('ENABLE_TEXT_BOOK_ORGANIZER && canAccessOrganizer', home)
         self.assertNotIn('VITE_ADMIN_EMAILS', home)
