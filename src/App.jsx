@@ -25,6 +25,12 @@ import CommunityOnboardingPage from "./pages/CommunityOnboardingPage";
 import CommunityDirectoryPage from "./pages/CommunityDirectoryPage";
 import CommunityPreparednessPage from "./pages/CommunityPreparednessPage";
 import MutualAidOverviewPage from "./pages/MutualAidOverviewPage";
+import SimbaMainHubPage from "./pages/SimbaMainHubPage";
+import MySocietiesPage from "./pages/MySocietiesPage";
+import SocietyBuilderPage from "./pages/SocietyBuilderPage";
+import SocietyHomePage from "./pages/SocietyHomePage";
+import SocietyFormationPage from "./pages/SocietyFormationPage";
+import SocietyChapterAdminPage from "./pages/SocietyChapterAdminPage";
 import MutualAidAdminPlanningPage from "./pages/MutualAidAdminPlanningPage";
 import MutualAidPilotReadinessPage from "./pages/MutualAidPilotReadinessPage";
 import MutualAidAllowlistPreviewPage from "./pages/MutualAidAllowlistPreviewPage";
@@ -49,7 +55,7 @@ import {
   MutualAidReviewPreviewPage,
 } from "./pages/MutualAidPilotPreviews";
 import { getBackgroundForPath } from "./utils/backgroundSystem";
-import { API_DEBUG, AUTH_DEBUG, ENABLE_MUTUAL_AID_ADMIN_PLANNING, ENABLE_MUTUAL_AID_ALLOWLIST_SHELL, ENABLE_MUTUAL_AID_EXECUTIVE_DASHBOARD, ENABLE_MUTUAL_AID_GOVERNANCE_CENTER, ENABLE_MUTUAL_AID_OPERATIONS_DASHBOARD, ENABLE_MUTUAL_AID_OVERVIEW, ENABLE_MUTUAL_AID_PILOT_READINESS_SHELL, ENABLE_MUTUAL_AID_PILOT_LAUNCH_LOCK, ENABLE_MUTUAL_AID_PILOT_RUNBOOK, ENABLE_MUTUAL_AID_PILOT_SMOKE_TESTS, MUTUAL_AID_REQUESTS_ENABLED, ENABLE_MUTUAL_AID_REVIEW_WORKFLOW, ENABLE_MUTUAL_AID_FINANCIAL_CONTROLS, ENABLE_MUTUAL_AID_PILOT_UI_SHELL, ENABLE_MUTUAL_AID_ANALYTICS, ENABLE_MUTUAL_AID_SECURITY, ENABLE_MUTUAL_AID_OBSERVABILITY, ENABLE_MUTUAL_AID_DOCUMENTATION, ENABLE_TEXT_BOOK_ORGANIZER } from "./config";
+import { API_DEBUG, AUTH_DEBUG, ENABLE_MUTUAL_AID_ADMIN_PLANNING, ENABLE_MUTUAL_AID_ALLOWLIST_SHELL, ENABLE_MUTUAL_AID_EXECUTIVE_DASHBOARD, ENABLE_MUTUAL_AID_GOVERNANCE_CENTER, ENABLE_MUTUAL_AID_OPERATIONS_DASHBOARD, ENABLE_MUTUAL_AID_OVERVIEW, ENABLE_MUTUAL_AID_PILOT_READINESS_SHELL, ENABLE_MUTUAL_AID_PILOT_LAUNCH_LOCK, ENABLE_MUTUAL_AID_PILOT_RUNBOOK, ENABLE_MUTUAL_AID_PILOT_SMOKE_TESTS, MUTUAL_AID_REQUESTS_ENABLED, ENABLE_MUTUAL_AID_REVIEW_WORKFLOW, ENABLE_MUTUAL_AID_FINANCIAL_CONTROLS, ENABLE_MUTUAL_AID_PILOT_UI_SHELL, ENABLE_MUTUAL_AID_ANALYTICS, ENABLE_MUTUAL_AID_SECURITY, ENABLE_MUTUAL_AID_OBSERVABILITY, ENABLE_MUTUAL_AID_DOCUMENTATION, ENABLE_TEXT_BOOK_ORGANIZER, SOCIETY_BUILDER_ENABLED } from "./config";
 import { api } from "./api/api";
 import { canAccessTextBookOrganizer, isAdminUser } from "./authz";
 import "./styles/backgroundSystem.css";
@@ -370,6 +376,22 @@ function AdminMutualAidAnalyticsRoute({ authChecked, user, rbac, isAdmin }) {
   return <MutualAidExecutiveAnalyticsPage />;
 }
 
+
+function SocietyBuilderRoute({ authChecked, user, children }) {
+  if (!SOCIETY_BUILDER_ENABLED) return <PilotDeferredPage title="Society Builder is not enabled" />;
+  if (!authChecked) return <div className="admin-loading">Checking Society Builder access...</div>;
+  if (!user) return <Navigate to="/?auth=login" replace />;
+  return children;
+}
+
+function AdminSocietyBuilderRoute({ authChecked, user, isAdmin, children }) {
+  if (!SOCIETY_BUILDER_ENABLED) return <PilotDeferredPage title="Society Builder is not enabled" />;
+  if (!authChecked) return <div className="admin-loading">Checking Society Builder admin access...</div>;
+  if (!user) return <Navigate to="/?auth=login" replace />;
+  if (!isAdmin) return <PilotDeferredPage title="Admin access required" detail="Chapter applications are restricted to Simba Main Hub admins and chapter reviewers." />;
+  return children;
+}
+
 function MutualAidPilotShellRoute({ children }) {
   if (!ENABLE_MUTUAL_AID_PILOT_UI_SHELL) {
     return <PilotDeferredPage title="Mutual Aid pilot UI shell is not enabled" />;
@@ -420,6 +442,13 @@ function AppRoutes({ user, rbac, isAdmin, canAccessOrganizer, authChecked, refre
         {ENABLE_MUTUAL_AID_EXECUTIVE_DASHBOARD ? (
           <Route path="/admin/mutual-aid/executive" element={<AdminMutualAidExecutiveDashboardRoute authChecked={authChecked} user={user} isAdmin={isAdmin} />} />
         ) : null}
+
+        <Route path="/simba-main-hub" element={<SocietyBuilderRoute authChecked={authChecked} user={user}><SimbaMainHubPage /></SocietyBuilderRoute>} />
+        <Route path="/societies" element={<SocietyBuilderRoute authChecked={authChecked} user={user}><MySocietiesPage /></SocietyBuilderRoute>} />
+        <Route path="/societies/start" element={<SocietyBuilderRoute authChecked={authChecked} user={user}><SocietyFormationPage /></SocietyBuilderRoute>} />
+        <Route path="/societies/register-chapter" element={<SocietyBuilderRoute authChecked={authChecked} user={user}><SocietyFormationPage /></SocietyBuilderRoute>} />
+        <Route path="/societies/:societyId" element={<SocietyBuilderRoute authChecked={authChecked} user={user}><SocietyHomePage /></SocietyBuilderRoute>} />
+        <Route path="/admin/societies/chapters" element={<AdminSocietyBuilderRoute authChecked={authChecked} user={user} isAdmin={isAdmin}><SocietyChapterAdminPage /></AdminSocietyBuilderRoute>} />
         <Route path="/admin-legacy" element={<Navigate to="/dashboard" replace />} />
         <Route
           path="/fitness"

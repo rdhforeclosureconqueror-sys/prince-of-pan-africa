@@ -70,6 +70,14 @@ DEFAULT_PERMISSION_NAMES = (
     "mutual_aid:read_reviewer_documentation",
     "mutual_aid:read_treasurer_documentation",
     "mutual_aid:read_governance_documentation",
+    "society_builder:create_self",
+    "society_builder:read_self",
+    "society_builder:update_self",
+    "society_builder:read_admin",
+    "society_builder:review_chapters",
+    "society_builder:manage_main_hub",
+    "society_builder:override_stage",
+    "society_builder:read_rollups",
 )
 
 BOOK_ORGANIZER_PERMISSION_NAMES = {
@@ -104,6 +112,9 @@ MEMBER_PERMISSION_NAMES = {
     "voice:use_stt",
     "mutual_aid:create_request_self",
     "mutual_aid:read_request_self",
+    "society_builder:create_self",
+    "society_builder:read_self",
+    "society_builder:update_self",
 }
 
 BUILDER_PERMISSION_NAMES = MEMBER_PERMISSION_NAMES | BOOK_ORGANIZER_PERMISSION_NAMES | {
@@ -134,6 +145,11 @@ ADMIN_EXTRA_PERMISSION_NAMES = {
     "mutual_aid:read_reviewer_documentation",
     "mutual_aid:read_treasurer_documentation",
     "mutual_aid:read_governance_documentation",
+    "society_builder:read_admin",
+    "society_builder:review_chapters",
+    "society_builder:manage_main_hub",
+    "society_builder:override_stage",
+    "society_builder:read_rollups",
 }
 
 

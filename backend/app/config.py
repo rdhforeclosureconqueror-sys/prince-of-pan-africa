@@ -24,6 +24,7 @@ class Settings:
     AUDIO_STORAGE_DIR: str = os.getenv("AUDIO_STORAGE_DIR", "")
     BOOK_COVER_STORAGE_DIR: str = os.getenv("BOOK_COVER_STORAGE_DIR", "/var/data/static/book-covers")
     ENABLE_TEXT_BOOK_ORGANIZER: bool = os.getenv("ENABLE_TEXT_BOOK_ORGANIZER", "false").strip().lower() in {"1", "true", "yes", "on"}
+    SOCIETY_BUILDER_ENABLED: bool = os.getenv("SOCIETY_BUILDER_ENABLED", os.getenv("ENABLE_SOCIETY_BUILDER", "false")).strip().lower() in {"1", "true", "yes", "on"}
     STRIPE_SECRET_KEY: str = os.getenv("STRIPE_SECRET_KEY", "")
     STRIPE_WEBHOOK_SECRET: str = os.getenv("STRIPE_WEBHOOK_SECRET", "")
     STRIPE_COMMUNITY_PRICE_ID: str = os.getenv("STRIPE_COMMUNITY_PRICE_ID", "")

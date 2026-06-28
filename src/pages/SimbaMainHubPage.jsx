@@ -1,0 +1,6 @@
+import React, { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { getSimbaMainHub } from "../api/societyBuilder";
+import "../styles/societyBuilder.css";
+
+export default function SimbaMainHubPage(){const [data,setData]=useState(null);const [error,setError]=useState("");useEffect(()=>{getSimbaMainHub().then(setData).catch(e=>setError(e.message));},[]);return <main className="society-builder-shell"><p className="society-kicker">Simba Main Hub</p><h1>Simba Mutual Aid Society</h1><p>Simba is the model and the infrastructure. Local societies build the trust. Hubs help the trust travel.</p>{error&&<p className="society-warning">{error}</p>}{data?.main_hub&&<section className="society-grid"><article className="society-card"><h2>Main Hub status</h2><p><strong>Stage:</strong> {data.main_hub.lifecycle_stage}</p><p><strong>Affiliation:</strong> {data.main_hub.affiliation_status}</p><p><strong>Chapter level:</strong> {data.main_hub.chapter_level}</p></article><article className="society-card"><h2>Approved chapters</h2><p>{data.approved_chapters?.length||0} safe chapter summaries visible.</p></article></section>}<div className="society-actions"><Link className="society-btn" to="/societies/start">Start a Society</Link><Link className="society-btn secondary" to="/societies/register-chapter">Register a Chapter</Link></div></main>}
