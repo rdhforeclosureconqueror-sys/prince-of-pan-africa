@@ -55,9 +55,11 @@ import {
   MutualAidReviewPreviewPage,
 } from "./pages/MutualAidPilotPreviews";
 import { getBackgroundForPath } from "./utils/backgroundSystem";
-import { API_DEBUG, AUTH_DEBUG, ENABLE_MUTUAL_AID_ADMIN_PLANNING, ENABLE_MUTUAL_AID_ALLOWLIST_SHELL, ENABLE_MUTUAL_AID_EXECUTIVE_DASHBOARD, ENABLE_MUTUAL_AID_GOVERNANCE_CENTER, ENABLE_MUTUAL_AID_OPERATIONS_DASHBOARD, ENABLE_MUTUAL_AID_OVERVIEW, ENABLE_MUTUAL_AID_PILOT_READINESS_SHELL, ENABLE_MUTUAL_AID_PILOT_LAUNCH_LOCK, ENABLE_MUTUAL_AID_PILOT_RUNBOOK, ENABLE_MUTUAL_AID_PILOT_SMOKE_TESTS, MUTUAL_AID_REQUESTS_ENABLED, ENABLE_MUTUAL_AID_REVIEW_WORKFLOW, ENABLE_MUTUAL_AID_FINANCIAL_CONTROLS, ENABLE_MUTUAL_AID_PILOT_UI_SHELL, ENABLE_MUTUAL_AID_ANALYTICS, ENABLE_MUTUAL_AID_SECURITY, ENABLE_MUTUAL_AID_OBSERVABILITY, ENABLE_MUTUAL_AID_DOCUMENTATION, ENABLE_TEXT_BOOK_ORGANIZER, SOCIETY_BUILDER_ENABLED } from "./config";
+import { API_DEBUG, AUTH_DEBUG, ENABLE_TEXT_BOOK_ORGANIZER } from "./config";
+import { ENABLE_MUTUAL_AID_ADMIN_PLANNING, ENABLE_MUTUAL_AID_ALLOWLIST_SHELL, ENABLE_MUTUAL_AID_EXECUTIVE_DASHBOARD, ENABLE_MUTUAL_AID_GOVERNANCE_CENTER, ENABLE_MUTUAL_AID_OPERATIONS_DASHBOARD, ENABLE_MUTUAL_AID_OVERVIEW, ENABLE_MUTUAL_AID_PILOT_READINESS_SHELL, ENABLE_MUTUAL_AID_PILOT_LAUNCH_LOCK, ENABLE_MUTUAL_AID_PILOT_RUNBOOK, ENABLE_MUTUAL_AID_PILOT_SMOKE_TESTS, MUTUAL_AID_REQUESTS_ENABLED, ENABLE_MUTUAL_AID_REVIEW_WORKFLOW, ENABLE_MUTUAL_AID_FINANCIAL_CONTROLS, ENABLE_MUTUAL_AID_PILOT_UI_SHELL, ENABLE_MUTUAL_AID_ANALYTICS, ENABLE_MUTUAL_AID_SECURITY, ENABLE_MUTUAL_AID_OBSERVABILITY, ENABLE_MUTUAL_AID_DOCUMENTATION, SOCIETY_BUILDER_ENABLED } from "./config";
 import { api } from "./api/api";
 import { canAccessTextBookOrganizer, isAdminUser } from "./authz";
+import { canAccessSocietyBuilder } from "./authz";
 import "./styles/backgroundSystem.css";
 
 function DashboardRoute({ authChecked, user, rbac, isAdmin }) {
@@ -185,7 +187,7 @@ function OrganizerRoute({ authChecked, user, rbac, canAccessOrganizer }) {
 }
 
 function AdminPlanningRoute({ authChecked, user, isAdmin }) {
-  if (!ENABLE_MUTUAL_AID_ADMIN_PLANNING) {
+  if (!ENABLE_MUTUAL_AID_ADMIN_PLANNING && !isAdmin) {
     return <PilotDeferredPage title="Mutual Aid admin planning is not enabled" />;
   }
 
@@ -204,7 +206,7 @@ function AdminPlanningRoute({ authChecked, user, isAdmin }) {
 }
 
 function AdminPilotReadinessRoute({ authChecked, user, isAdmin }) {
-  if (!ENABLE_MUTUAL_AID_PILOT_READINESS_SHELL) {
+  if (!ENABLE_MUTUAL_AID_PILOT_READINESS_SHELL && !isAdmin) {
     return <PilotDeferredPage title="Mutual Aid pilot readiness shell is not enabled" />;
   }
 
@@ -223,7 +225,7 @@ function AdminPilotReadinessRoute({ authChecked, user, isAdmin }) {
 }
 
 function AdminAllowlistPreviewRoute({ authChecked, user, isAdmin }) {
-  if (!ENABLE_MUTUAL_AID_ALLOWLIST_SHELL) {
+  if (!ENABLE_MUTUAL_AID_ALLOWLIST_SHELL && !isAdmin) {
     return <PilotDeferredPage title="Mutual Aid allowlist shell is not enabled" />;
   }
 
@@ -242,7 +244,7 @@ function AdminAllowlistPreviewRoute({ authChecked, user, isAdmin }) {
 }
 
 function AdminMutualAidOperationsDashboardRoute({ authChecked, user, isAdmin }) {
-  if (!ENABLE_MUTUAL_AID_OBSERVABILITY) return <PilotDeferredPage title="Mutual Aid observability is not enabled" />;
+  if (!ENABLE_MUTUAL_AID_OBSERVABILITY && !isAdmin) return <PilotDeferredPage title="Mutual Aid observability is not enabled" />;
   if (!authChecked) return <div className="admin-loading">Checking admin access...</div>;
   if (!user) return <Navigate to="/?auth=login" replace />;
   if (!isAdmin) {
@@ -290,7 +292,7 @@ function AdminMutualAidExecutiveDashboardRoute({ authChecked, user, isAdmin }) {
 
 
 function AdminPilotLaunchLockRoute({ authChecked, user, isAdmin }) {
-  if (!ENABLE_MUTUAL_AID_PILOT_LAUNCH_LOCK) {
+  if (!ENABLE_MUTUAL_AID_PILOT_LAUNCH_LOCK && !isAdmin) {
     return <PilotDeferredPage title="Mutual Aid pilot launch lock is not enabled" />;
   }
   if (!authChecked) return <div className="admin-loading">Checking admin access...</div>;
@@ -300,7 +302,7 @@ function AdminPilotLaunchLockRoute({ authChecked, user, isAdmin }) {
 }
 
 function AdminPilotRunbookRoute({ authChecked, user, isAdmin }) {
-  if (!ENABLE_MUTUAL_AID_PILOT_RUNBOOK) {
+  if (!ENABLE_MUTUAL_AID_PILOT_RUNBOOK && !isAdmin) {
     return <PilotDeferredPage title="Mutual Aid pilot runbook is not enabled" />;
   }
   if (!authChecked) return <div className="admin-loading">Checking admin access...</div>;
@@ -310,7 +312,7 @@ function AdminPilotRunbookRoute({ authChecked, user, isAdmin }) {
 }
 
 function AdminPilotSmokeTestsRoute({ authChecked, user, isAdmin }) {
-  if (!ENABLE_MUTUAL_AID_PILOT_SMOKE_TESTS) {
+  if (!ENABLE_MUTUAL_AID_PILOT_SMOKE_TESTS && !isAdmin) {
     return <PilotDeferredPage title="Mutual Aid pilot smoke tests are not enabled" />;
   }
   if (!authChecked) return <div className="admin-loading">Checking admin access...</div>;
@@ -320,7 +322,7 @@ function AdminPilotSmokeTestsRoute({ authChecked, user, isAdmin }) {
 }
 
 function AdminMutualAidReviewWorkflowRoute({ authChecked, user, rbac, isAdmin, children }) {
-  if (!ENABLE_MUTUAL_AID_REVIEW_WORKFLOW) {
+  if (!ENABLE_MUTUAL_AID_REVIEW_WORKFLOW && !isAdmin) {
     return <PilotDeferredPage title="Mutual Aid review workflow is not enabled" />;
   }
 
@@ -341,7 +343,7 @@ function AdminMutualAidReviewWorkflowRoute({ authChecked, user, rbac, isAdmin, c
 }
 
 function AdminMutualAidFinancialControlsRoute({ authChecked, user, rbac, isAdmin }) {
-  if (!ENABLE_MUTUAL_AID_FINANCIAL_CONTROLS) {
+  if (!ENABLE_MUTUAL_AID_FINANCIAL_CONTROLS && !isAdmin) {
     return <PilotDeferredPage title="Mutual Aid financial controls are not enabled" />;
   }
   if (!authChecked) return <div className="admin-loading">Checking Mutual Aid financial access...</div>;
@@ -355,7 +357,7 @@ function AdminMutualAidFinancialControlsRoute({ authChecked, user, rbac, isAdmin
 }
 
 function AdminMutualAidSecurityRoute({ authChecked, user, rbac, isAdmin }) {
-  if (!ENABLE_MUTUAL_AID_SECURITY) return <PilotDeferredPage title="Mutual Aid security dashboard is not enabled" />;
+  if (!ENABLE_MUTUAL_AID_SECURITY && !isAdmin) return <PilotDeferredPage title="Mutual Aid security dashboard is not enabled" />;
   if (!authChecked) return <div className="admin-loading">Loading Mutual Aid security…</div>;
   if (!user) return <Navigate to="/?auth=login" replace />;
   const permissions = Array.isArray(rbac?.permissions) ? rbac.permissions : [];
@@ -366,7 +368,7 @@ function AdminMutualAidSecurityRoute({ authChecked, user, rbac, isAdmin }) {
 }
 
 function AdminMutualAidAnalyticsRoute({ authChecked, user, rbac, isAdmin }) {
-  if (!ENABLE_MUTUAL_AID_ANALYTICS) return <PilotDeferredPage title="Mutual Aid executive analytics are not enabled" />;
+  if (!ENABLE_MUTUAL_AID_ANALYTICS && !isAdmin) return <PilotDeferredPage title="Mutual Aid executive analytics are not enabled" />;
   if (!authChecked) return <div className="admin-loading">Checking Mutual Aid analytics access...</div>;
   if (!user) return <Navigate to="/?auth=login" replace />;
   const permissions = Array.isArray(rbac?.permissions) ? rbac.permissions : [];
@@ -377,18 +379,18 @@ function AdminMutualAidAnalyticsRoute({ authChecked, user, rbac, isAdmin }) {
 }
 
 
-function SocietyBuilderRoute({ authChecked, user, children }) {
-  if (!SOCIETY_BUILDER_ENABLED) return <PilotDeferredPage title="Society Builder is not enabled" />;
+function SocietyBuilderRoute({ authChecked, user, rbac, children }) {
   if (!authChecked) return <div className="admin-loading">Checking Society Builder access...</div>;
   if (!user) return <Navigate to="/?auth=login" replace />;
+  if (!canAccessSocietyBuilder(user, rbac, SOCIETY_BUILDER_ENABLED, authChecked)) return <PilotDeferredPage title="Society Builder is not enabled" />;
   return children;
 }
 
-function AdminSocietyBuilderRoute({ authChecked, user, isAdmin, children }) {
-  if (!SOCIETY_BUILDER_ENABLED) return <PilotDeferredPage title="Society Builder is not enabled" />;
+function AdminSocietyBuilderRoute({ authChecked, user, rbac, isAdmin, children }) {
   if (!authChecked) return <div className="admin-loading">Checking Society Builder admin access...</div>;
   if (!user) return <Navigate to="/?auth=login" replace />;
   if (!isAdmin) return <PilotDeferredPage title="Admin access required" detail="Chapter applications are restricted to Simba Main Hub admins and chapter reviewers." />;
+  if (!canAccessSocietyBuilder(user, rbac, SOCIETY_BUILDER_ENABLED, authChecked)) return <PilotDeferredPage title="Society Builder is not enabled" />;
   return children;
 }
 
@@ -401,7 +403,7 @@ function MutualAidPilotShellRoute({ children }) {
 }
 
 function AdminMutualAidPilotShellRoute({ authChecked, user, isAdmin, children }) {
-  if (!ENABLE_MUTUAL_AID_PILOT_UI_SHELL) {
+  if (!ENABLE_MUTUAL_AID_PILOT_UI_SHELL && !isAdmin) {
     return <PilotDeferredPage title="Mutual Aid pilot UI shell is not enabled" />;
   }
 
@@ -433,22 +435,22 @@ function AppRoutes({ user, rbac, isAdmin, canAccessOrganizer, authChecked, refre
         <Route path="/admin/mutual-aid" element={<AdminPlanningRoute authChecked={authChecked} user={user} isAdmin={isAdmin} />} />
         <Route path="/admin/mutual-aid/pilot-readiness" element={<AdminPilotReadinessRoute authChecked={authChecked} user={user} isAdmin={isAdmin} />} />
         <Route path="/admin/mutual-aid/allowlist-preview" element={<AdminAllowlistPreviewRoute authChecked={authChecked} user={user} isAdmin={isAdmin} />} />
-        {(ENABLE_MUTUAL_AID_OPERATIONS_DASHBOARD || ENABLE_MUTUAL_AID_OBSERVABILITY) ? (
+        {(isAdmin || ENABLE_MUTUAL_AID_OPERATIONS_DASHBOARD || ENABLE_MUTUAL_AID_OBSERVABILITY) ? (
           <Route path="/admin/mutual-aid/dashboard" element={<AdminMutualAidOperationsDashboardRoute authChecked={authChecked} user={user} isAdmin={isAdmin} />} />
         ) : null}
-        {ENABLE_MUTUAL_AID_GOVERNANCE_CENTER ? (
+        {(isAdmin || ENABLE_MUTUAL_AID_GOVERNANCE_CENTER) ? (
           <Route path="/admin/mutual-aid/governance" element={<AdminMutualAidGovernanceRoute authChecked={authChecked} user={user} isAdmin={isAdmin} />} />
         ) : null}
-        {ENABLE_MUTUAL_AID_EXECUTIVE_DASHBOARD ? (
+        {(isAdmin || ENABLE_MUTUAL_AID_EXECUTIVE_DASHBOARD) ? (
           <Route path="/admin/mutual-aid/executive" element={<AdminMutualAidExecutiveDashboardRoute authChecked={authChecked} user={user} isAdmin={isAdmin} />} />
         ) : null}
 
-        <Route path="/simba-main-hub" element={<SocietyBuilderRoute authChecked={authChecked} user={user}><SimbaMainHubPage /></SocietyBuilderRoute>} />
-        <Route path="/societies" element={<SocietyBuilderRoute authChecked={authChecked} user={user}><MySocietiesPage /></SocietyBuilderRoute>} />
-        <Route path="/societies/start" element={<SocietyBuilderRoute authChecked={authChecked} user={user}><SocietyFormationPage /></SocietyBuilderRoute>} />
-        <Route path="/societies/register-chapter" element={<SocietyBuilderRoute authChecked={authChecked} user={user}><SocietyFormationPage /></SocietyBuilderRoute>} />
-        <Route path="/societies/:societyId" element={<SocietyBuilderRoute authChecked={authChecked} user={user}><SocietyHomePage /></SocietyBuilderRoute>} />
-        <Route path="/admin/societies/chapters" element={<AdminSocietyBuilderRoute authChecked={authChecked} user={user} isAdmin={isAdmin}><SocietyChapterAdminPage /></AdminSocietyBuilderRoute>} />
+        <Route path="/simba-main-hub" element={<SocietyBuilderRoute authChecked={authChecked} user={user} rbac={rbac}><SimbaMainHubPage /></SocietyBuilderRoute>} />
+        <Route path="/societies" element={<SocietyBuilderRoute authChecked={authChecked} user={user} rbac={rbac}><MySocietiesPage /></SocietyBuilderRoute>} />
+        <Route path="/societies/start" element={<SocietyBuilderRoute authChecked={authChecked} user={user} rbac={rbac}><SocietyFormationPage /></SocietyBuilderRoute>} />
+        <Route path="/societies/register-chapter" element={<SocietyBuilderRoute authChecked={authChecked} user={user} rbac={rbac}><SocietyFormationPage /></SocietyBuilderRoute>} />
+        <Route path="/societies/:societyId" element={<SocietyBuilderRoute authChecked={authChecked} user={user} rbac={rbac}><SocietyHomePage /></SocietyBuilderRoute>} />
+        <Route path="/admin/societies/chapters" element={<AdminSocietyBuilderRoute authChecked={authChecked} user={user} rbac={rbac} isAdmin={isAdmin}><SocietyChapterAdminPage /></AdminSocietyBuilderRoute>} />
         <Route path="/admin-legacy" element={<Navigate to="/dashboard" replace />} />
         <Route
           path="/fitness"
