@@ -19,6 +19,14 @@ export function isAdminUser(user, rbac) {
   );
 }
 
+export function canUseInternalTestingAccess(user, rbac) {
+  return isAdminUser(user, rbac);
+}
+
+export function canAccessSocietyBuilder(user, rbac, featureEnabled, authChecked) {
+  return Boolean(authChecked && user && (featureEnabled || canUseInternalTestingAccess(user, rbac)));
+}
+
 export function canAccessTextBookOrganizer(user, rbac, featureEnabled, authChecked) {
   const permissions = normalizeList(rbac?.permissions);
 

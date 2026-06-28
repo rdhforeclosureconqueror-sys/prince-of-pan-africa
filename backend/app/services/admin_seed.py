@@ -4,7 +4,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
-from app.models import ActivityLog, MemberProfile, User
+from app.models import ActivityLog, MemberProfile, Role, User, UserRole
 from app.security import hash_password
 
 
@@ -29,6 +29,18 @@ def _find_users_by_normalized_email(db: Session, normalized_email: str) -> list[
         .order_by(User.id.asc())
         .all()
     )
+
+
+def _ensure_superadmin_role_assignment(db: Session, user: User) -> None:
+    role = db.query(Role).filter(Role.name == SUPERADMIN_ROLE).first()
+    if not role:
+        role = Role(name=SUPERADMIN_ROLE)
+        db.add(role)
+        db.flush()
+
+    existing = db.query(UserRole).filter(UserRole.user_id == user.id, UserRole.role_id == role.id).first()
+    if not existing:
+        db.add(UserRole(user_id=user.id, role_id=role.id))
 
 
 def _ensure_profile_and_activity(db: Session, user: User) -> None:
@@ -120,6 +132,7 @@ def seed_admin() -> dict:
                 user.password_hash = password_hash
                 updated = True
 
+        _ensure_superadmin_role_assignment(db, user)
         _ensure_profile_and_activity(db, user)
         db.commit()
 

@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies.auth import require_auth, require_permission
+from app.dependencies.auth import get_current_user, require_auth, require_permission
 from app.models import Society, SocietyBlueprintAudit, SocietyCovenant, SocietyFirstTenMember, SocietyMembership, SocietyPurpose, User
 from app.services.society_builder import (
     DEFAULT_COVENANT,
@@ -144,8 +144,8 @@ def _require_manage_access(db: Session, user: User, society: Society) -> None:
 
 
 @router.get("/main-hub")
-def main_hub(db: Session = Depends(get_db)):
-    require_society_builder_enabled()
+def main_hub(current_user: User | None = Depends(get_current_user), db: Session = Depends(get_db)):
+    require_society_builder_enabled(db, current_user)
     hub = seed_simba_main_hub(db)
     children = db.query(Society).filter(Society.parent_society_id == hub.id, Society.affiliation_status.in_(["approved", "active"])).all()
     return {"ok": True, "main_hub": safe_society_summary(db, hub), "approved_chapters": [safe_society_summary(db, c) for c in children]}
@@ -153,7 +153,7 @@ def main_hub(db: Session = Depends(get_db)):
 
 @router.get("/my-societies")
 def my_societies(current_user: User = Depends(require_permission("society_builder:read_self")), db: Session = Depends(get_db)):
-    require_society_builder_enabled()
+    require_society_builder_enabled(db, current_user)
     ids = {sid for (sid,) in db.query(SocietyMembership.society_id).filter(SocietyMembership.user_id == current_user.id, SocietyMembership.status == "active").all()}
     societies = db.query(Society).filter((Society.founder_user_id == current_user.id) | (Society.id.in_(ids or {-1}))).all()
     return {"ok": True, "societies": [safe_society_summary(db, s) for s in societies]}
@@ -161,7 +161,7 @@ def my_societies(current_user: User = Depends(require_permission("society_builde
 
 @router.post("/societies")
 def create_society(payload: SocietyPayload, current_user: User = Depends(require_permission("society_builder:create_self")), db: Session = Depends(get_db)):
-    require_society_builder_enabled()
+    require_society_builder_enabled(db, current_user)
     root_id = payload.root_society_id
     if payload.parent_society_id and root_id is None:
         parent = _get_society(db, payload.parent_society_id)
@@ -179,7 +179,7 @@ def create_society(payload: SocietyPayload, current_user: User = Depends(require
 
 @router.get("/societies/{society_id}")
 def get_society(society_id: int, current_user: User = Depends(require_permission("society_builder:read_self")), db: Session = Depends(get_db)):
-    require_society_builder_enabled()
+    require_society_builder_enabled(db, current_user)
     society = _get_society(db, society_id)
     _require_member_access(db, current_user, society)
     return {"ok": True, "society": safe_society_summary(db, society), "first_ten_summary": first_ten_summary(db, society.id)}
@@ -187,7 +187,7 @@ def get_society(society_id: int, current_user: User = Depends(require_permission
 
 @router.patch("/societies/{society_id}")
 def patch_society(society_id: int, payload: SocietyPatchPayload, current_user: User = Depends(require_permission("society_builder:update_self")), db: Session = Depends(get_db)):
-    require_society_builder_enabled()
+    require_society_builder_enabled(db, current_user)
     society = _get_society(db, society_id)
     _require_manage_access(db, current_user, society)
     for key, value in payload.model_dump(exclude_unset=True).items():
@@ -198,7 +198,7 @@ def patch_society(society_id: int, payload: SocietyPatchPayload, current_user: U
 
 @router.post("/societies/{society_id}/apply-chapter")
 def apply_chapter(society_id: int, current_user: User = Depends(require_permission("society_builder:update_self")), db: Session = Depends(get_db)):
-    require_society_builder_enabled()
+    require_society_builder_enabled(db, current_user)
     society = _get_society(db, society_id)
     _require_manage_access(db, current_user, society)
     before = {"affiliation_status": society.affiliation_status, "is_chapter": society.is_chapter}
@@ -211,7 +211,7 @@ def apply_chapter(society_id: int, current_user: User = Depends(require_permissi
 
 @router.post("/societies/{society_id}/blueprint-audit")
 def save_blueprint(society_id: int, payload: BlueprintPayload, current_user: User = Depends(require_permission("society_builder:update_self")), db: Session = Depends(get_db)):
-    require_society_builder_enabled()
+    require_society_builder_enabled(db, current_user)
     society = _get_society(db, society_id)
     _require_manage_access(db, current_user, society)
     data = payload.model_dump()
@@ -226,7 +226,7 @@ def save_blueprint(society_id: int, payload: BlueprintPayload, current_user: Use
 
 @router.get("/societies/{society_id}/blueprint-audit/latest")
 def latest_blueprint(society_id: int, current_user: User = Depends(require_permission("society_builder:read_self")), db: Session = Depends(get_db)):
-    require_society_builder_enabled()
+    require_society_builder_enabled(db, current_user)
     society = _get_society(db, society_id)
     _require_member_access(db, current_user, society)
     row = db.query(SocietyBlueprintAudit).filter_by(society_id=society.id).order_by(SocietyBlueprintAudit.created_at.desc(), SocietyBlueprintAudit.id.desc()).first()
@@ -235,7 +235,7 @@ def latest_blueprint(society_id: int, current_user: User = Depends(require_permi
 
 @router.post("/societies/{society_id}/first-ten")
 def add_first_ten(society_id: int, payload: FirstTenPayload, current_user: User = Depends(require_permission("society_builder:update_self")), db: Session = Depends(get_db)):
-    require_society_builder_enabled()
+    require_society_builder_enabled(db, current_user)
     society = _get_society(db, society_id)
     _require_manage_access(db, current_user, society)
     row = SocietyFirstTenMember(society_id=society.id, **payload.model_dump())
@@ -248,7 +248,7 @@ def add_first_ten(society_id: int, payload: FirstTenPayload, current_user: User 
 
 @router.patch("/societies/{society_id}/first-ten/{member_id}")
 def update_first_ten(society_id: int, member_id: int, payload: FirstTenPayload, current_user: User = Depends(require_permission("society_builder:update_self")), db: Session = Depends(get_db)):
-    require_society_builder_enabled()
+    require_society_builder_enabled(db, current_user)
     society = _get_society(db, society_id)
     _require_manage_access(db, current_user, society)
     row = db.query(SocietyFirstTenMember).filter_by(id=member_id, society_id=society.id).first()
@@ -264,7 +264,7 @@ def update_first_ten(society_id: int, member_id: int, payload: FirstTenPayload, 
 
 @router.delete("/societies/{society_id}/first-ten/{member_id}")
 def delete_first_ten(society_id: int, member_id: int, current_user: User = Depends(require_permission("society_builder:update_self")), db: Session = Depends(get_db)):
-    require_society_builder_enabled()
+    require_society_builder_enabled(db, current_user)
     society = _get_society(db, society_id)
     _require_manage_access(db, current_user, society)
     row = db.query(SocietyFirstTenMember).filter_by(id=member_id, society_id=society.id).first()
@@ -277,7 +277,7 @@ def delete_first_ten(society_id: int, member_id: int, current_user: User = Depen
 
 @router.post("/societies/{society_id}/purpose")
 def save_purpose(society_id: int, payload: PurposePayload, current_user: User = Depends(require_permission("society_builder:update_self")), db: Session = Depends(get_db)):
-    require_society_builder_enabled()
+    require_society_builder_enabled(db, current_user)
     society = _get_society(db, society_id)
     _require_manage_access(db, current_user, society)
     statement, prompt = purpose_statement_and_prompt(payload.model_dump())
@@ -292,7 +292,7 @@ def save_purpose(society_id: int, payload: PurposePayload, current_user: User = 
 
 @router.post("/societies/{society_id}/covenant")
 def save_covenant(society_id: int, payload: CovenantPayload, current_user: User = Depends(require_permission("society_builder:update_self")), db: Session = Depends(get_db)):
-    require_society_builder_enabled()
+    require_society_builder_enabled(db, current_user)
     society = _get_society(db, society_id)
     _require_manage_access(db, current_user, society)
     if payload.status not in COVENANT_STATUSES:
@@ -306,7 +306,7 @@ def save_covenant(society_id: int, payload: CovenantPayload, current_user: User 
 
 @router.post("/societies/{society_id}/advance-stage")
 def advance_stage(society_id: int, payload: StagePayload, current_user: User = Depends(require_permission("society_builder:update_self")), db: Session = Depends(get_db)):
-    require_society_builder_enabled()
+    require_society_builder_enabled(db, current_user)
     society = _get_society(db, society_id)
     _require_manage_access(db, current_user, society)
     ok, missing = stage_eligibility(db, society, payload.target_stage)
@@ -321,13 +321,13 @@ def advance_stage(society_id: int, payload: StagePayload, current_user: User = D
 
 @router.get("/admin/chapter-applications")
 def chapter_applications(current_user: User = Depends(require_permission("society_builder:review_chapters")), db: Session = Depends(get_db)):
-    require_society_builder_enabled()
+    require_society_builder_enabled(db, current_user)
     societies = db.query(Society).filter(Society.affiliation_status == "pending_review").all()
     return {"ok": True, "applications": [safe_society_summary(db, s) for s in societies]}
 
 
 def _set_chapter_status(db: Session, society_id: int, current_user: User, status_value: str, action: str):
-    require_society_builder_enabled()
+    require_society_builder_enabled(db, current_user)
     society = _get_society(db, society_id)
     before = {"affiliation_status": society.affiliation_status}
     society.affiliation_status = status_value
@@ -354,7 +354,7 @@ def decline_chapter(society_id: int, current_user: User = Depends(require_permis
 
 @router.post("/admin/societies/{society_id}/stage-override")
 def stage_override(society_id: int, payload: StageOverridePayload, current_user: User = Depends(require_permission("society_builder:override_stage")), db: Session = Depends(get_db)):
-    require_society_builder_enabled()
+    require_society_builder_enabled(db, current_user)
     society = _get_society(db, society_id)
     before = {"lifecycle_stage": society.lifecycle_stage}
     society.lifecycle_stage = payload.target_stage

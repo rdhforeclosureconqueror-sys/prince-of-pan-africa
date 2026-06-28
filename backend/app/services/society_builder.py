@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.authz import user_has_permission
 from app.models import (
     MutualAidAuditLog,
     Society,
@@ -46,9 +47,12 @@ def society_builder_enabled() -> bool:
     return os.getenv("SOCIETY_BUILDER_ENABLED", os.getenv("ENABLE_SOCIETY_BUILDER", "false")).strip().lower() in {"1", "true", "yes", "on"}
 
 
-def require_society_builder_enabled() -> None:
-    if not society_builder_enabled():
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Society Builder is not enabled")
+def require_society_builder_enabled(db: Session | None = None, user=None) -> None:
+    if society_builder_enabled():
+        return
+    if db is not None and user is not None and user_has_permission(db, user, "admin:read_dashboard"):
+        return
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Society Builder is not enabled")
 
 
 def slugify(value: str) -> str:
