@@ -8,17 +8,21 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies.auth import get_current_user, require_auth, require_permission
-from app.models import Society, SocietyBlueprintAudit, SocietyCovenant, SocietyFirstTenMember, SocietyMembership, SocietyPurpose, User
+from app.models import Society, SocietyBlueprintAudit, SocietyCovenant, SocietyFirstTenMember, SocietyInstitutionalProfile, SocietyMembership, SocietyPurpose, User
 from app.services.society_builder import (
     DEFAULT_COVENANT,
     audit,
     blueprint_logic,
     can_manage_society,
     first_ten_summary,
+    active_membership,
+    profile_dict,
     purpose_statement_and_prompt,
     require_society_builder_enabled,
     safe_society_summary,
     seed_simba_main_hub,
+    society_directory,
+    society_profile_presets,
     stage_eligibility,
     unique_society_slug,
 )
@@ -121,6 +125,23 @@ class StageOverridePayload(BaseModel):
     explanation: str = Field(min_length=3, max_length=5000)
 
 
+class InstitutionalProfilePayload(BaseModel):
+    display_name: str = ""
+    headline: str = ""
+    primary_contribution: str = ""
+    contribution_categories_json: list = []
+    availability: str = ""
+    contribution_type: str = "Volunteer"
+    looking_for_json: list = []
+    skills_to_learn_json: list = []
+    goals_json: list = []
+    needs_json: list = []
+    needs_privacy_level: str = "Care Team Only"
+    current_projects_json: list = []
+    impact_summary_json: dict = {}
+    visibility: str = "Society Members"
+
+
 def _get_society(db: Session, society_id: int) -> Society:
     society = db.query(Society).filter(Society.id == society_id).first()
     if not society:
@@ -183,6 +204,74 @@ def get_society(society_id: int, current_user: User = Depends(require_permission
     society = _get_society(db, society_id)
     _require_member_access(db, current_user, society)
     return {"ok": True, "society": safe_society_summary(db, society), "first_ten_summary": first_ten_summary(db, society.id)}
+
+
+@router.get("/societies/{society_id}/institutional-profile/me")
+def get_my_institutional_profile(society_id: int, current_user: User = Depends(require_permission("society_builder:read_self")), db: Session = Depends(get_db)):
+    require_society_builder_enabled(db, current_user)
+    society = _get_society(db, society_id)
+    _require_member_access(db, current_user, society)
+    profile = db.query(SocietyInstitutionalProfile).filter_by(society_id=society.id, user_id=current_user.id).first()
+    return {"ok": True, "society": safe_society_summary(db, society), "profile": profile_dict(profile), "presets": society_profile_presets(society)}
+
+
+def _upsert_profile(db: Session, society: Society, user: User, payload: InstitutionalProfilePayload) -> SocietyInstitutionalProfile:
+    membership = active_membership(db, society.id, user.id)
+    profile = db.query(SocietyInstitutionalProfile).filter_by(society_id=society.id, user_id=user.id).first()
+    if profile is None:
+        profile = SocietyInstitutionalProfile(society_id=society.id, user_id=user.id, society_membership_id=membership.id if membership else None)
+        db.add(profile)
+    data = payload.model_dump()
+    if data.get("needs_privacy_level") not in {"Care Team Only", "Admin Only", "Private", "Society Members"}:
+        data["needs_privacy_level"] = "Care Team Only"
+    for key, value in data.items():
+        setattr(profile, key, value)
+    if not profile.display_name:
+        profile.display_name = user.email.split("@", 1)[0]
+    return profile
+
+
+@router.post("/societies/{society_id}/institutional-profile/me")
+def create_my_institutional_profile(society_id: int, payload: InstitutionalProfilePayload, current_user: User = Depends(require_permission("society_builder:update_self")), db: Session = Depends(get_db)):
+    require_society_builder_enabled(db, current_user)
+    society = _get_society(db, society_id)
+    _require_member_access(db, current_user, society)
+    profile = _upsert_profile(db, society, current_user, payload)
+    db.commit()
+    db.refresh(profile)
+    return {"ok": True, "profile": profile_dict(profile), "presets": society_profile_presets(society)}
+
+
+@router.patch("/societies/{society_id}/institutional-profile/me")
+def patch_my_institutional_profile(society_id: int, payload: InstitutionalProfilePayload, current_user: User = Depends(require_permission("society_builder:update_self")), db: Session = Depends(get_db)):
+    return create_my_institutional_profile(society_id, payload, current_user, db)
+
+
+@router.get("/societies/{society_id}/member-home")
+def society_member_home(society_id: int, current_user: User = Depends(require_permission("society_builder:read_self")), db: Session = Depends(get_db)):
+    require_society_builder_enabled(db, current_user)
+    society = _get_society(db, society_id)
+    _require_member_access(db, current_user, society)
+    profile = db.query(SocietyInstitutionalProfile).filter_by(society_id=society.id, user_id=current_user.id).first()
+    directory = society_directory(db, society.id)
+    newest = db.query(SocietyInstitutionalProfile).filter_by(society_id=society.id).order_by(SocietyInstitutionalProfile.created_at.desc()).limit(5).all()
+    return {
+        "ok": True,
+        "society": safe_society_summary(db, society),
+        "profile": profile_dict(profile),
+        "presets": society_profile_presets(society),
+        "directory_highlights": directory["groups"][:4],
+        "newest_members": [profile_dict(p, include_private=False) for p in newest],
+        "contribution_flow": "Future versions will show how your membership contribution supports Simba, your chosen society, and approved projects.",
+    }
+
+
+@router.get("/societies/{society_id}/directory")
+def get_society_directory(society_id: int, current_user: User = Depends(require_permission("society_builder:read_self")), db: Session = Depends(get_db)):
+    require_society_builder_enabled(db, current_user)
+    society = _get_society(db, society_id)
+    _require_member_access(db, current_user, society)
+    return {"ok": True, "society": safe_society_summary(db, society), "directory": society_directory(db, society.id), "presets": society_profile_presets(society)}
 
 
 @router.patch("/societies/{society_id}")
@@ -361,3 +450,10 @@ def stage_override(society_id: int, payload: StageOverridePayload, current_user:
     audit(db, actor_user_id=current_user.id, action="lifecycle_stage_overridden", entity_id=society.id, before=before, after={"lifecycle_stage": society.lifecycle_stage, "explanation": payload.explanation})
     db.commit()
     return {"ok": True, "society": safe_society_summary(db, society)}
+
+@router.get("/admin/societies/{society_id}/institutional-profiles")
+def admin_institutional_profiles(society_id: int, current_user: User = Depends(require_permission("admin:read_dashboard")), db: Session = Depends(get_db)):
+    require_society_builder_enabled(db, current_user)
+    society = _get_society(db, society_id)
+    profiles = db.query(SocietyInstitutionalProfile).filter_by(society_id=society.id).order_by(SocietyInstitutionalProfile.updated_at.desc()).all()
+    return {"ok": True, "society": safe_society_summary(db, society), "profiles": [profile_dict(p) for p in profiles]}

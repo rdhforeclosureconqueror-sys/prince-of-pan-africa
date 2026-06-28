@@ -852,6 +852,33 @@ class SocietyMembership(Base):
     __table_args__ = (UniqueConstraint("society_id", "user_id", "role", name="uq_society_membership_role"),)
 
 
+class SocietyInstitutionalProfile(Base):
+    __tablename__ = "society_institutional_profiles"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    society_id: Mapped[int] = mapped_column(ForeignKey("societies.id"), nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    society_membership_id: Mapped[int | None] = mapped_column(ForeignKey("society_memberships.id"), nullable=True, index=True)
+    display_name: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    headline: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    primary_contribution: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    contribution_categories_json: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    availability: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    contribution_type: Mapped[str] = mapped_column(String(128), nullable=False, default="Volunteer")
+    looking_for_json: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    skills_to_learn_json: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    goals_json: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    needs_json: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    needs_privacy_level: Mapped[str] = mapped_column(String(64), nullable=False, default="Care Team Only")
+    current_projects_json: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    impact_summary_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    visibility: Mapped[str] = mapped_column(String(64), nullable=False, default="Society Members", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, onupdate=datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint("society_id", "user_id", name="uq_society_institutional_profile_user"),)
+
+
 class SocietyBlueprintAudit(Base):
     __tablename__ = "society_blueprint_audits"
 

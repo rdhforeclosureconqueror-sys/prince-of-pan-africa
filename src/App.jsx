@@ -31,6 +31,9 @@ import SocietyBuilderPage from "./pages/SocietyBuilderPage";
 import SocietyHomePage from "./pages/SocietyHomePage";
 import SocietyFormationPage from "./pages/SocietyFormationPage";
 import SocietyChapterAdminPage from "./pages/SocietyChapterAdminPage";
+import SocietyMemberHomePage from "./pages/SocietyMemberHomePage";
+import SocietyInstitutionalProfilePage from "./pages/SocietyInstitutionalProfilePage";
+import SocietyDirectoryPage from "./pages/SocietyDirectoryPage";
 import MutualAidAdminPlanningPage from "./pages/MutualAidAdminPlanningPage";
 import MutualAidPilotReadinessPage from "./pages/MutualAidPilotReadinessPage";
 import MutualAidAllowlistPreviewPage from "./pages/MutualAidAllowlistPreviewPage";
@@ -449,6 +452,10 @@ function AppRoutes({ user, rbac, isAdmin, canAccessOrganizer, authChecked, refre
         <Route path="/societies" element={<SocietyBuilderRoute authChecked={authChecked} user={user} rbac={rbac}><MySocietiesPage /></SocietyBuilderRoute>} />
         <Route path="/societies/start" element={<SocietyBuilderRoute authChecked={authChecked} user={user} rbac={rbac}><SocietyFormationPage /></SocietyBuilderRoute>} />
         <Route path="/societies/register-chapter" element={<SocietyBuilderRoute authChecked={authChecked} user={user} rbac={rbac}><SocietyFormationPage /></SocietyBuilderRoute>} />
+        <Route path="/societies/:societyId/member-home" element={<SocietyBuilderRoute authChecked={authChecked} user={user} rbac={rbac}><SocietyMemberHomePage /></SocietyBuilderRoute>} />
+        <Route path="/societies/:societyId/profile" element={<SocietyBuilderRoute authChecked={authChecked} user={user} rbac={rbac}><SocietyInstitutionalProfilePage /></SocietyBuilderRoute>} />
+        <Route path="/societies/:societyId/profile/edit" element={<SocietyBuilderRoute authChecked={authChecked} user={user} rbac={rbac}><SocietyInstitutionalProfilePage edit /></SocietyBuilderRoute>} />
+        <Route path="/societies/:societyId/directory" element={<SocietyBuilderRoute authChecked={authChecked} user={user} rbac={rbac}><SocietyDirectoryPage /></SocietyBuilderRoute>} />
         <Route path="/societies/:societyId" element={<SocietyBuilderRoute authChecked={authChecked} user={user} rbac={rbac}><SocietyHomePage /></SocietyBuilderRoute>} />
         <Route path="/admin/societies/chapters" element={<AdminSocietyBuilderRoute authChecked={authChecked} user={user} rbac={rbac} isAdmin={isAdmin}><SocietyChapterAdminPage /></AdminSocietyBuilderRoute>} />
         <Route path="/admin-legacy" element={<Navigate to="/dashboard" replace />} />

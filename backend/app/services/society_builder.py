@@ -14,6 +14,7 @@ from app.models import (
     SocietyBlueprintAudit,
     SocietyCovenant,
     SocietyFirstTenMember,
+    SocietyInstitutionalProfile,
     SocietyMembership,
     SocietyPurpose,
 )
@@ -41,6 +42,13 @@ We will disagree without destroying the room.
 We will not use the society for personal gain without disclosure.
 We will honor elders and train youth.
 We will build systems that can outlive us."""
+
+SOCIETY_TYPE_PRESETS = {
+    "health": ["Personal Training", "Yoga", "Massage Therapy", "Nutrition Coaching", "Walking Group", "Gardening", "Cooking", "Mental Wellness", "CPR Instruction", "Youth Coaching"],
+    "business": ["Accounting", "Marketing", "Sales", "Vendor Referrals", "Grant Writing", "Business Coaching", "Technology", "Legal Referral", "Event Planning", "Photography"],
+    "preparedness": ["CPR", "Transportation", "Emergency Supplies", "Communication Tree", "Elder Check-ins", "Food Storage", "Water Readiness", "Medical Support", "Evacuation Help"],
+    "youth": ["Mentorship", "Tutoring", "Coaching", "Leadership Training", "Technology", "Sports", "History/Archive Projects", "Business Apprenticeship"],
+}
 
 
 def society_builder_enabled() -> bool:
@@ -202,6 +210,58 @@ def _row_dict(row) -> dict | None:
     if row is None:
         return None
     return {c.name: getattr(row, c.name) for c in row.__table__.columns}
+
+
+def society_profile_presets(society: Society) -> dict:
+    text = f"{society.type} {society.first_focus} {society.name}".lower()
+    categories: list[str] = []
+    for key, values in SOCIETY_TYPE_PRESETS.items():
+        if key in text or (key == "health" and "wellness" in text) or (key == "business" and "support" in text):
+            categories.extend(values)
+    if not categories:
+        categories = ["Facilitation", "Volunteering", "Care Coordination", "Event Organizing", "Teaching", "Transportation", "Resource Support"]
+    return {"contribution_categories": list(dict.fromkeys([*categories, "Custom"]))}
+
+
+def active_membership(db: Session, society_id: int, user_id: int) -> SocietyMembership | None:
+    return db.query(SocietyMembership).filter(
+        SocietyMembership.society_id == society_id,
+        SocietyMembership.user_id == user_id,
+        SocietyMembership.status == "active",
+    ).order_by(SocietyMembership.id.asc()).first()
+
+
+def profile_dict(profile: SocietyInstitutionalProfile | None, *, include_private: bool = True) -> dict | None:
+    data = _row_dict(profile)
+    if data and not include_private:
+        data.pop("needs_json", None)
+        data.pop("needs_privacy_level", None)
+    return data
+
+
+def society_directory(db: Session, society_id: int) -> dict:
+    profiles = db.query(SocietyInstitutionalProfile).filter(
+        SocietyInstitutionalProfile.society_id == society_id,
+        SocietyInstitutionalProfile.visibility != "Private",
+    ).order_by(SocietyInstitutionalProfile.updated_at.desc(), SocietyInstitutionalProfile.id.desc()).all()
+    groups: dict[str, list[dict]] = {}
+    for profile in profiles:
+        categories = profile.contribution_categories_json or [profile.primary_contribution or "Custom"]
+        for category in categories or ["Custom"]:
+            label = str(category or "Custom").strip() or "Custom"
+            groups.setdefault(label, []).append({
+                "id": profile.id,
+                "user_id": profile.user_id,
+                "display_name": profile.display_name,
+                "headline": profile.headline,
+                "primary_contribution": profile.primary_contribution,
+                "availability": profile.availability,
+                "contribution_type": profile.contribution_type,
+                "current_projects_json": profile.current_projects_json,
+                "impact_summary_json": profile.impact_summary_json,
+                "visibility": profile.visibility,
+            })
+    return {"groups": [{"category": k, "members": v} for k, v in sorted(groups.items(), key=lambda item: (-len(item[1]), item[0].lower()))]}
 
 
 def safe_society_summary(db: Session, society: Society) -> dict:

@@ -162,6 +162,37 @@ class SocietyBuilderFoundationTests(unittest.TestCase):
         self.assertNotIn("private hardship details", text)
         self.assertNotIn("Private Person", text)
 
+    def test_universal_institutional_profile_member_home_and_directory_privacy(self):
+        s = self.create_society(name="Simba Health & Wellness Society", type="Health & Wellness", first_focus="Health & Wellness")
+        payload = {
+            "display_name": "Amina Builder",
+            "headline": "Walking group and nutrition support",
+            "primary_contribution": "Walking Group",
+            "contribution_categories_json": ["Walking Group", "Nutrition Coaching"],
+            "availability": "Saturday mornings",
+            "contribution_type": "Volunteer",
+            "looking_for_json": ["Community garden partners"],
+            "skills_to_learn_json": ["Yoga"],
+            "goals_json": ["Lower blood pressure goals"],
+            "needs_json": ["Private transportation hardship"],
+            "needs_privacy_level": "Care Team Only",
+            "current_projects_json": ["Garden Build Day"],
+            "impact_summary_json": {"hours": 3},
+            "visibility": "Society Members",
+        }
+        res = self.client.post(f"/society-builder/societies/{s['id']}/institutional-profile/me", json=payload, cookies=self.member_cookie)
+        self.assertEqual(res.status_code, 200, res.text)
+        self.assertIn("Yoga", res.json()["presets"]["contribution_categories"])
+        saved = self.client.get(f"/society-builder/societies/{s['id']}/institutional-profile/me", cookies=self.member_cookie).json()["profile"]
+        self.assertEqual(saved["availability"], "Saturday mornings")
+        home = self.client.get(f"/society-builder/societies/{s['id']}/member-home", cookies=self.member_cookie).json()
+        self.assertEqual(home["contribution_flow"], "Future versions will show how your membership contribution supports Simba, your chosen society, and approved projects.")
+        directory = self.client.get(f"/society-builder/societies/{s['id']}/directory", cookies=self.member_cookie).json()["directory"]
+        text = str(directory)
+        self.assertIn("Walking Group", text)
+        self.assertIn("Nutrition Coaching", text)
+        self.assertNotIn("Private transportation hardship", text)
+
 
 if __name__ == "__main__":
     unittest.main()

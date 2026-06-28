@@ -14,6 +14,11 @@ export const deleteFirstTenMember = (id, memberId) => del(`/society-builder/soci
 export const savePurpose = (id, payload) => post(`/society-builder/societies/${id}/purpose`, payload);
 export const saveCovenant = (id, payload) => post(`/society-builder/societies/${id}/covenant`, payload);
 export const advanceSocietyStage = (id, target_stage) => post(`/society-builder/societies/${id}/advance-stage`, { target_stage });
+export const getSocietyMemberHome = (id) => get(`/society-builder/societies/${id}/member-home`);
+export const getMyInstitutionalProfile = (id) => get(`/society-builder/societies/${id}/institutional-profile/me`);
+export const saveMyInstitutionalProfile = (id, payload) => post(`/society-builder/societies/${id}/institutional-profile/me`, payload);
+export const updateMyInstitutionalProfile = (id, payload) => api(`/society-builder/societies/${id}/institutional-profile/me`, { method: "PATCH", body: JSON.stringify(payload) });
+export const getSocietyDirectory = (id) => get(`/society-builder/societies/${id}/directory`);
 export const getChapterApplications = () => get("/society-builder/admin/chapter-applications");
 export const approveChapter = (id) => post(`/society-builder/admin/chapter-applications/${id}/approve`, {});
 export const requestChapterChanges = (id) => post(`/society-builder/admin/chapter-applications/${id}/request-changes`, {});
