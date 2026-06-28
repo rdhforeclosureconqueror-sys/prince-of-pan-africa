@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import "../styles/globalNav.css";
-import { AUTH_DEBUG, ENABLE_MUTUAL_AID_ALLOWLIST_SHELL, ENABLE_MUTUAL_AID_EXECUTIVE_DASHBOARD, ENABLE_MUTUAL_AID_GOVERNANCE_CENTER, ENABLE_MUTUAL_AID_OPERATIONS_DASHBOARD, ENABLE_MUTUAL_AID_OVERVIEW, ENABLE_MUTUAL_AID_PILOT_UI_SHELL, ENABLE_TEXT_BOOK_ORGANIZER } from "../config";
+import { AUTH_DEBUG, ENABLE_MUTUAL_AID_ALLOWLIST_SHELL, ENABLE_MUTUAL_AID_EXECUTIVE_DASHBOARD, ENABLE_MUTUAL_AID_GOVERNANCE_CENTER, ENABLE_MUTUAL_AID_OPERATIONS_DASHBOARD, ENABLE_MUTUAL_AID_OVERVIEW, ENABLE_MUTUAL_AID_PILOT_UI_SHELL, ENABLE_TEXT_BOOK_ORGANIZER, SOCIETY_BUILDER_ENABLED } from "../config";
 import { PILOT_NAV_LINKS } from "../pilotScope";
 import { getDashboardLabel, isAdminUser } from "../authz";
 
@@ -71,6 +71,17 @@ export default function GlobalNav({ user, rbac, canAccessOrganizer = false, auth
                   </Link>
                 );
               })}
+
+
+              {SOCIETY_BUILDER_ENABLED ? (
+                <>
+                  <Link to="/simba-main-hub" onClick={closeMenu} className={location.pathname === "/simba-main-hub" ? "global-nav__link is-active" : "global-nav__link"}>Simba Main Hub</Link>
+                  <Link to="/societies" onClick={closeMenu} className={location.pathname === "/societies" ? "global-nav__link is-active" : "global-nav__link"}>My Societies</Link>
+                  <Link to="/societies/register-chapter" onClick={closeMenu} className={location.pathname === "/societies/register-chapter" ? "global-nav__link is-active" : "global-nav__link"}>Register a Chapter</Link>
+                  <Link to="/societies/start" onClick={closeMenu} className={location.pathname === "/societies/start" ? "global-nav__link is-active" : "global-nav__link"}>Start a Society</Link>
+                  {isAdmin ? <Link to="/admin/societies/chapters" onClick={closeMenu} className={location.pathname === "/admin/societies/chapters" ? "global-nav__link is-active" : "global-nav__link"}>Chapter Applications</Link> : null}
+                </>
+              ) : null}
 
               {ENABLE_MUTUAL_AID_OVERVIEW ? (
                 <Link

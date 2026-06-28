@@ -1,0 +1,20 @@
+import { get, post, put, del, api } from "./api";
+
+export const getSimbaMainHub = () => get("/society-builder/main-hub");
+export const getMySocieties = () => get("/society-builder/my-societies");
+export const createSociety = (payload) => post("/society-builder/societies", payload);
+export const getSociety = (id) => get(`/society-builder/societies/${id}`);
+export const updateSociety = (id, payload) => api(`/society-builder/societies/${id}`, { method: "PATCH", body: JSON.stringify(payload) });
+export const applyForChapter = (id) => post(`/society-builder/societies/${id}/apply-chapter`, {});
+export const saveBlueprintAudit = (id, payload) => post(`/society-builder/societies/${id}/blueprint-audit`, payload);
+export const getLatestBlueprintAudit = (id) => get(`/society-builder/societies/${id}/blueprint-audit/latest`);
+export const addFirstTenMember = (id, payload) => post(`/society-builder/societies/${id}/first-ten`, payload);
+export const updateFirstTenMember = (id, memberId, payload) => api(`/society-builder/societies/${id}/first-ten/${memberId}`, { method: "PATCH", body: JSON.stringify(payload) });
+export const deleteFirstTenMember = (id, memberId) => del(`/society-builder/societies/${id}/first-ten/${memberId}`);
+export const savePurpose = (id, payload) => post(`/society-builder/societies/${id}/purpose`, payload);
+export const saveCovenant = (id, payload) => post(`/society-builder/societies/${id}/covenant`, payload);
+export const advanceSocietyStage = (id, target_stage) => post(`/society-builder/societies/${id}/advance-stage`, { target_stage });
+export const getChapterApplications = () => get("/society-builder/admin/chapter-applications");
+export const approveChapter = (id) => post(`/society-builder/admin/chapter-applications/${id}/approve`, {});
+export const requestChapterChanges = (id) => post(`/society-builder/admin/chapter-applications/${id}/request-changes`, {});
+export const declineChapter = (id) => post(`/society-builder/admin/chapter-applications/${id}/decline`, {});

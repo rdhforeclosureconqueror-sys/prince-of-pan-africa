@@ -103,6 +103,7 @@ export const ENV = {
 };
 
 const TEXT_BOOK_ORGANIZER_FLAG = import.meta.env.VITE_ENABLE_TEXT_BOOK_ORGANIZER;
+const SOCIETY_BUILDER_FLAG = import.meta.env.VITE_SOCIETY_BUILDER_ENABLED;
 const MUTUAL_AID_OVERVIEW_FLAG = import.meta.env.VITE_ENABLE_MUTUAL_AID_OVERVIEW;
 const MUTUAL_AID_ADMIN_PLANNING_FLAG = import.meta.env.VITE_ENABLE_MUTUAL_AID_ADMIN_PLANNING;
 const MUTUAL_AID_PILOT_UI_SHELL_FLAG = import.meta.env.VITE_ENABLE_MUTUAL_AID_PILOT_UI_SHELL;
@@ -126,6 +127,7 @@ const MUTUAL_AID_SECURITY_FLAG = import.meta.env.VITE_ENABLE_MUTUAL_AID_SECURITY
 const MUTUAL_AID_OBSERVABILITY_FLAG = import.meta.env.VITE_ENABLE_MUTUAL_AID_OBSERVABILITY;
 const MUTUAL_AID_DOCUMENTATION_FLAG = import.meta.env.VITE_ENABLE_MUTUAL_AID_DOCUMENTATION;
 const normalizedTextBookOrganizerFlag = String(TEXT_BOOK_ORGANIZER_FLAG || "").trim().toLowerCase();
+const normalizedSocietyBuilderFlag = String(SOCIETY_BUILDER_FLAG || "").trim().toLowerCase();
 const normalizedMutualAidOverviewFlag = String(MUTUAL_AID_OVERVIEW_FLAG || "").trim().toLowerCase();
 const normalizedMutualAidAdminPlanningFlag = String(MUTUAL_AID_ADMIN_PLANNING_FLAG || "").trim().toLowerCase();
 const normalizedMutualAidPilotUiShellFlag = String(MUTUAL_AID_PILOT_UI_SHELL_FLAG || "").trim().toLowerCase();
@@ -148,6 +150,10 @@ const normalizedMutualAidAnalyticsFlag = String(MUTUAL_AID_ANALYTICS_FLAG || "")
 const normalizedMutualAidSecurityFlag = String(MUTUAL_AID_SECURITY_FLAG || "").trim().toLowerCase();
 const normalizedMutualAidObservabilityFlag = String(MUTUAL_AID_OBSERVABILITY_FLAG || "").trim().toLowerCase();
 const normalizedMutualAidDocumentationFlag = String(MUTUAL_AID_DOCUMENTATION_FLAG || "").trim().toLowerCase();
+
+export const SOCIETY_BUILDER_ENABLED = SOCIETY_BUILDER_FLAG === undefined
+  ? false
+  : ["1", "true", "yes", "on"].includes(normalizedSocietyBuilderFlag);
 
 export const ENABLE_TEXT_BOOK_ORGANIZER = TEXT_BOOK_ORGANIZER_FLAG === undefined
   ? !isDev

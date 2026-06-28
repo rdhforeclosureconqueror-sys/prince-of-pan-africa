@@ -808,3 +808,122 @@ class MutualAidVendorRecipient(Base):
     status: Mapped[str] = mapped_column(String(64), nullable=False, default="inactive")
     contact_metadata: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class Society(Base):
+    __tablename__ = "societies"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    slug: Mapped[str] = mapped_column(String(128), nullable=False, unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    type: Mapped[str] = mapped_column(String(128), nullable=False, default="Custom")
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    community_served: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    location: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    first_focus: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    visibility: Mapped[str] = mapped_column(String(128), nullable=False, default="Private")
+    lifecycle_stage: Mapped[str] = mapped_column(String(128), nullable=False, default="Exploring", index=True)
+    founder_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    parent_society_id: Mapped[int | None] = mapped_column(ForeignKey("societies.id"), nullable=True, index=True)
+    root_society_id: Mapped[int | None] = mapped_column(ForeignKey("societies.id"), nullable=True, index=True)
+    is_main_hub: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
+    is_chapter: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
+    chapter_level: Mapped[str] = mapped_column(String(128), nullable=False, default="independent_society", index=True)
+    affiliation_status: Mapped[str] = mapped_column(String(128), nullable=False, default="draft", index=True)
+    geographic_scope: Mapped[str] = mapped_column(String(128), nullable=False, default="custom", index=True)
+    state: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    city: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    region: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, onupdate=datetime.utcnow)
+
+
+class SocietyMembership(Base):
+    __tablename__ = "society_memberships"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    society_id: Mapped[int] = mapped_column(ForeignKey("societies.id"), nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    role: Mapped[str] = mapped_column(String(128), nullable=False, default="Member", index=True)
+    status: Mapped[str] = mapped_column(String(64), nullable=False, default="active", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, onupdate=datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint("society_id", "user_id", "role", name="uq_society_membership_role"),)
+
+
+class SocietyBlueprintAudit(Base):
+    __tablename__ = "society_blueprint_audits"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    society_id: Mapped[int] = mapped_column(ForeignKey("societies.id"), nullable=False, index=True)
+    trust_score: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    relationships_score: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    mutual_aid_score: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    organization_score: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    institutions_score: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    businesses_score: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    property_score: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    community_wealth_score: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    political_power_score: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    weakest_area: Mapped[str] = mapped_column(String(128), nullable=False, default="Trust")
+    strongest_area: Mapped[str] = mapped_column(String(128), nullable=False, default="Trust")
+    recommended_next_step: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    warning: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, onupdate=datetime.utcnow)
+
+
+class SocietyFirstTenMember(Base):
+    __tablename__ = "society_first_ten_members"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    society_id: Mapped[int] = mapped_column(ForeignKey("societies.id"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    email: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    phone: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    relationship_to_society: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    status: Mapped[str] = mapped_column(String(64), nullable=False, default="Considering", index=True)
+    role: Mapped[str] = mapped_column(String(128), nullable=False, default="Member", index=True)
+    reliability_score: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    confidentiality_score: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    skill_capacity_score: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    financial_steadiness_score: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    relationship_capacity_score: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    possible_contribution: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    invitation_status: Mapped[str] = mapped_column(String(64), nullable=False, default="not_sent", index=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, onupdate=datetime.utcnow)
+
+
+class SocietyPurpose(Base):
+    __tablename__ = "society_purposes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    society_id: Mapped[int] = mapped_column(ForeignKey("societies.id"), nullable=False, index=True)
+    community_served: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    recurring_problem: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    first_focus: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    member_contribution: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    day_100_goal: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    not_doing_yet: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    purpose_statement: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    refinement_prompt: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, onupdate=datetime.utcnow)
+
+
+class SocietyCovenant(Base):
+    __tablename__ = "society_covenants"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    society_id: Mapped[int] = mapped_column(ForeignKey("societies.id"), nullable=False, index=True)
+    covenant_text: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    version: Mapped[str] = mapped_column(String(64), nullable=False, default="v1")
+    status: Mapped[str] = mapped_column(String(64), nullable=False, default="Draft", index=True)
+    accepted_by_members: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, onupdate=datetime.utcnow)

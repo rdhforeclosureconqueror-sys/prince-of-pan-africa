@@ -404,7 +404,9 @@ def init_db() -> None:
     db = SessionLocal()
     try:
         from app.services.mutual_aid import seed_default_mutual_aid_fund
+        from app.services.society_builder import seed_simba_main_hub
 
         seed_default_mutual_aid_fund(db)
+        seed_simba_main_hub(db)
     finally:
         db.close()
