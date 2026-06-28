@@ -198,10 +198,17 @@ def purpose_statement_and_prompt(payload: dict) -> tuple[str, str]:
     return text, prompt
 
 
+def _row_dict(row) -> dict | None:
+    if row is None:
+        return None
+    return {c.name: getattr(row, c.name) for c in row.__table__.columns}
+
+
 def safe_society_summary(db: Session, society: Society) -> dict:
-    audit_done = db.query(SocietyBlueprintAudit).filter(SocietyBlueprintAudit.society_id == society.id).first() is not None
-    purpose_done = db.query(SocietyPurpose).filter(SocietyPurpose.society_id == society.id).first() is not None
-    covenant_done = db.query(SocietyCovenant).filter(SocietyCovenant.society_id == society.id).first() is not None
+    latest_audit = db.query(SocietyBlueprintAudit).filter(SocietyBlueprintAudit.society_id == society.id).order_by(SocietyBlueprintAudit.created_at.desc(), SocietyBlueprintAudit.id.desc()).first()
+    latest_purpose = db.query(SocietyPurpose).filter(SocietyPurpose.society_id == society.id).order_by(SocietyPurpose.created_at.desc(), SocietyPurpose.id.desc()).first()
+    latest_covenant = db.query(SocietyCovenant).filter(SocietyCovenant.society_id == society.id).order_by(SocietyCovenant.created_at.desc(), SocietyCovenant.id.desc()).first()
+    members = db.query(SocietyFirstTenMember).filter(SocietyFirstTenMember.society_id == society.id).order_by(SocietyFirstTenMember.created_at.asc(), SocietyFirstTenMember.id.asc()).all()
     first_ten = first_ten_summary(db, society.id)
     return {
         "id": society.id,
@@ -217,9 +224,13 @@ def safe_society_summary(db: Session, society: Society) -> dict:
         "member_counts": {"first_ten_total": first_ten["total"], "core_members": first_ten["core_members"], "accepted_members": first_ten["accepted_members"]},
         "critical_role_completion": first_ten["critical_role_completion"],
         "missing_critical_roles": first_ten["missing_critical_roles"],
-        "blueprint_audit_completed": audit_done,
-        "purpose_completed": purpose_done,
-        "covenant_completed": covenant_done,
+        "blueprint_audit_completed": latest_audit is not None,
+        "purpose_completed": latest_purpose is not None,
+        "covenant_completed": latest_covenant is not None,
+        "latest_blueprint_audit": _row_dict(latest_audit),
+        "latest_purpose": _row_dict(latest_purpose),
+        "latest_covenant": _row_dict(latest_covenant),
+        "first_ten_members": [_row_dict(m) for m in members],
     }
 
 
