@@ -326,6 +326,34 @@ FIRST_CONTAINER_TITLE = "First Container / 100-Day Formation Container"
 TRUST_TASK_STATUSES = {"backlog", "this_week", "in_progress", "waiting", "completed", "archived"}
 TRUST_TASK_LANES = {"people", "systems", "projects", "community_impact"}
 
+HANDBOOK_BOOK_SLUG = "mutual-aid-society-handbook"
+HANDBOOK_TITLE = "The Mutual Aid Society Handbook"
+
+def _slugify_reference(value: str) -> str:
+    import re
+    return re.sub(r"[^a-z0-9]+", "-", (value or "").lower()).strip("-")
+
+def handbook_source_reference(label: str) -> dict:
+    label = (label or "").strip()
+    if not label:
+        return {}
+    lower = label.lower()
+    if lower.startswith("appendix"):
+        reference_type = "appendix"
+    elif lower.startswith("week"):
+        reference_type = "week"
+    else:
+        reference_type = "chapter"
+    return {
+        "source_book_slug": HANDBOOK_BOOK_SLUG,
+        "source_book_id": None,
+        "source_section_id": None,
+        "source_chapter_slug": _slugify_reference(label),
+        "source_chapter_label": label,
+        "source_reader_path": "",
+        "source_reference_type": reference_type,
+    }
+
 FIRST_CONTAINER_MILESTONE_TEMPLATES = [
     ("Understand the Blueprint", "Part One: Understand the Blueprint — chapters 1–3. Build the first trustworthy container by naming the recurring problem, completing the Blueprint Audit, and choosing the first focus.", "Part One", 15),
     ("Form the Society", "Part Two: Form the Society — chapters 4–7. Start a society, name the First Ten, save purpose, and create the covenant.", "Part Two", 20),
@@ -489,7 +517,7 @@ def activate_first_container(db: Session, society: Society, actor_user_id: int |
             m = milestone_by_title[milestone_title]
             for idx, (title, desc, lane, module, chapter, step) in enumerate(rows, 1):
                 status = "this_week" if m.sequence_order == 1 else "backlog"
-                db.add(SocietyTrustTask(society_id=society.id, container_id=container.id, milestone_id=m.id, title=title, description=desc, status=status, lane=lane, task_type="container_step", linked_module=module, linked_handbook_chapter=chapter, linked_container_step=step, priority="high" if idx == 1 else "normal", created_from_template=True, created_by=actor_user_id))
+                db.add(SocietyTrustTask(society_id=society.id, container_id=container.id, milestone_id=m.id, title=title, description=desc, status=status, lane=lane, task_type="container_step", linked_module=module, linked_handbook_chapter=chapter, linked_container_step=step, priority="high" if idx == 1 else "normal", created_from_template=True, created_by=actor_user_id, **handbook_source_reference(chapter)))
                 task_count += 1
         db.flush()
         logger.info("activate_first_container inserted tasks society_id=%s container_id=%s count=%s", society.id, container.id, task_count)
@@ -523,4 +551,7 @@ def container_dict(db: Session, container) -> dict:
 
 
 def task_dict(task) -> dict:
-    return _row_dict(task)
+    data = _row_dict(task)
+    if data.get("linked_handbook_chapter") and not data.get("source_chapter_label"):
+        data.update(handbook_source_reference(data["linked_handbook_chapter"]))
+    return data

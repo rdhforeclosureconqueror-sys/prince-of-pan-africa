@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
-import { getTrustBoard, updateTrustTask } from "../api/societyBuilder";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { getTrustBoard, getTrustTaskReaderReference, updateTrustTask } from "../api/societyBuilder";
 import "../styles/societyBuilder.css";
 
 const COLUMNS = [
@@ -33,6 +33,7 @@ export default function SocietyTrustBoardPage() {
   const [error, setError] = useState("");
   const [msg, setMsg] = useState("");
   const [showGuide, setShowGuide] = useState(true);
+  const navigate = useNavigate();
 
   async function load() {
     const next = await getTrustBoard(societyId);
@@ -42,6 +43,25 @@ export default function SocietyTrustBoardPage() {
   useEffect(() => {
     load().catch((e) => setError(e.message || "Unable to load Trust Board."));
   }, [societyId]);
+
+  async function openReading(task) {
+    setError("");
+    setMsg("");
+    try {
+      const res = await getTrustTaskReaderReference(societyId, task.id);
+      const reference = res.reference || {};
+      if (reference.connected && reference.reader_path) {
+        navigate(reference.reader_path);
+      } else if (reference.reader_path && reference.reader_path !== "/study") {
+        setMsg(reference.message || "Opening the handbook library fallback.");
+        navigate(reference.reader_path);
+      } else {
+        setMsg(reference.message || "Chapter link will open when the handbook is connected.");
+      }
+    } catch (e) {
+      setError(e.message || "Unable to open the handbook reference.");
+    }
+  }
 
   async function changeStatus(task, status) {
     setError("");
@@ -95,7 +115,7 @@ export default function SocietyTrustBoardPage() {
       <section className="society-board-grid trust-board-grid">
         {COLUMNS.map(([key, label, description]) => { const tasks = board.columns?.[key] || []; return <article className={`society-card trust-column trust-column-${key}`} key={key}>
           <div className="trust-column-head"><div><h2>{label}</h2><p>{description}</p>{key === "completed" && <p className="trust-memory">Completed work becomes society memory.</p>}</div><span className="trust-count">{tasks.length}</span></div>
-          {tasks.map((task) => <TaskCard key={task.id} task={task} onStatusChange={changeStatus} />)}
+          {tasks.map((task) => <TaskCard key={task.id} task={task} onStatusChange={changeStatus} onOpenReading={openReading} />)}
           {!tasks.length && <p className="society-muted trust-empty">{EMPTY_STATES[key]}</p>}
         </article>; })}
       </section>
@@ -103,14 +123,26 @@ export default function SocietyTrustBoardPage() {
   </main>;
 }
 
-function TaskCard({ task, onStatusChange }) {
+function TaskCard({ task, onStatusChange, onOpenReading }) {
   const lane = LANE_META[task.lane] || ["◆", task.lane || "Lane", ""];
   return <div className={`society-task-card trust-task-card ${task.status === "completed" ? "is-completed" : ""}`}>
     <div className="trust-card-badges"><span className="trust-badge">{task.status === "completed" ? "✅ Completed" : STATUS_LABELS[task.status] || task.status}</span><span className="trust-badge lane">{lane[0]} {lane[1]}</span></div>
     <h3>{task.title}</h3>
     <p>{task.description}</p>
     {task.status === "completed" && <p className="trust-complete-note">✅ Completed — This strengthens the container.</p>}
-    <div className="trust-task-meta"><span>🙋 Owner: {task.owner_member_id || "Unassigned"}</span><span>🗓️ Due: {task.due_date || "Not set"}</span><span>🔗 Module: {task.linked_module || "None"}</span><span>📖 Handbook: {task.linked_handbook_chapter || task.linked_container_step || "None"}</span>{task.status === "waiting" && task.blocked_reason && <span className="trust-blocked">🚧 Blocked: {task.blocked_reason}</span>}</div>
+    <div className="trust-task-meta"><span>🙋 Owner: {task.owner_member_id || "Unassigned"}</span><span>🗓️ Due: {task.due_date || "Not set"}</span><span>🔗 Module: {task.linked_module || "None"}</span><RelatedReading task={task} onOpenReading={onOpenReading} />{task.status === "waiting" && task.blocked_reason && <span className="trust-blocked">🚧 Blocked: {task.blocked_reason}</span>}</div>
     <label>Status<select value={task.status} onChange={(e) => onStatusChange(task, e.target.value)}>{STATUSES.map((status) => <option key={status} value={status}>{status.replace("_", " ")}</option>)}</select></label>
   </div>;
+}
+
+
+function RelatedReading({ task, onOpenReading }) {
+  const label = task.source_chapter_label || task.linked_handbook_chapter || task.linked_container_step || "";
+  if (!label) return <span>📖 Related Reading: None</span>;
+  const hasSource = task.source_book_slug || task.source_book_id || task.source_reader_path || task.source_chapter_label || task.linked_handbook_chapter;
+  return <span className="trust-related-reading">
+    <strong>📖 Related Reading</strong>
+    <em>{label}</em>
+    {hasSource ? <button type="button" className="trust-reading-link" onClick={() => onOpenReading(task)}>Read Chapter</button> : <small>Handbook link not connected yet</small>}
+  </span>;
 }

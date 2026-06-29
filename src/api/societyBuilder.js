@@ -28,3 +28,5 @@ export const getActiveContainer = (id) => get(`/society-builder/societies/${id}/
 export const getTrustBoard = (id) => get(`/society-builder/societies/${id}/trust-board`);
 export const createTrustTask = (id, payload) => post(`/society-builder/societies/${id}/trust-board/tasks`, payload);
 export const updateTrustTask = (id, taskId, payload) => api(`/society-builder/societies/${id}/trust-board/tasks/${taskId}`, { method: "PATCH", body: JSON.stringify(payload) });
+
+export const getTrustTaskReaderReference = (id, taskId) => get(`/society-builder/societies/${id}/trust-board/tasks/${taskId}/reader-reference`);

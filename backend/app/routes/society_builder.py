@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies.auth import get_current_user, require_auth, require_permission
-from app.models import Society, SocietyBlueprintAudit, SocietyContainer, SocietyContainerMilestone, SocietyCovenant, SocietyFirstTenMember, SocietyInstitutionalProfile, SocietyMembership, SocietyPurpose, SocietyTrustTask, User
+from app.models import Society, SocietyBlueprintAudit, SocietyContainer, SocietyContainerMilestone, SocietyCovenant, SocietyFirstTenMember, SocietyInstitutionalProfile, SocietyMembership, SocietyPurpose, SocietyTrustTask, User, Audiobook, AudiobookChapter
 from app.services.society_builder import (
     DEFAULT_COVENANT,
     FIRST_CONTAINER_TYPE,
@@ -33,6 +33,8 @@ from app.services.society_builder import (
     stage_eligibility,
     task_dict,
     unique_society_slug,
+    HANDBOOK_BOOK_SLUG,
+    HANDBOOK_TITLE,
 )
 
 logger = logging.getLogger(__name__)
@@ -181,6 +183,38 @@ class TrustTaskCreatePayload(BaseModel):
     priority: str = "normal"
     blocked_reason: str = ""
 
+
+
+def _chapter_number(label: str) -> int | None:
+    import re
+    match = re.search(r"(?:chapter|week)\s+(\d+)", label or "", re.IGNORECASE)
+    return int(match.group(1)) if match else None
+
+def _resolve_task_reader_reference(db: Session, task: SocietyTrustTask, user: User) -> dict:
+    label = task.source_chapter_label or task.linked_handbook_chapter or ""
+    if task.source_reader_path:
+        return {"connected": True, "reader_path": task.source_reader_path}
+    book = None
+    if task.source_book_id:
+        book = db.query(Audiobook).filter(Audiobook.id == task.source_book_id).first()
+    if not book:
+        title_candidates = {HANDBOOK_TITLE.lower(), (task.source_book_slug or HANDBOOK_BOOK_SLUG).replace("-", " ").lower()}
+        books = db.query(Audiobook).filter((Audiobook.user_id == user.id) | (Audiobook.access_level.in_(["public", "free", "subscription", "member", "subscriber"]))).all()
+        book = next((b for b in books if (b.title or "").strip().lower() in title_candidates), None)
+    if not book:
+        return {"connected": False, "reader_path": "/study", "message": "Chapter link will open when the handbook is connected.", "book_slug": task.source_book_slug or HANDBOOK_BOOK_SLUG, "book_title": HANDBOOK_TITLE}
+    chapter = None
+    if task.source_section_id:
+        chapter = db.query(AudiobookChapter).filter(AudiobookChapter.id == task.source_section_id, AudiobookChapter.audiobook_id == book.id).first()
+    if not chapter:
+        number = _chapter_number(label)
+        if number:
+            chapter = db.query(AudiobookChapter).filter(AudiobookChapter.audiobook_id == book.id, AudiobookChapter.chapter_index == number).first()
+        if not chapter and label:
+            chapter = next((c for c in book.chapters if label.lower() in (c.title or "").lower()), None)
+    if not chapter:
+        return {"connected": False, "reader_path": f"/study?book={book.id}", "message": "Chapter link will open when the handbook section is connected.", "book_id": book.id, "book_title": book.title}
+    return {"connected": True, "reader_path": f"/study?book={book.id}&chapter={chapter.chapter_index}", "book_id": book.id, "section_id": chapter.id, "chapter_index": chapter.chapter_index, "chapter_title": chapter.title}
 
 def _get_society(db: Session, society_id: int) -> Society:
     society = db.query(Society).filter(Society.id == society_id).first()
@@ -498,6 +532,17 @@ def trust_board(society_id: int, current_user: User = Depends(require_permission
             columns[task.status].append(task_dict(task))
     return {"ok": True, "container": container_dict(db, container), "columns": columns}
 
+
+
+@router.get("/societies/{society_id}/trust-board/tasks/{task_id}/reader-reference")
+def trust_task_reader_reference(society_id: int, task_id: int, current_user: User = Depends(require_permission("society_builder:read_self")), db: Session = Depends(get_db)):
+    require_society_builder_enabled(db, current_user)
+    society = _get_society(db, society_id)
+    _require_member_access(db, current_user, society)
+    task = db.query(SocietyTrustTask).filter_by(id=task_id, society_id=society.id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return {"ok": True, "reference": _resolve_task_reader_reference(db, task, current_user)}
 
 @router.post("/societies/{society_id}/trust-board/tasks")
 def create_trust_task(society_id: int, payload: TrustTaskCreatePayload, current_user: User = Depends(require_permission("society_builder:update_self")), db: Session = Depends(get_db)):
