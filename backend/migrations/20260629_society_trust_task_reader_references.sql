@@ -1,0 +1,10 @@
+ALTER TABLE society_trust_tasks ADD COLUMN IF NOT EXISTS source_book_slug VARCHAR(255) NOT NULL DEFAULT '';
+ALTER TABLE society_trust_tasks ADD COLUMN IF NOT EXISTS source_book_id INTEGER;
+ALTER TABLE society_trust_tasks ADD COLUMN IF NOT EXISTS source_section_id INTEGER;
+ALTER TABLE society_trust_tasks ADD COLUMN IF NOT EXISTS source_chapter_slug VARCHAR(255) NOT NULL DEFAULT '';
+ALTER TABLE society_trust_tasks ADD COLUMN IF NOT EXISTS source_chapter_label VARCHAR(128) NOT NULL DEFAULT '';
+ALTER TABLE society_trust_tasks ADD COLUMN IF NOT EXISTS source_reader_path TEXT NOT NULL DEFAULT '';
+ALTER TABLE society_trust_tasks ADD COLUMN IF NOT EXISTS source_reference_type VARCHAR(64) NOT NULL DEFAULT '';
+CREATE INDEX IF NOT EXISTS ix_society_trust_tasks_source_book_id ON society_trust_tasks (source_book_id);
+CREATE INDEX IF NOT EXISTS ix_society_trust_tasks_source_section_id ON society_trust_tasks (source_section_id);
+CREATE INDEX IF NOT EXISTS ix_society_trust_tasks_source_book_slug ON society_trust_tasks (source_book_slug);

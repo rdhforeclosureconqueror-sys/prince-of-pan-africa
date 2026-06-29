@@ -188,7 +188,11 @@ export default function StudyPage() {
       const response = await api(`/audiobooks/${id}`, { method: "GET", credentials: "include" });
       setSelectedBook(response);
       setGenerationProgress(response.generation_progress || null);
-      const safeChapterIndex = Math.max(0, (response.progress?.chapter_index || 1) - 1);
+      const params = new URLSearchParams(location.search);
+      const requestedChapter = Number(params.get("chapter") || 0);
+      const progressChapterIndex = Math.max(0, (response.progress?.chapter_index || 1) - 1);
+      const requestedChapterIndex = requestedChapter > 0 ? requestedChapter - 1 : progressChapterIndex;
+      const safeChapterIndex = Math.min(Math.max(0, requestedChapterIndex), Math.max((response.chapters?.length || 1) - 1, 0));
       setActiveChapterIndex(safeChapterIndex);
       setPlaybackRate(Number(response.progress?.playback_rate || 1));
       setResumePositionSeconds(Number(response.progress?.position_seconds || 0));
