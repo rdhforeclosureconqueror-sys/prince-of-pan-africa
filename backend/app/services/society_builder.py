@@ -4,6 +4,7 @@ import logging
 import os
 import re
 from dataclasses import dataclass
+from datetime import date, datetime, timedelta
 
 from fastapi import HTTPException, status
 from sqlalchemy.exc import SQLAlchemyError
@@ -386,7 +387,6 @@ FIRST_CONTAINER_TASK_TEMPLATES = {
 
 
 def _today():
-    from datetime import date
     return date.today()
 
 
@@ -460,7 +460,6 @@ def recalculate_container_progress(db: Session, container) -> None:
 
 
 def activate_first_container(db: Session, society: Society, actor_user_id: int | None):
-    from datetime import timedelta
     from app.models import SocietyContainer, SocietyContainerMilestone, SocietyTrustTask
 
     logger.info("activate_first_container started society_id=%s actor_user_id=%s", society.id, actor_user_id)
