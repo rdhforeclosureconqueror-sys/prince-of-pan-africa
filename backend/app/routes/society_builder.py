@@ -8,22 +8,28 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies.auth import get_current_user, require_auth, require_permission
-from app.models import Society, SocietyBlueprintAudit, SocietyCovenant, SocietyFirstTenMember, SocietyInstitutionalProfile, SocietyMembership, SocietyPurpose, User
+from app.models import Society, SocietyBlueprintAudit, SocietyContainer, SocietyContainerMilestone, SocietyCovenant, SocietyFirstTenMember, SocietyInstitutionalProfile, SocietyMembership, SocietyPurpose, SocietyTrustTask, User
 from app.services.society_builder import (
     DEFAULT_COVENANT,
+    FIRST_CONTAINER_TYPE,
+    TRUST_TASK_STATUSES,
+    activate_first_container,
     audit,
     blueprint_logic,
     can_manage_society,
+    container_dict,
     first_ten_summary,
     active_membership,
     profile_dict,
     purpose_statement_and_prompt,
     require_society_builder_enabled,
     safe_society_summary,
+    recalculate_container_progress,
     seed_simba_main_hub,
     society_directory,
     society_profile_presets,
     stage_eligibility,
+    task_dict,
     unique_society_slug,
 )
 
@@ -142,6 +148,36 @@ class InstitutionalProfilePayload(BaseModel):
     visibility: str = "Society Members"
 
 
+class TrustTaskPatchPayload(BaseModel):
+    title: str | None = None
+    description: str | None = None
+    status: str | None = None
+    lane: str | None = None
+    owner_member_id: int | None = None
+    linked_role: str | None = None
+    due_date: str | None = None
+    blocked_reason: str | None = None
+    completion_notes: str | None = None
+    priority: str | None = None
+
+
+class TrustTaskCreatePayload(BaseModel):
+    title: str = Field(min_length=1, max_length=255)
+    description: str = ""
+    milestone_id: int | None = None
+    status: str = "backlog"
+    lane: str = "systems"
+    task_type: str = "manual"
+    owner_member_id: int | None = None
+    linked_role: str = ""
+    linked_module: str = ""
+    linked_handbook_chapter: str = ""
+    linked_container_step: str = ""
+    due_date: str | None = None
+    priority: str = "normal"
+    blocked_reason: str = ""
+
+
 def _get_society(db: Session, society_id: int) -> Society:
     society = db.query(Society).filter(Society.id == society_id).first()
     if not society:
@@ -255,9 +291,12 @@ def society_member_home(society_id: int, current_user: User = Depends(require_pe
     profile = db.query(SocietyInstitutionalProfile).filter_by(society_id=society.id, user_id=current_user.id).first()
     directory = society_directory(db, society.id)
     newest = db.query(SocietyInstitutionalProfile).filter_by(society_id=society.id).order_by(SocietyInstitutionalProfile.created_at.desc()).limit(5).all()
+    active_container = db.query(SocietyContainer).filter_by(society_id=society.id, status="active").order_by(SocietyContainer.created_at.desc(), SocietyContainer.id.desc()).first()
+    active_container_summary = container_dict(db, active_container) if active_container else None
     return {
         "ok": True,
         "society": safe_society_summary(db, society),
+        "active_container": active_container_summary,
         "profile": profile_dict(profile),
         "presets": society_profile_presets(society),
         "directory_highlights": directory["groups"][:4],
@@ -407,6 +446,101 @@ def advance_stage(society_id: int, payload: StagePayload, current_user: User = D
     db.commit()
     return {"ok": True, "advanced": True, "society": safe_society_summary(db, society)}
 
+
+
+@router.post("/societies/{society_id}/containers/first-100-days/activate")
+def activate_first_100_days_container(society_id: int, current_user: User = Depends(require_permission("society_builder:update_self")), db: Session = Depends(get_db)):
+    require_society_builder_enabled(db, current_user)
+    society = _get_society(db, society_id)
+    _require_manage_access(db, current_user, society)
+    container = activate_first_container(db, society, current_user.id)
+    db.commit()
+    db.refresh(container)
+    return {"ok": True, "container": container_dict(db, container)}
+
+
+@router.get("/societies/{society_id}/containers/active")
+def active_container(society_id: int, current_user: User = Depends(require_permission("society_builder:read_self")), db: Session = Depends(get_db)):
+    require_society_builder_enabled(db, current_user)
+    society = _get_society(db, society_id)
+    _require_member_access(db, current_user, society)
+    container = db.query(SocietyContainer).filter_by(society_id=society.id, status="active").order_by(SocietyContainer.created_at.desc(), SocietyContainer.id.desc()).first()
+    return {"ok": True, "container": container_dict(db, container) if container else None, "start_available": container is None}
+
+
+@router.get("/societies/{society_id}/trust-board")
+def trust_board(society_id: int, current_user: User = Depends(require_permission("society_builder:read_self")), db: Session = Depends(get_db)):
+    require_society_builder_enabled(db, current_user)
+    society = _get_society(db, society_id)
+    _require_member_access(db, current_user, society)
+    container = db.query(SocietyContainer).filter_by(society_id=society.id, status="active").order_by(SocietyContainer.created_at.desc(), SocietyContainer.id.desc()).first()
+    if not container:
+        return {"ok": True, "container": None, "columns": {status: [] for status in ["backlog", "this_week", "in_progress", "waiting", "completed"]}}
+    recalculate_container_progress(db, container)
+    db.commit()
+    tasks = db.query(SocietyTrustTask).filter_by(container_id=container.id).order_by(SocietyTrustTask.id.asc()).all()
+    columns = {status: [] for status in ["backlog", "this_week", "in_progress", "waiting", "completed"]}
+    for task in tasks:
+        if task.status in columns:
+            columns[task.status].append(task_dict(task))
+    return {"ok": True, "container": container_dict(db, container), "columns": columns}
+
+
+@router.post("/societies/{society_id}/trust-board/tasks")
+def create_trust_task(society_id: int, payload: TrustTaskCreatePayload, current_user: User = Depends(require_permission("society_builder:update_self")), db: Session = Depends(get_db)):
+    require_society_builder_enabled(db, current_user)
+    society = _get_society(db, society_id)
+    _require_manage_access(db, current_user, society)
+    if payload.status not in TRUST_TASK_STATUSES or payload.lane not in {"people", "systems", "projects", "community_impact"}:
+        raise HTTPException(status_code=400, detail="Invalid task status or lane")
+    container = db.query(SocietyContainer).filter_by(society_id=society.id, status="active").first()
+    if not container:
+        raise HTTPException(status_code=404, detail="No active container")
+    data = payload.model_dump()
+    row = SocietyTrustTask(society_id=society.id, container_id=container.id, created_by=current_user.id, created_from_template=False, **data)
+    if row.status == "completed":
+        row.completed_at = datetime.utcnow()
+    db.add(row)
+    audit(db, actor_user_id=current_user.id, action="trust_task_created", entity_id=society.id, after={"task": row.title})
+    recalculate_container_progress(db, container)
+    db.commit()
+    db.refresh(row)
+    return {"ok": True, "task": task_dict(row), "container": container_dict(db, container)}
+
+
+@router.patch("/societies/{society_id}/trust-board/tasks/{task_id}")
+def update_trust_task(society_id: int, task_id: int, payload: TrustTaskPatchPayload, current_user: User = Depends(require_permission("society_builder:update_self")), db: Session = Depends(get_db)):
+    require_society_builder_enabled(db, current_user)
+    society = _get_society(db, society_id)
+    _require_member_access(db, current_user, society)
+    task = db.query(SocietyTrustTask).filter_by(id=task_id, society_id=society.id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    membership = active_membership(db, society.id, current_user.id)
+    can_manage = can_manage_society(db, current_user.id, society)
+    if not can_manage and (not membership or task.owner_member_id != membership.id):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    data = payload.model_dump(exclude_unset=True)
+    if data.get("status") and data["status"] not in TRUST_TASK_STATUSES:
+        raise HTTPException(status_code=400, detail="Invalid task status")
+    if data.get("lane") and data["lane"] not in {"people", "systems", "projects", "community_impact"}:
+        raise HTTPException(status_code=400, detail="Invalid task lane")
+    if not can_manage:
+        data = {k: v for k, v in data.items() if k in {"status", "blocked_reason", "completion_notes"}}
+    before = {"status": task.status}
+    for key, value in data.items():
+        setattr(task, key, value or "" if key in {"blocked_reason", "completion_notes", "description"} else value)
+    if task.status == "completed" and task.completed_at is None:
+        task.completed_at = datetime.utcnow()
+    if task.status != "completed":
+        task.completed_at = None
+    container = db.query(SocietyContainer).filter_by(id=task.container_id).first()
+    audit(db, actor_user_id=current_user.id, action="trust_task_updated", entity_id=society.id, before=before, after={"task_id": task.id, "status": task.status})
+    if container:
+        recalculate_container_progress(db, container)
+    db.commit()
+    db.refresh(task)
+    return {"ok": True, "task": task_dict(task), "container": container_dict(db, container) if container else None}
 
 @router.get("/admin/chapter-applications")
 def chapter_applications(current_user: User = Depends(require_permission("society_builder:review_chapters")), db: Session = Depends(get_db)):

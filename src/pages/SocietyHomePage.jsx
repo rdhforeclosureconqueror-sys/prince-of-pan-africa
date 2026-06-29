@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import {
   addFirstTenMember,
   advanceSocietyStage,
@@ -8,6 +8,8 @@ import {
   saveBlueprintAudit,
   saveCovenant,
   savePurpose,
+  activateFirst100DaysContainer,
+  getActiveContainer,
 } from "../api/societyBuilder";
 import "../styles/societyBuilder.css";
 
@@ -57,10 +59,17 @@ export default function SocietyHomePage() {
   const [purpose, setPurpose] = useState({ community_served: "", recurring_problem: "", first_focus: "", member_contribution: "show up consistently and contribute as agreed", day_100_goal: "long-term community capacity", not_doing_yet: "" });
   const [covenant, setCovenant] = useState(DEFAULT_COVENANT);
   const [audit, setAudit] = useState(Object.fromEntries(scoreFields.map(([key]) => [key, 3])));
+  const [activeContainer, setActiveContainer] = useState(null);
 
   async function load() {
     const next = await getSociety(societyId);
     setData(next);
+    try {
+      const container = await getActiveContainer(societyId);
+      setActiveContainer(container.container);
+    } catch (_) {
+      setActiveContainer(null);
+    }
     return next;
   }
 
@@ -107,6 +116,7 @@ export default function SocietyHomePage() {
   return <main className="society-builder-shell">
     <p className="society-kicker">Society Home</p><h1>{s.name}</h1><p className="society-warning">You are building the foundation before wealth arrives.</p>
     {msg && <p className="society-success">{msg}</p>}{error && <p className="society-warning">{error}</p>}
+    <section className="society-grid"><article className="society-card"><h2>Active Container</h2>{activeContainer ? <><p><strong>{activeContainer.title}</strong></p><p>Mission Progress: {activeContainer.percent_complete}%</p><p>Current Day: {activeContainer.current_day}</p><p>Current Week: {activeContainer.current_week}</p><p>Next Milestone: {activeContainer.active_milestone?.title || "Day 100 Report"}</p><p>This Week Tasks: {activeContainer.task_counts?.this_week || 0}</p><p>Blocked Tasks: {activeContainer.task_counts?.waiting || 0}</p><Link className="society-btn" to={`/societies/${s.id}/trust-board`}>Open Trust Board</Link></> : <><p>Start the First 100 Days Container</p><button className="society-btn" onClick={() => run(() => activateFirst100DaysContainer(s.id), "First 100 Days Container started.")}>Start the First 100 Days Container</button></>}</article></section>
     <section className="society-grid"><article className="society-card"><h2>Foundation status</h2><p>Stage: {humanize(s.lifecycle_stage)}</p><p>Chapter level: {humanize(s.chapter_level)}</p><p>Affiliation: {humanize(s.affiliation_status)}</p><ul className="society-progress-list"><li>Blueprint Audit: {s.blueprint_audit_completed ? "Complete" : "Needed"}</li><li>Purpose Builder: {s.purpose_completed ? "Complete" : "Needed"}</li><li>Covenant: {s.covenant_completed ? "Complete" : "Needed"}</li><li>Missing critical roles: {s.missing_critical_roles?.join(", ") || "none"}</li></ul><button className="society-btn secondary" onClick={() => run(() => applyForChapter(s.id), "Chapter application submitted.")}>Apply to Register a Chapter</button></article>
     <article className="society-card"><h2>Blueprint Audit</h2><p>Score each MVP 1 foundation area from 1 (weak) to 5 (strong).</p><div className="society-form compact">{scoreFields.map(([key, label]) => <label key={key}>{label}<select value={audit[key]} onChange={(e) => setAudit({ ...audit, [key]: Number(e.target.value) })}>{[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}</select></label>)}<label>Notes<textarea value={audit.notes || ""} onChange={(e) => setAudit({ ...audit, notes: e.target.value })} /></label></div><button className="society-btn" onClick={() => run(() => saveBlueprintAudit(s.id, audit), "Blueprint Audit saved.")}>Save Blueprint Audit</button>{latestAudit && <div className="society-result"><p>Weakest area: {latestAudit.weakest_area}</p><p>Strongest area: {latestAudit.strongest_area}</p><p>Recommended next step: {latestAudit.recommended_next_step}</p>{latestAudit.warning && <p className="society-warning">{latestAudit.warning}</p>}</div>}</article></section>
     <section className="society-grid"><article className="society-card"><h2>Name Your First Ten</h2><div className="society-form compact"><label>Name<input value={first.name} onChange={(e) => setFirst({ ...first, name: e.target.value })} /></label><label>Role<select value={first.role} onChange={(e) => setFirst({ ...first, role: e.target.value })}>{["Member", "Facilitator", "Treasurer", "Assistant Treasurer", "Recordkeeper", "Care Coordinator"].map((r) => <option key={r}>{r}</option>)}</select></label></div><button className="society-btn" onClick={() => run(() => addFirstTenMember(s.id, first), "First Ten member added.")}>Add First Ten Member</button><div className="society-result"><p>Total named: {summary.total || 0}</p><p>Missing critical roles: {summary.missing_critical_roles?.join(", ") || "none"}</p>{members.length ? <ul>{members.map((m) => <li key={m.id}>{m.name} — {m.role} ({m.status})</li>)}</ul> : <p>No First Ten members named yet.</p>}</div></article>

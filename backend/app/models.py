@@ -1,7 +1,7 @@
 from datetime import datetime
 import hashlib
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, event, inspect
+from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, event, inspect
 from sqlalchemy.orm import Mapped, Session, mapped_column, relationship
 
 from app.database import Base
@@ -836,6 +836,70 @@ class Society(Base):
     region: Mapped[str] = mapped_column(String(128), nullable=False, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, onupdate=datetime.utcnow)
+
+
+class SocietyContainer(Base):
+    __tablename__ = "society_containers"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    society_id: Mapped[int] = mapped_column(ForeignKey("societies.id"), nullable=False, index=True)
+    container_type: Mapped[str] = mapped_column(String(128), nullable=False, default="first_container_100_day", index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    status: Mapped[str] = mapped_column(String(64), nullable=False, default="draft", index=True)
+    start_date: Mapped[datetime | None] = mapped_column(Date, nullable=True)
+    target_end_date: Mapped[datetime | None] = mapped_column(Date, nullable=True)
+    current_day: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    current_week: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    percent_complete: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    active_milestone_id: Mapped[int | None] = mapped_column(ForeignKey("society_container_milestones.id"), nullable=True, index=True)
+    source_guide: Mapped[str] = mapped_column(String(255), nullable=False, default="Mutual Aid Society Handbook / First 100 Days Container")
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, onupdate=datetime.utcnow)
+
+
+class SocietyContainerMilestone(Base):
+    __tablename__ = "society_container_milestones"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    container_id: Mapped[int] = mapped_column(ForeignKey("society_containers.id"), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    sequence_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0, index=True)
+    phase_label: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    percent_weight: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    status: Mapped[str] = mapped_column(String(64), nullable=False, default="not_started", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, onupdate=datetime.utcnow)
+
+
+class SocietyTrustTask(Base):
+    __tablename__ = "society_trust_tasks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    society_id: Mapped[int] = mapped_column(ForeignKey("societies.id"), nullable=False, index=True)
+    container_id: Mapped[int] = mapped_column(ForeignKey("society_containers.id"), nullable=False, index=True)
+    milestone_id: Mapped[int | None] = mapped_column(ForeignKey("society_container_milestones.id"), nullable=True, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    status: Mapped[str] = mapped_column(String(64), nullable=False, default="backlog", index=True)
+    lane: Mapped[str] = mapped_column(String(64), nullable=False, default="systems", index=True)
+    task_type: Mapped[str] = mapped_column(String(128), nullable=False, default="container_step")
+    owner_member_id: Mapped[int | None] = mapped_column(ForeignKey("society_memberships.id"), nullable=True, index=True)
+    linked_role: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    linked_module: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    linked_handbook_chapter: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    linked_container_step: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    due_date: Mapped[datetime | None] = mapped_column(Date, nullable=True)
+    priority: Mapped[str] = mapped_column(String(64), nullable=False, default="normal")
+    blocked_reason: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    completion_notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_from_template: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, onupdate=datetime.utcnow)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class SocietyMembership(Base):

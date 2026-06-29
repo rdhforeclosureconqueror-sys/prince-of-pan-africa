@@ -23,3 +23,8 @@ export const getChapterApplications = () => get("/society-builder/admin/chapter-
 export const approveChapter = (id) => post(`/society-builder/admin/chapter-applications/${id}/approve`, {});
 export const requestChapterChanges = (id) => post(`/society-builder/admin/chapter-applications/${id}/request-changes`, {});
 export const declineChapter = (id) => post(`/society-builder/admin/chapter-applications/${id}/decline`, {});
+export const activateFirst100DaysContainer = (id) => post(`/society-builder/societies/${id}/containers/first-100-days/activate`, {});
+export const getActiveContainer = (id) => get(`/society-builder/societies/${id}/containers/active`);
+export const getTrustBoard = (id) => get(`/society-builder/societies/${id}/trust-board`);
+export const createTrustTask = (id, payload) => post(`/society-builder/societies/${id}/trust-board/tasks`, payload);
+export const updateTrustTask = (id, taskId, payload) => api(`/society-builder/societies/${id}/trust-board/tasks/${taskId}`, { method: "PATCH", body: JSON.stringify(payload) });
