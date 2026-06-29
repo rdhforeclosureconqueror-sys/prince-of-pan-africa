@@ -315,3 +315,184 @@ def stage_eligibility(db: Session, society: Society, target_stage: str) -> tuple
             missing.append("At least 1 critical role assigned")
         return not missing, missing
     return False, ["Later stage advancement is not part of MVP 1 yet."]
+
+FIRST_CONTAINER_TYPE = "first_container_100_day"
+FIRST_CONTAINER_TITLE = "First Container / 100-Day Formation Container"
+TRUST_TASK_STATUSES = {"backlog", "this_week", "in_progress", "waiting", "completed", "archived"}
+TRUST_TASK_LANES = {"people", "systems", "projects", "community_impact"}
+
+FIRST_CONTAINER_MILESTONE_TEMPLATES = [
+    ("Understand the Blueprint", "Part One: Understand the Blueprint — chapters 1–3. Build the first trustworthy container by naming the recurring problem, completing the Blueprint Audit, and choosing the first focus.", "Part One", 15),
+    ("Form the Society", "Part Two: Form the Society — chapters 4–7. Start a society, name the First Ten, save purpose, and create the covenant.", "Part Two", 20),
+    ("Build the Foundation", "Part Three: Build the Operating Structure — chapters 8–13. Set treasury, ledger categories, needs map, care teams, rules, and meeting rhythm.", "Part Three", 25),
+    ("Organize Operations", "Part Four: Complete the First 100 Days — chapters 14–15. Launch the 100-Day Planner and convert the handbook into weekly outputs.", "Part Four", 15),
+    ("Complete First Action", "Appendix L and Week 10–12. Choose, prepare, execute, and document one small, real, measurable action.", "First Action", 15),
+    ("Generate Day 100 Report", "Part Six — chapters 21–23. Generate the Day 100 Report, record recommitments, and save a next-phase plan.", "Part Six", 10),
+]
+
+FIRST_CONTAINER_TASK_TEMPLATES = {
+    "Understand the Blueprint": [
+        ("Complete Blueprint Audit", "Complete the Blueprint Audit inside Society Builder.", "systems", "Blueprint Audit", "Chapter 2", "blueprint_audit"),
+        ("Review the sequence: Trust → Relationships → Mutual Aid → Organization → Institutions", "Discuss why the society cannot start with businesses, money, or scale.", "people", "Blueprint Audit", "Chapter 2", "sequence_review"),
+        ("Identify weakest foundation area", "Use the audit to name the weakest foundation area.", "systems", "Blueprint Audit", "Chapter 2", "weakest_area"),
+        ("Choose first focus", "Select the next foundation the society must strengthen.", "projects", "Purpose Builder", "Chapter 2", "first_focus"),
+    ],
+    "Form the Society": [
+        ("Create Society", "Use Start a Society to name the society, community served, first focus, visibility, and 100-day boundary.", "systems", "Start a Society", "Chapter 4", "create_society"),
+        ("Name Your First Ten", "Enter ten potential founding members with reliability, confidentiality, capacity, and possible roles.", "people", "Name Your First Ten", "Chapter 5", "first_ten"),
+        ("Add at least 3 founding members", "Confirm at least three founding members are entered.", "people", "Name Your First Ten", "Chapter 5", "three_founders"),
+        ("Fill at least 1 critical role", "Assign at least one critical role before moving deeper into the container.", "people", "Name Your First Ten", "Chapter 5", "critical_role"),
+        ("Assign Facilitator", "Name who keeps meetings focused.", "people", "Roles", "Appendix N", "role_facilitator"),
+        ("Assign Recordkeeper", "Name who protects institutional memory.", "people", "Roles", "Appendix N", "role_recordkeeper"),
+        ("Assign Treasurer", "Name who coordinates treasury records.", "people", "Roles", "Appendix N", "role_treasurer"),
+        ("Assign Assistant Treasurer", "Name who provides two-person oversight.", "people", "Roles", "Appendix N", "role_assistant_treasurer"),
+        ("Assign Care Coordinator", "Name who organizes care teams.", "people", "Roles", "Appendix N", "role_care_coordinator"),
+    ],
+    "Build the Foundation": [
+        ("Save Purpose Statement", "Use Purpose Builder and save the final purpose statement.", "systems", "Purpose Builder", "Chapter 6", "purpose"),
+        ("Review and Save Covenant", "Discuss the covenant line by line and save the approved covenant.", "systems", "Covenant Builder", "Chapter 7", "covenant"),
+        ("Draft Rules", "Use Rules Builder to draft the Mutual Aid Society Agreement.", "systems", "Rules Builder", "Chapter 12", "rules"),
+        ("Choose Meeting Rhythm", "Choose how often members meet and how decisions become records.", "people", "Meeting Builder", "Chapter 13", "meeting_rhythm"),
+        ("Schedule First Meeting", "Generate and save the first meeting agenda, facilitator, recordkeeper, and next meeting date.", "people", "Meeting Builder", "Chapter 13", "first_meeting"),
+    ],
+    "Organize Operations": [
+        ("Complete Treasury Setup", "Select contribution model, treasurer, assistant treasurer, approval rule, reserve rule, and reporting rhythm.", "systems", "Treasury Setup", "Chapter 8", "treasury_setup"),
+        ("Define Contribution Rhythm", "Create a contribution rhythm the society can keep without shame or confusion.", "systems", "Treasury Setup", "Chapter 8", "contribution_rhythm"),
+        ("Create Needs Map", "Map recurring needs by urgency, frequency, and solvability.", "community_impact", "Needs Map", "Chapter 10", "needs_map"),
+        ("Create Skills and Assets Map", "Identify existing capacity before assuming scarcity.", "community_impact", "Skills and Assets Map", "Appendix K", "skills_assets_map"),
+        ("Create Care Teams", "Create at least one care team with a lead, members, linked need, status, and notes.", "people", "Care Teams", "Chapter 11", "care_teams"),
+        ("Invite members to complete Institutional Profiles", "Ask members to record contributions, skills, needs privacy, and current projects.", "people", "Institutional Profile", "Appendix K", "institutional_profiles"),
+    ],
+    "Complete First Action": [
+        ("Choose First Action", "Choose one small, real, measurable action.", "projects", "First Action Tracker", "Appendix L", "first_action_choose"),
+        ("Assign First Action Lead", "Name the project lead and members assigned.", "projects", "First Action Tracker", "Appendix L", "first_action_lead"),
+        ("Prepare First Action", "Set date, resources, money needed, privacy level, and success measure.", "projects", "First Action Tracker", "Appendix L", "first_action_prepare"),
+        ("Execute First Action", "Complete the action and record what happened.", "projects", "First Action Tracker", "Week 11", "first_action_execute"),
+        ("Record Results", "Record who was served or supported, money used, what worked, what broke, and what must change.", "systems", "First Action Tracker", "Week 12", "first_action_record"),
+    ],
+    "Generate Day 100 Report": [
+        ("Gather meeting notes", "Collect meeting decisions, assignments, records, and next steps.", "systems", "Day 100 Report", "Chapter 21", "gather_meeting_notes"),
+        ("Gather ledger/treasury summary if available", "Collect contribution totals, aid distributed, balance, reserve, and report dates if available.", "systems", "Day 100 Report", "Chapter 21", "gather_treasury"),
+        ("Gather care team activity", "Collect care team activity and lessons learned.", "people", "Day 100 Report", "Chapter 21", "gather_care"),
+        ("Gather first action results", "Collect the First Action results and after-action review.", "projects", "Day 100 Report", "Chapter 21", "gather_first_action"),
+        ("Generate Day 100 Report", "Generate the report with the required closing: We have not built everything. We have built the first container.", "systems", "Day 100 Report", "Chapter 21", "day_100_report"),
+        ("Save Next Phase recommendation", "Choose one next-phase goal, first 30-day action, first 90-day goal, roles, resources, risks, and review date.", "projects", "Next Phase Planner", "Chapter 23", "next_phase"),
+    ],
+}
+
+
+def _today():
+    from datetime import date
+    return date.today()
+
+
+def sync_first_container_tasks(db: Session, society: Society, container=None) -> None:
+    from app.models import SocietyContainer, SocietyTrustTask
+    container = container or db.query(SocietyContainer).filter_by(society_id=society.id, container_type=FIRST_CONTAINER_TYPE, status="active").first()
+    if not container:
+        return
+    tasks = db.query(SocietyTrustTask).filter_by(container_id=container.id).all()
+    latest_audit = db.query(SocietyBlueprintAudit).filter_by(society_id=society.id).first()
+    latest_purpose = db.query(SocietyPurpose).filter_by(society_id=society.id).first()
+    active_cov = db.query(SocietyCovenant).filter_by(society_id=society.id, status="Active").first()
+    first_ten = first_ten_summary(db, society.id)
+    members = db.query(SocietyFirstTenMember).filter_by(society_id=society.id).all()
+    roles = {m.role for m in members}
+    complete_titles = set()
+    if latest_audit:
+        complete_titles |= {"Complete Blueprint Audit", "Identify weakest foundation area"}
+    if society.id:
+        complete_titles.add("Create Society")
+    if first_ten["total"] >= 10:
+        complete_titles.add("Name Your First Ten")
+    if first_ten["total"] >= 3:
+        complete_titles.add("Add at least 3 founding members")
+    if first_ten["critical_role_completion"] >= 1:
+        complete_titles.add("Fill at least 1 critical role")
+    role_map = {"Facilitator": "Assign Facilitator", "Recordkeeper": "Assign Recordkeeper", "Treasurer": "Assign Treasurer", "Assistant Treasurer": "Assign Assistant Treasurer", "Care Coordinator": "Assign Care Coordinator"}
+    for role, title in role_map.items():
+        if role in roles:
+            complete_titles.add(title)
+    if latest_purpose:
+        complete_titles |= {"Save Purpose Statement", "Choose first focus"}
+    if active_cov:
+        complete_titles.add("Review and Save Covenant")
+    now = datetime.utcnow()
+    for task in tasks:
+        if task.title in complete_titles and task.status != "completed":
+            task.status = "completed"
+            task.completed_at = now
+            task.completion_notes = task.completion_notes or "Completed from Society Builder activity sync."
+
+
+def recalculate_container_progress(db: Session, container) -> None:
+    from app.models import SocietyContainerMilestone, SocietyTrustTask
+    sync_first_container_tasks(db, db.query(Society).filter_by(id=container.society_id).one(), container)
+    tasks = db.query(SocietyTrustTask).filter_by(container_id=container.id).all()
+    completed = sum(1 for t in tasks if t.status == "completed")
+    container.percent_complete = round((completed / len(tasks)) * 100) if tasks else 0
+    if container.start_date:
+        days = (_today() - container.start_date).days + 1
+        container.current_day = max(1, min(100, days))
+        container.current_week = max(1, min(15, ((container.current_day - 1) // 7) + 1))
+    milestones = db.query(SocietyContainerMilestone).filter_by(container_id=container.id).order_by(SocietyContainerMilestone.sequence_order).all()
+    active = None
+    for m in milestones:
+        mtasks = [t for t in tasks if t.milestone_id == m.id]
+        if mtasks and all(t.status == "completed" for t in mtasks):
+            m.status = "completed"
+        elif mtasks and any(t.status in {"this_week", "in_progress", "waiting", "completed"} for t in mtasks):
+            m.status = "in_progress"
+        else:
+            m.status = "not_started"
+        if active is None and m.status != "completed":
+            active = m
+    if active:
+        active.status = "in_progress" if active.status == "not_started" else active.status
+        container.active_milestone_id = active.id
+    elif milestones:
+        container.active_milestone_id = milestones[-1].id
+        container.status = "completed"
+
+
+def activate_first_container(db: Session, society: Society, actor_user_id: int | None):
+    from datetime import timedelta
+    from app.models import SocietyContainer, SocietyContainerMilestone, SocietyTrustTask
+    existing = db.query(SocietyContainer).filter_by(society_id=society.id, container_type=FIRST_CONTAINER_TYPE, status="active").first()
+    if existing:
+        recalculate_container_progress(db, existing)
+        return existing
+    start = _today()
+    container = SocietyContainer(society_id=society.id, container_type=FIRST_CONTAINER_TYPE, title=FIRST_CONTAINER_TITLE, description="Help a new society build the first trustworthy container: gather, decide, contribute, record, care, report, and return.", status="active", start_date=start, target_end_date=start + timedelta(days=99), current_day=1, current_week=1, created_by=actor_user_id)
+    db.add(container); db.flush()
+    milestone_by_title = {}
+    for i, (title, desc, phase, weight) in enumerate(FIRST_CONTAINER_MILESTONE_TEMPLATES, 1):
+        m = SocietyContainerMilestone(container_id=container.id, title=title, description=desc, sequence_order=i, phase_label=phase, percent_weight=weight, status="not_started")
+        db.add(m); db.flush(); milestone_by_title[title] = m
+    for milestone_title, rows in FIRST_CONTAINER_TASK_TEMPLATES.items():
+        m = milestone_by_title[milestone_title]
+        for idx, (title, desc, lane, module, chapter, step) in enumerate(rows, 1):
+            status = "this_week" if m.sequence_order == 1 else "backlog"
+            db.add(SocietyTrustTask(society_id=society.id, container_id=container.id, milestone_id=m.id, title=title, description=desc, status=status, lane=lane, task_type="container_step", linked_module=module, linked_handbook_chapter=chapter, linked_container_step=step, priority="high" if idx == 1 else "normal", created_from_template=True, created_by=actor_user_id))
+    recalculate_container_progress(db, container)
+    audit(db, actor_user_id=actor_user_id, action="first_container_activated", entity_id=society.id, after={"container_id": container.id, "title": container.title})
+    return container
+
+
+def container_dict(db: Session, container) -> dict:
+    from app.models import SocietyContainerMilestone, SocietyTrustTask
+    recalculate_container_progress(db, container)
+    milestones = db.query(SocietyContainerMilestone).filter_by(container_id=container.id).order_by(SocietyContainerMilestone.sequence_order).all()
+    tasks = db.query(SocietyTrustTask).filter_by(container_id=container.id).all()
+    active = next((m for m in milestones if m.id == container.active_milestone_id), None)
+    data = _row_dict(container)
+    data["milestones"] = [_row_dict(m) for m in milestones]
+    data["active_milestone"] = _row_dict(active)
+    data["task_counts"] = {status: sum(1 for t in tasks if t.status == status) for status in TRUST_TASK_STATUSES}
+    data["this_week_tasks"] = [_row_dict(t) for t in tasks if t.status == "this_week"][:10]
+    data["blocked_tasks"] = [_row_dict(t) for t in tasks if t.status == "waiting"][:10]
+    return data
+
+
+def task_dict(task) -> dict:
+    return _row_dict(task)
