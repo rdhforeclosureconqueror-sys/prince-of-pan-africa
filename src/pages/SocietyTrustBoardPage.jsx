@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { getTrustBoard, getTrustTaskReaderReference, updateTrustTask } from "../api/societyBuilder";
 import { CONTAINER_GUIDE_SOURCE_TITLE, containerGuideEntries, findContainerGuideEntryForTask } from "../data/societyContainerGuide";
+import { findFirst100FullChapter, first100ChapterIdFromLabel } from "../data/first100DaysFullChapters";
 import "../styles/societyBuilder.css";
 
 const COLUMNS = [
@@ -46,22 +47,36 @@ export default function SocietyTrustBoardPage() {
     load().catch((e) => setError(e.message || "Unable to load Trust Board."));
   }, [societyId]);
 
-  async function openReading(task) {
+  async function openReading(task, onMissingChapter) {
     setError("");
     setMsg("");
+    const label = task.source_chapter_label || task.linked_handbook_chapter || task.linked_container_step || "";
+    const repoChapter = findFirst100FullChapter(label);
+    if (repoChapter) {
+      navigate(`/societies/${societyId}/containers/first-100-days/chapter/${repoChapter.id}`);
+      return;
+    }
     try {
       const res = await getTrustTaskReaderReference(societyId, task.id);
       const reference = res.reference || {};
       if (reference.connected && reference.reader_path) {
         navigate(reference.reader_path);
       } else if (reference.reader_path && reference.reader_path !== "/study") {
-        setMsg(reference.message || "Opening the handbook library fallback.");
         navigate(reference.reader_path);
       } else {
-        setMsg(reference.message || "Chapter link will open when the handbook is connected.");
+        onMissingChapter?.("Full chapter text is not connected yet.");
       }
     } catch (e) {
       setError(e.message || "Unable to open the handbook reference.");
+    }
+  }
+
+  function openGuideForTask(task) {
+    const entry = findContainerGuideEntryForTask(task);
+    if (entry) {
+      setActiveGuideId(entry.id);
+      setShowGuide(true);
+      document.getElementById("container-guide")?.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   }
 
@@ -110,12 +125,12 @@ export default function SocietyTrustBoardPage() {
         </div>
       </section>
 
-      <section className="trust-guide society-card">
-        <div className="trust-section-heading"><div><p className="society-kicker">Repo-backed Container Guide</p><h2>Operational handbook breakdown</h2><p className="society-muted">Source: {CONTAINER_GUIDE_SOURCE_TITLE}</p></div><button className="society-btn secondary" onClick={() => setShowGuide((value) => !value)}>{showGuide ? "Hide Guide" : "Show Guide"}</button></div>
+      <section className="trust-guide society-card" id="container-guide">
+        <div className="trust-section-heading"><div><p className="society-kicker">Container Guide</p><h2>Operational breakdown of the handbook</h2><p className="society-muted">This guide summarizes the chapter for action. Use Read Full Chapter to study the complete teaching.</p><p className="society-muted">Source: {CONTAINER_GUIDE_SOURCE_TITLE}</p></div><button className="society-btn secondary" onClick={() => setShowGuide((value) => !value)}>{showGuide ? "Hide Guide" : "Show Guide"}</button></div>
         {showGuide && activeGuideEntry && <div className="trust-guide-body trust-container-guide">
           <div className="trust-guide-picker" role="list" aria-label="Container Guide chapters">{containerGuideEntries.map((entry) => <button type="button" role="listitem" key={entry.id} className={entry.id === activeGuideEntry.id ? "is-active" : ""} onClick={() => setActiveGuideId(entry.id)}>Ch. {entry.chapterNumber}</button>)}</div>
           <article className="trust-guide-entry">
-            <p className="society-kicker">{activeGuideEntry.chapterLabel}</p><h3>{activeGuideEntry.title}</h3><p className="trust-core-question"><strong>Core question:</strong> {activeGuideEntry.coreQuestion}</p>
+            <p className="society-kicker">{activeGuideEntry.chapterLabel}</p><h3>{activeGuideEntry.title}</h3><p className="trust-core-question"><strong>Core question:</strong> {activeGuideEntry.coreQuestion}</p>{findFirst100FullChapter(activeGuideEntry.chapterLabel) && <Link className="society-btn trust-guide-reader-btn" to={`/societies/${societyId}/containers/first-100-days/chapter/${first100ChapterIdFromLabel(activeGuideEntry.chapterLabel)}`}>📖 Read Full Chapter</Link>}
             <div className="trust-guide-two"><GuideBlock title="What it means" items={[activeGuideEntry.meaning]} /><GuideBlock title="Why it matters" items={[activeGuideEntry.whyItMatters]} /></div>
             <div className="trust-guide-three"><GuideBlock title="Discuss" items={activeGuideEntry.discuss} /><GuideBlock title="Build" items={activeGuideEntry.build} /><GuideBlock title="Record in Simba" items={activeGuideEntry.recordInSimba} /></div>
             <div className="trust-guide-tasks"><h4>Connected Trust Board tasks</h4>{guideConnectedTasks.length ? <ul>{guideConnectedTasks.map((task) => <li key={task.id}><button type="button" onClick={() => setActiveGuideId(findContainerGuideEntryForTask(task)?.id || activeGuideEntry.id)}>{task.title}</button><span>{task.status?.replace("_", " ")}</span></li>)}</ul> : <p className="society-muted">No active Trust Board task is directly tied to this chapter yet.</p>}</div>
@@ -128,7 +143,7 @@ export default function SocietyTrustBoardPage() {
       <section className="society-board-grid trust-board-grid">
         {COLUMNS.map(([key, label, description]) => { const tasks = board.columns?.[key] || []; return <article className={`society-card trust-column trust-column-${key}`} key={key}>
           <div className="trust-column-head"><div><h2>{label}</h2><p>{description}</p>{key === "completed" && <p className="trust-memory">Completed work becomes society memory.</p>}</div><span className="trust-count">{tasks.length}</span></div>
-          {tasks.map((task) => <TaskCard key={task.id} task={task} onStatusChange={changeStatus} onOpenReading={openReading} />)}
+          {tasks.map((task) => <TaskCard key={task.id} task={task} onStatusChange={changeStatus} onOpenReading={openReading} onOpenGuide={openGuideForTask} />)}
           {!tasks.length && <p className="society-muted trust-empty">{EMPTY_STATES[key]}</p>}
         </article>; })}
       </section>
@@ -140,26 +155,30 @@ function GuideBlock({ title, items }) {
   return <div className="trust-guide-block"><h4>{title}</h4><ul>{items.map((item) => <li key={item}>{item}</li>)}</ul></div>;
 }
 
-function TaskCard({ task, onStatusChange, onOpenReading }) {
+function TaskCard({ task, onStatusChange, onOpenReading, onOpenGuide }) {
   const lane = LANE_META[task.lane] || ["◆", task.lane || "Lane", ""];
   return <div className={`society-task-card trust-task-card ${task.status === "completed" ? "is-completed" : ""}`}>
     <div className="trust-card-badges"><span className="trust-badge">{task.status === "completed" ? "✅ Completed" : STATUS_LABELS[task.status] || task.status}</span><span className="trust-badge lane">{lane[0]} {lane[1]}</span></div>
     <h3>{task.title}</h3>
     <p>{task.description}</p>
     {task.status === "completed" && <p className="trust-complete-note">✅ Completed — This strengthens the container.</p>}
-    <div className="trust-task-meta"><span>🙋 Owner: {task.owner_member_id || "Unassigned"}</span><span>🗓️ Due: {task.due_date || "Not set"}</span><span>🔗 Module: {task.linked_module || "None"}</span><RelatedReading task={task} onOpenReading={onOpenReading} />{task.status === "waiting" && task.blocked_reason && <span className="trust-blocked">🚧 Blocked: {task.blocked_reason}</span>}</div>
+    <div className="trust-task-meta"><span>🙋 Owner: {task.owner_member_id || "Unassigned"}</span><span>🗓️ Due: {task.due_date || "Not set"}</span><span>🔗 Module: {task.linked_module || "None"}</span><RelatedReading task={task} onOpenReading={onOpenReading} onOpenGuide={onOpenGuide} />{task.status === "waiting" && task.blocked_reason && <span className="trust-blocked">🚧 Blocked: {task.blocked_reason}</span>}</div>
     <label>Status<select value={task.status} onChange={(e) => onStatusChange(task, e.target.value)}>{STATUSES.map((status) => <option key={status} value={status}>{status.replace("_", " ")}</option>)}</select></label>
   </div>;
 }
 
 
-function RelatedReading({ task, onOpenReading }) {
+function RelatedReading({ task, onOpenReading, onOpenGuide }) {
+  const [notice, setNotice] = useState("");
   const label = task.source_chapter_label || task.linked_handbook_chapter || task.linked_container_step || "";
-  if (!label) return <span>📖 Related Reading: None</span>;
+  if (!label) return <span>📖 Chapter: None</span>;
   const hasSource = task.source_book_slug || task.source_book_id || task.source_reader_path || task.source_chapter_label || task.linked_handbook_chapter;
   return <span className="trust-related-reading">
-    <strong>📖 Related Reading</strong>
+    <strong>📖 Chapter</strong>
     <em>{label}</em>
-    {hasSource ? <button type="button" className="trust-reading-link" onClick={() => onOpenReading(task)}>Read Chapter</button> : <small>Handbook link not connected yet</small>}
+    {hasSource ? <button type="button" className="trust-reading-link" onClick={() => onOpenReading(task, setNotice)}>Read Full Chapter</button> : <small>Full chapter text is not connected yet.</small>}
+    <strong>🧭 Guide</strong>
+    <button type="button" className="trust-reading-link secondary" onClick={() => onOpenGuide(task)}>Open Task Guide</button>
+    {notice && <small className="trust-inline-notice">{notice}</small>}
   </span>;
 }
