@@ -386,6 +386,164 @@ def _ensure_mutual_aid_fund_phase5_columns() -> None:
                         )
                     )
 
+
+def _ensure_society_first_container_tables() -> None:
+    """Ensure production DBs have the First 100 Days container schema.
+
+    The standalone SQL migration is intentionally mirrored here because
+    create_all() will not repair partially-created production tables and older
+    raw migrations may have been applied before all mapped columns existed.
+    """
+    with engine.begin() as conn:
+        dialect = engine.dialect.name
+        if dialect == "postgresql":
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS society_containers (
+                    id SERIAL PRIMARY KEY,
+                    society_id INTEGER NOT NULL,
+                    container_type VARCHAR(128) NOT NULL DEFAULT 'first_container_100_day',
+                    title VARCHAR(255) NOT NULL,
+                    description TEXT NOT NULL DEFAULT '',
+                    status VARCHAR(64) NOT NULL DEFAULT 'draft',
+                    start_date DATE,
+                    target_end_date DATE,
+                    current_day INTEGER NOT NULL DEFAULT 1,
+                    current_week INTEGER NOT NULL DEFAULT 1,
+                    percent_complete INTEGER NOT NULL DEFAULT 0,
+                    active_milestone_id INTEGER,
+                    source_guide VARCHAR(255) NOT NULL DEFAULT 'Mutual Aid Society Handbook / First 100 Days Container',
+                    created_by INTEGER,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS society_container_milestones (
+                    id SERIAL PRIMARY KEY,
+                    container_id INTEGER NOT NULL,
+                    title VARCHAR(255) NOT NULL,
+                    description TEXT NOT NULL DEFAULT '',
+                    sequence_order INTEGER NOT NULL DEFAULT 0,
+                    phase_label VARCHAR(128) NOT NULL DEFAULT '',
+                    percent_weight INTEGER NOT NULL DEFAULT 0,
+                    status VARCHAR(64) NOT NULL DEFAULT 'not_started',
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS society_trust_tasks (
+                    id SERIAL PRIMARY KEY,
+                    society_id INTEGER NOT NULL,
+                    container_id INTEGER NOT NULL,
+                    milestone_id INTEGER,
+                    title VARCHAR(255) NOT NULL,
+                    description TEXT NOT NULL DEFAULT '',
+                    status VARCHAR(64) NOT NULL DEFAULT 'backlog',
+                    lane VARCHAR(64) NOT NULL DEFAULT 'systems',
+                    task_type VARCHAR(128) NOT NULL DEFAULT 'container_step',
+                    owner_member_id INTEGER,
+                    linked_role VARCHAR(128) NOT NULL DEFAULT '',
+                    linked_module VARCHAR(128) NOT NULL DEFAULT '',
+                    linked_handbook_chapter VARCHAR(128) NOT NULL DEFAULT '',
+                    linked_container_step VARCHAR(128) NOT NULL DEFAULT '',
+                    due_date DATE,
+                    priority VARCHAR(64) NOT NULL DEFAULT 'normal',
+                    blocked_reason TEXT NOT NULL DEFAULT '',
+                    completion_notes TEXT NOT NULL DEFAULT '',
+                    created_from_template BOOLEAN NOT NULL DEFAULT TRUE,
+                    created_by INTEGER,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    completed_at TIMESTAMP
+                )
+            """))
+            for table in ["society_containers", "society_container_milestones", "society_trust_tasks"]:
+                conn.execute(text(f"""
+                    DO $$
+                    DECLARE
+                        seq_name text := '{table}_id_seq';
+                    BEGIN
+                        IF NOT EXISTS (
+                            SELECT 1 FROM pg_class c
+                            JOIN pg_namespace n ON n.oid = c.relnamespace
+                            WHERE c.relkind = 'S' AND c.relname = seq_name
+                        ) THEN
+                            EXECUTE format('CREATE SEQUENCE %I', seq_name);
+                        END IF;
+                        EXECUTE format('ALTER SEQUENCE %I OWNED BY {table}.id', seq_name);
+                        EXECUTE format('ALTER TABLE {table} ALTER COLUMN id SET DEFAULT nextval(%L)', seq_name);
+                        EXECUTE format('SELECT setval(%L, COALESCE((SELECT MAX(id) FROM {table}), 0) + 1, false)', seq_name);
+                    END $$
+                """))
+
+            table_columns = {
+                "society_containers": {
+                    "container_type": "VARCHAR(128) NOT NULL DEFAULT 'first_container_100_day'",
+                    "description": "TEXT NOT NULL DEFAULT ''",
+                    "status": "VARCHAR(64) NOT NULL DEFAULT 'draft'",
+                    "start_date": "DATE",
+                    "target_end_date": "DATE",
+                    "current_day": "INTEGER NOT NULL DEFAULT 1",
+                    "current_week": "INTEGER NOT NULL DEFAULT 1",
+                    "percent_complete": "INTEGER NOT NULL DEFAULT 0",
+                    "active_milestone_id": "INTEGER",
+                    "source_guide": "VARCHAR(255) NOT NULL DEFAULT 'Mutual Aid Society Handbook / First 100 Days Container'",
+                    "created_by": "INTEGER",
+                    "created_at": "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP",
+                    "updated_at": "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP",
+                },
+                "society_container_milestones": {
+                    "description": "TEXT NOT NULL DEFAULT ''",
+                    "sequence_order": "INTEGER NOT NULL DEFAULT 0",
+                    "phase_label": "VARCHAR(128) NOT NULL DEFAULT ''",
+                    "percent_weight": "INTEGER NOT NULL DEFAULT 0",
+                    "status": "VARCHAR(64) NOT NULL DEFAULT 'not_started'",
+                    "created_at": "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP",
+                    "updated_at": "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP",
+                },
+                "society_trust_tasks": {
+                    "society_id": "INTEGER NOT NULL",
+                    "milestone_id": "INTEGER",
+                    "description": "TEXT NOT NULL DEFAULT ''",
+                    "status": "VARCHAR(64) NOT NULL DEFAULT 'backlog'",
+                    "lane": "VARCHAR(64) NOT NULL DEFAULT 'systems'",
+                    "task_type": "VARCHAR(128) NOT NULL DEFAULT 'container_step'",
+                    "owner_member_id": "INTEGER",
+                    "linked_role": "VARCHAR(128) NOT NULL DEFAULT ''",
+                    "linked_module": "VARCHAR(128) NOT NULL DEFAULT ''",
+                    "linked_handbook_chapter": "VARCHAR(128) NOT NULL DEFAULT ''",
+                    "linked_container_step": "VARCHAR(128) NOT NULL DEFAULT ''",
+                    "due_date": "DATE",
+                    "priority": "VARCHAR(64) NOT NULL DEFAULT 'normal'",
+                    "blocked_reason": "TEXT NOT NULL DEFAULT ''",
+                    "completion_notes": "TEXT NOT NULL DEFAULT ''",
+                    "created_from_template": "BOOLEAN NOT NULL DEFAULT TRUE",
+                    "created_by": "INTEGER",
+                    "created_at": "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP",
+                    "updated_at": "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP",
+                    "completed_at": "TIMESTAMP",
+                },
+            }
+            for table, columns in table_columns.items():
+                for column, column_type in columns.items():
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} {column_type}"))
+            indexes = [
+                ("ix_society_containers_society_id", "society_containers", "society_id"),
+                ("ix_society_containers_container_type", "society_containers", "container_type"),
+                ("ix_society_containers_status", "society_containers", "status"),
+                ("ix_society_container_milestones_container_id", "society_container_milestones", "container_id"),
+                ("ix_society_container_milestones_sequence_order", "society_container_milestones", "sequence_order"),
+                ("ix_society_container_milestones_status", "society_container_milestones", "status"),
+                ("ix_society_trust_tasks_society_id", "society_trust_tasks", "society_id"),
+                ("ix_society_trust_tasks_container_id", "society_trust_tasks", "container_id"),
+                ("ix_society_trust_tasks_milestone_id", "society_trust_tasks", "milestone_id"),
+                ("ix_society_trust_tasks_status", "society_trust_tasks", "status"),
+                ("ix_society_trust_tasks_lane", "society_trust_tasks", "lane"),
+            ]
+            for name, table, column in indexes:
+                conn.execute(text(f"CREATE INDEX IF NOT EXISTS {name} ON {table} ({column})"))
+
 # =========================
 # INIT DB (UNIFIED VERSION)
 # =========================
@@ -400,6 +558,7 @@ def init_db() -> None:
     _run_sqlite_compat_migrations()
     _run_generic_compat_migrations()
     _ensure_mutual_aid_fund_phase5_columns()
+    _ensure_society_first_container_tables()
 
     db = SessionLocal()
     try:

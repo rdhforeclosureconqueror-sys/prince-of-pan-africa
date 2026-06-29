@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import logging
 import os
 import re
 from dataclasses import dataclass
 
 from fastapi import HTTPException, status
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.authz import user_has_permission
@@ -42,6 +44,8 @@ We will disagree without destroying the room.
 We will not use the society for personal gain without disclosure.
 We will honor elders and train youth.
 We will build systems that can outlive us."""
+
+logger = logging.getLogger(__name__)
 
 SOCIETY_TYPE_PRESETS = {
     "health": ["Personal Training", "Yoga", "Massage Therapy", "Nutrition Coaching", "Walking Group", "Gardening", "Cooking", "Mental Wellness", "CPR Instruction", "Youth Coaching"],
@@ -458,25 +462,50 @@ def recalculate_container_progress(db: Session, container) -> None:
 def activate_first_container(db: Session, society: Society, actor_user_id: int | None):
     from datetime import timedelta
     from app.models import SocietyContainer, SocietyContainerMilestone, SocietyTrustTask
-    existing = db.query(SocietyContainer).filter_by(society_id=society.id, container_type=FIRST_CONTAINER_TYPE, status="active").first()
-    if existing:
-        recalculate_container_progress(db, existing)
-        return existing
-    start = _today()
-    container = SocietyContainer(society_id=society.id, container_type=FIRST_CONTAINER_TYPE, title=FIRST_CONTAINER_TITLE, description="Help a new society build the first trustworthy container: gather, decide, contribute, record, care, report, and return.", status="active", start_date=start, target_end_date=start + timedelta(days=99), current_day=1, current_week=1, created_by=actor_user_id)
-    db.add(container); db.flush()
-    milestone_by_title = {}
-    for i, (title, desc, phase, weight) in enumerate(FIRST_CONTAINER_MILESTONE_TEMPLATES, 1):
-        m = SocietyContainerMilestone(container_id=container.id, title=title, description=desc, sequence_order=i, phase_label=phase, percent_weight=weight, status="not_started")
-        db.add(m); db.flush(); milestone_by_title[title] = m
-    for milestone_title, rows in FIRST_CONTAINER_TASK_TEMPLATES.items():
-        m = milestone_by_title[milestone_title]
-        for idx, (title, desc, lane, module, chapter, step) in enumerate(rows, 1):
-            status = "this_week" if m.sequence_order == 1 else "backlog"
-            db.add(SocietyTrustTask(society_id=society.id, container_id=container.id, milestone_id=m.id, title=title, description=desc, status=status, lane=lane, task_type="container_step", linked_module=module, linked_handbook_chapter=chapter, linked_container_step=step, priority="high" if idx == 1 else "normal", created_from_template=True, created_by=actor_user_id))
-    recalculate_container_progress(db, container)
-    audit(db, actor_user_id=actor_user_id, action="first_container_activated", entity_id=society.id, after={"container_id": container.id, "title": container.title})
-    return container
+
+    logger.info("activate_first_container started society_id=%s actor_user_id=%s", society.id, actor_user_id)
+    try:
+        existing = db.query(SocietyContainer).filter_by(society_id=society.id, container_type=FIRST_CONTAINER_TYPE, status="active").first()
+        if existing:
+            logger.info("activate_first_container returning existing active container society_id=%s container_id=%s", society.id, existing.id)
+            recalculate_container_progress(db, existing)
+            return existing
+
+        start = _today()
+        container = SocietyContainer(society_id=society.id, container_type=FIRST_CONTAINER_TYPE, title=FIRST_CONTAINER_TITLE, description="Help a new society build the first trustworthy container: gather, decide, contribute, record, care, report, and return.", status="active", start_date=start, target_end_date=start + timedelta(days=99), current_day=1, current_week=1, percent_complete=0, source_guide="Mutual Aid Society Handbook / First 100 Days Container", created_by=actor_user_id)
+        db.add(container)
+        db.flush()
+        logger.info("activate_first_container inserted container society_id=%s container_id=%s", society.id, container.id)
+
+        milestone_by_title = {}
+        for i, (title, desc, phase, weight) in enumerate(FIRST_CONTAINER_MILESTONE_TEMPLATES, 1):
+            m = SocietyContainerMilestone(container_id=container.id, title=title, description=desc, sequence_order=i, phase_label=phase, percent_weight=weight, status="not_started")
+            db.add(m)
+            db.flush()
+            milestone_by_title[title] = m
+        logger.info("activate_first_container inserted milestones society_id=%s container_id=%s count=%s", society.id, container.id, len(milestone_by_title))
+
+        task_count = 0
+        for milestone_title, rows in FIRST_CONTAINER_TASK_TEMPLATES.items():
+            m = milestone_by_title[milestone_title]
+            for idx, (title, desc, lane, module, chapter, step) in enumerate(rows, 1):
+                status = "this_week" if m.sequence_order == 1 else "backlog"
+                db.add(SocietyTrustTask(society_id=society.id, container_id=container.id, milestone_id=m.id, title=title, description=desc, status=status, lane=lane, task_type="container_step", linked_module=module, linked_handbook_chapter=chapter, linked_container_step=step, priority="high" if idx == 1 else "normal", created_from_template=True, created_by=actor_user_id))
+                task_count += 1
+        db.flush()
+        logger.info("activate_first_container inserted tasks society_id=%s container_id=%s count=%s", society.id, container.id, task_count)
+
+        recalculate_container_progress(db, container)
+        try:
+            with db.begin_nested():
+                audit(db, actor_user_id=actor_user_id, action="first_container_activated", entity_id=society.id, after={"container_id": container.id, "title": container.title})
+                db.flush()
+        except SQLAlchemyError:
+            logger.exception("activate_first_container audit log failed but activation will continue society_id=%s container_id=%s", society.id, container.id)
+        return container
+    except Exception:
+        logger.exception("activate_first_container failed society_id=%s actor_user_id=%s", society.id, actor_user_id)
+        raise
 
 
 def container_dict(db: Session, container) -> dict:

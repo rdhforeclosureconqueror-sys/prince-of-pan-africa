@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from datetime import datetime
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.exc import SQLAlchemyError
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -32,6 +34,8 @@ from app.services.society_builder import (
     task_dict,
     unique_society_slug,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/society-builder", tags=["Society Builder"])
 CHAPTER_STATUSES = {"draft", "pending_review", "approved", "changes_requested", "declined", "active", "paused", "suspended", "inactive", "independent"}
@@ -453,10 +457,19 @@ def activate_first_100_days_container(society_id: int, current_user: User = Depe
     require_society_builder_enabled(db, current_user)
     society = _get_society(db, society_id)
     _require_manage_access(db, current_user, society)
-    container = activate_first_container(db, society, current_user.id)
-    db.commit()
-    db.refresh(container)
-    return {"ok": True, "container": container_dict(db, container)}
+    try:
+        container = activate_first_container(db, society, current_user.id)
+        db.commit()
+        db.refresh(container)
+        return {"ok": True, "container": container_dict(db, container)}
+    except SQLAlchemyError as exc:
+        db.rollback()
+        logger.exception("first_100_days_activation_database_error society_id=%s actor_user_id=%s", society.id, current_user.id)
+        raise HTTPException(status_code=500, detail={"code": "first_container_activation_database_error", "message": "First 100 Days Container activation failed while writing to the database. Check production logs for the exact migration, column, constraint, or insert error.", "society_id": society.id}) from exc
+    except Exception as exc:
+        db.rollback()
+        logger.exception("first_100_days_activation_unexpected_error society_id=%s actor_user_id=%s", society.id, current_user.id)
+        raise HTTPException(status_code=500, detail={"code": "first_container_activation_failed", "message": "First 100 Days Container activation failed unexpectedly. Check production logs for the exact exception.", "society_id": society.id}) from exc
 
 
 @router.get("/societies/{society_id}/containers/active")
