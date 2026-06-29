@@ -4,19 +4,35 @@ import { getTrustBoard, updateTrustTask } from "../api/societyBuilder";
 import "../styles/societyBuilder.css";
 
 const COLUMNS = [
-  ["backlog", "Backlog"],
-  ["this_week", "This Week"],
-  ["in_progress", "In Progress"],
-  ["waiting", "Waiting"],
-  ["completed", "Completed"],
+  ["backlog", "📥 Backlog", "Work we know we need to do."],
+  ["this_week", "📅 This Week", "Work members committed to now."],
+  ["in_progress", "⚡ In Progress", "Work currently moving."],
+  ["waiting", "⏳ Waiting", "Blocked, paused, or waiting on someone."],
+  ["completed", "✅ Completed", "Institutional memory: what the society has actually done."],
 ];
 const STATUSES = COLUMNS.map(([value]) => value);
+const STATUS_LABELS = Object.fromEntries(COLUMNS.map(([value, label]) => [value, label.replace(/^\S+\s/, "")]));
+const LANE_META = {
+  people: ["👥", "People", "Founding members, roles, care teams"],
+  systems: ["⚙️", "Systems", "Purpose, covenant, rules, treasury, records"],
+  projects: ["🛠️", "Projects", "First action, assignments, execution"],
+  community_impact: ["🌍", "Community Impact", "Needs, skills, service, results, reports"],
+};
+const EMPTY_STATES = {
+  backlog: "Nothing waiting. The foundation is clear.",
+  this_week: "Choose a few tasks to carry this week.",
+  in_progress: "No active work yet. Move one task here when someone starts.",
+  waiting: "Nothing blocked. Keep the rhythm moving.",
+  completed: "No completed tasks yet. Every finished task becomes part of the society’s memory.",
+};
+const MILESTONE_ICONS = ["🧭", "👥", "🧱", "⚙️", "🛠️", "📜"];
 
 export default function SocietyTrustBoardPage() {
   const { societyId } = useParams();
   const [board, setBoard] = useState(null);
   const [error, setError] = useState("");
   const [msg, setMsg] = useState("");
+  const [showGuide, setShowGuide] = useState(true);
 
   async function load() {
     const next = await getTrustBoard(societyId);
@@ -41,37 +57,60 @@ export default function SocietyTrustBoardPage() {
 
   if (!board) return <main className="society-builder-shell"><p>Loading Trust Board...</p>{error && <p className="society-warning">{error}</p>}</main>;
   const container = board.container;
-  return <main className="society-builder-shell">
-    <p className="society-kicker">Trust Board</p>
-    <h1>{container?.title || "First 100 Days Container"}</h1>
-    <p className="society-warning">Build the first trustworthy container. Mutual aid is organized responsibility.</p>
+  const allTasks = COLUMNS.flatMap(([key]) => board.columns?.[key] || []);
+  const milestoneCounts = allTasks.reduce((acc, task) => {
+    if (!task.milestone_id) return acc;
+    acc[task.milestone_id] = acc[task.milestone_id] || { total: 0, completed: 0 };
+    acc[task.milestone_id].total += 1;
+    if (task.status === "completed") acc[task.milestone_id].completed += 1;
+    return acc;
+  }, {});
+
+  return <main className="society-builder-shell trust-command-shell">
     <div className="society-actions"><Link className="society-btn secondary" to={`/societies/${societyId}`}>Back to Society Home</Link></div>
     {msg && <p className="society-success">{msg}</p>}{error && <p className="society-warning">{error}</p>}
-    {container ? <section className="society-card">
-      <h2>Mission Progress: {container.percent_complete}%</h2>
-      <p>Current Day: {container.current_day} · Current Week: {container.current_week}</p>
-      <p>Next Milestone: {container.active_milestone?.title || "Day 100 Report"}</p>
-    </section> : <section className="society-card"><h2>No active container</h2><p>Start the First 100 Days Container from Society Home.</p></section>}
-    <section className="society-board-grid">
-      {COLUMNS.map(([key, label]) => <article className="society-card" key={key}>
-        <h2>{label}</h2>
-        {(board.columns?.[key] || []).map((task) => <div className="society-task-card" key={task.id}>
-          <strong>{task.title}</strong>
-          <p>{task.description}</p>
-          <p>Owner: {task.owner_member_id || "Unassigned"}</p>
-          <p>Due date: {task.due_date || "Not set"}</p>
-          <p>Lane: {task.lane}</p>
-          <p>Linked module: {task.linked_module || "None"}</p>
-          <p>Handbook: {task.linked_handbook_chapter || task.linked_container_step || "None"}</p>
-          {task.status === "waiting" && task.blocked_reason && <p className="society-warning">Blocked: {task.blocked_reason}</p>}
-          <label>Status
-            <select value={task.status} onChange={(e) => changeStatus(task, e.target.value)}>
-              {STATUSES.map((status) => <option key={status} value={status}>{status.replace("_", " ")}</option>)}
-            </select>
-          </label>
-        </div>)}
-        {!(board.columns?.[key] || []).length && <p className="society-muted">No tasks in {label}.</p>}
-      </article>)}
-    </section>
+    {container ? <>
+      <section className="trust-hero society-card">
+        <div className="trust-hero-copy">
+          <p className="society-kicker">Trust Board</p>
+          <h1>🚀 First 100 Days Trust Board</h1>
+          <p className="trust-lede">Build the first trustworthy container before wealth arrives.</p>
+          <p className="society-muted">The handbook teaches the process. The Trust Board turns it into weekly work.</p>
+          <div className="trust-progress-row"><strong>Mission Progress: {container.percent_complete}%</strong><span>Day {container.current_day} of 100 · Week {container.current_week}</span></div>
+          <div className="trust-progress-bar" aria-label={`Mission Progress ${container.percent_complete}%`}><span style={{ width: `${container.percent_complete || 0}%` }} /></div>
+          <p className="trust-next">Next Milestone: <strong>{container.active_milestone?.title || "Generate Day 100 Report"}</strong></p>
+        </div>
+        <div className="trust-metric-grid">
+          {Object.entries(LANE_META).map(([key, [icon, label, text]]) => <article className="trust-metric-card" key={key}><span>{icon}</span><strong>{label}</strong><p>{text}</p></article>)}
+        </div>
+      </section>
+
+      <section className="trust-guide society-card">
+        <div className="trust-section-heading"><div><p className="society-kicker">Guided Operating Rhythm</p><h2>How this works</h2></div><button className="society-btn secondary" onClick={() => setShowGuide((value) => !value)}>{showGuide ? "Hide Guide" : "Show Guide"}</button></div>
+        {showGuide && <div className="trust-guide-body"><p>The First 100 Days Container turns the Mutual Aid Society Handbook into weekly work.</p><ol><li>Read the milestone</li><li>Complete the tasks</li><li>Assign owners</li><li>Move work across the board</li><li>Record what happened</li><li>Generate the Day 100 Report</li></ol><p>The goal is not to do everything at once. The goal is to build a society that can gather, decide, contribute, record, care, report, and return.</p><p><strong>Start with trust. Build the foundation. Record the work. Return next week.</strong></p><p>Simba is where the society becomes real.</p></div>}
+      </section>
+
+      <section className="trust-roadmap society-card"><p className="society-kicker">Milestone Roadmap</p><h2>From trust to institution</h2><div className="trust-roadmap-track">{(container.milestones || []).map((m, index) => { const counts = milestoneCounts[m.id] || { total: 0, completed: 0 }; const pct = counts.total ? Math.round((counts.completed / counts.total) * 100) : 0; return <article className={`trust-milestone ${m.id === container.active_milestone_id ? "is-current" : ""}`} key={m.id}><span className="trust-milestone-icon">{MILESTONE_ICONS[index] || "◆"}</span><strong>{m.title}</strong><small>{m.status?.replace("_", " ") || "not started"}</small><p>{counts.completed}/{counts.total} tasks · {pct}%</p></article>; })}</div></section>
+
+      <section className="society-board-grid trust-board-grid">
+        {COLUMNS.map(([key, label, description]) => { const tasks = board.columns?.[key] || []; return <article className={`society-card trust-column trust-column-${key}`} key={key}>
+          <div className="trust-column-head"><div><h2>{label}</h2><p>{description}</p>{key === "completed" && <p className="trust-memory">Completed work becomes society memory.</p>}</div><span className="trust-count">{tasks.length}</span></div>
+          {tasks.map((task) => <TaskCard key={task.id} task={task} onStatusChange={changeStatus} />)}
+          {!tasks.length && <p className="society-muted trust-empty">{EMPTY_STATES[key]}</p>}
+        </article>; })}
+      </section>
+    </> : <section className="society-card trust-empty-container"><h1>🚀 Start the First 100 Days Container</h1><p>This will turn the handbook into milestones, tasks, and weekly work for your society.</p><p>Start the container from Society Home.</p></section>}
   </main>;
+}
+
+function TaskCard({ task, onStatusChange }) {
+  const lane = LANE_META[task.lane] || ["◆", task.lane || "Lane", ""];
+  return <div className={`society-task-card trust-task-card ${task.status === "completed" ? "is-completed" : ""}`}>
+    <div className="trust-card-badges"><span className="trust-badge">{task.status === "completed" ? "✅ Completed" : STATUS_LABELS[task.status] || task.status}</span><span className="trust-badge lane">{lane[0]} {lane[1]}</span></div>
+    <h3>{task.title}</h3>
+    <p>{task.description}</p>
+    {task.status === "completed" && <p className="trust-complete-note">✅ Completed — This strengthens the container.</p>}
+    <div className="trust-task-meta"><span>🙋 Owner: {task.owner_member_id || "Unassigned"}</span><span>🗓️ Due: {task.due_date || "Not set"}</span><span>🔗 Module: {task.linked_module || "None"}</span><span>📖 Handbook: {task.linked_handbook_chapter || task.linked_container_step || "None"}</span>{task.status === "waiting" && task.blocked_reason && <span className="trust-blocked">🚧 Blocked: {task.blocked_reason}</span>}</div>
+    <label>Status<select value={task.status} onChange={(e) => onStatusChange(task, e.target.value)}>{STATUSES.map((status) => <option key={status} value={status}>{status.replace("_", " ")}</option>)}</select></label>
+  </div>;
 }
