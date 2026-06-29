@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { getTrustBoard, getTrustTaskReaderReference, updateTrustTask } from "../api/societyBuilder";
+import { CONTAINER_GUIDE_SOURCE_TITLE, containerGuideEntries, findContainerGuideEntryForTask } from "../data/societyContainerGuide";
 import "../styles/societyBuilder.css";
 
 const COLUMNS = [
@@ -33,6 +34,7 @@ export default function SocietyTrustBoardPage() {
   const [error, setError] = useState("");
   const [msg, setMsg] = useState("");
   const [showGuide, setShowGuide] = useState(true);
+  const [activeGuideId, setActiveGuideId] = useState("chapter-1");
   const navigate = useNavigate();
 
   async function load() {
@@ -78,6 +80,9 @@ export default function SocietyTrustBoardPage() {
   if (!board) return <main className="society-builder-shell"><p>Loading Trust Board...</p>{error && <p className="society-warning">{error}</p>}</main>;
   const container = board.container;
   const allTasks = COLUMNS.flatMap(([key]) => board.columns?.[key] || []);
+  const activeGuideEntry = containerGuideEntries.find((entry) => entry.id === activeGuideId) || containerGuideEntries[0];
+  const guideConnectedTasks = allTasks.filter((task) => activeGuideEntry?.connectedTasks?.some((title) => task.title === title || task.linked_handbook_chapter === activeGuideEntry.chapterLabel));
+
   const milestoneCounts = allTasks.reduce((acc, task) => {
     if (!task.milestone_id) return acc;
     acc[task.milestone_id] = acc[task.milestone_id] || { total: 0, completed: 0 };
@@ -106,8 +111,16 @@ export default function SocietyTrustBoardPage() {
       </section>
 
       <section className="trust-guide society-card">
-        <div className="trust-section-heading"><div><p className="society-kicker">Guided Operating Rhythm</p><h2>How this works</h2></div><button className="society-btn secondary" onClick={() => setShowGuide((value) => !value)}>{showGuide ? "Hide Guide" : "Show Guide"}</button></div>
-        {showGuide && <div className="trust-guide-body"><p>The First 100 Days Container turns the Mutual Aid Society Handbook into weekly work.</p><ol><li>Read the milestone</li><li>Complete the tasks</li><li>Assign owners</li><li>Move work across the board</li><li>Record what happened</li><li>Generate the Day 100 Report</li></ol><p>The goal is not to do everything at once. The goal is to build a society that can gather, decide, contribute, record, care, report, and return.</p><p><strong>Start with trust. Build the foundation. Record the work. Return next week.</strong></p><p>Simba is where the society becomes real.</p></div>}
+        <div className="trust-section-heading"><div><p className="society-kicker">Repo-backed Container Guide</p><h2>Operational handbook breakdown</h2><p className="society-muted">Source: {CONTAINER_GUIDE_SOURCE_TITLE}</p></div><button className="society-btn secondary" onClick={() => setShowGuide((value) => !value)}>{showGuide ? "Hide Guide" : "Show Guide"}</button></div>
+        {showGuide && activeGuideEntry && <div className="trust-guide-body trust-container-guide">
+          <div className="trust-guide-picker" role="list" aria-label="Container Guide chapters">{containerGuideEntries.map((entry) => <button type="button" role="listitem" key={entry.id} className={entry.id === activeGuideEntry.id ? "is-active" : ""} onClick={() => setActiveGuideId(entry.id)}>Ch. {entry.chapterNumber}</button>)}</div>
+          <article className="trust-guide-entry">
+            <p className="society-kicker">{activeGuideEntry.chapterLabel}</p><h3>{activeGuideEntry.title}</h3><p className="trust-core-question"><strong>Core question:</strong> {activeGuideEntry.coreQuestion}</p>
+            <div className="trust-guide-two"><GuideBlock title="What it means" items={[activeGuideEntry.meaning]} /><GuideBlock title="Why it matters" items={[activeGuideEntry.whyItMatters]} /></div>
+            <div className="trust-guide-three"><GuideBlock title="Discuss" items={activeGuideEntry.discuss} /><GuideBlock title="Build" items={activeGuideEntry.build} /><GuideBlock title="Record in Simba" items={activeGuideEntry.recordInSimba} /></div>
+            <div className="trust-guide-tasks"><h4>Connected Trust Board tasks</h4>{guideConnectedTasks.length ? <ul>{guideConnectedTasks.map((task) => <li key={task.id}><button type="button" onClick={() => setActiveGuideId(findContainerGuideEntryForTask(task)?.id || activeGuideEntry.id)}>{task.title}</button><span>{task.status?.replace("_", " ")}</span></li>)}</ul> : <p className="society-muted">No active Trust Board task is directly tied to this chapter yet.</p>}</div>
+          </article>
+        </div>}
       </section>
 
       <section className="trust-roadmap society-card"><p className="society-kicker">Milestone Roadmap</p><h2>From trust to institution</h2><div className="trust-roadmap-track">{(container.milestones || []).map((m, index) => { const counts = milestoneCounts[m.id] || { total: 0, completed: 0 }; const pct = counts.total ? Math.round((counts.completed / counts.total) * 100) : 0; return <article className={`trust-milestone ${m.id === container.active_milestone_id ? "is-current" : ""}`} key={m.id}><span className="trust-milestone-icon">{MILESTONE_ICONS[index] || "◆"}</span><strong>{m.title}</strong><small>{m.status?.replace("_", " ") || "not started"}</small><p>{counts.completed}/{counts.total} tasks · {pct}%</p></article>; })}</div></section>
@@ -121,6 +134,10 @@ export default function SocietyTrustBoardPage() {
       </section>
     </> : <section className="society-card trust-empty-container"><h1>🚀 Start the First 100 Days Container</h1><p>This will turn the handbook into milestones, tasks, and weekly work for your society.</p><p>Start the container from Society Home.</p></section>}
   </main>;
+}
+
+function GuideBlock({ title, items }) {
+  return <div className="trust-guide-block"><h4>{title}</h4><ul>{items.map((item) => <li key={item}>{item}</li>)}</ul></div>;
 }
 
 function TaskCard({ task, onStatusChange, onOpenReading }) {

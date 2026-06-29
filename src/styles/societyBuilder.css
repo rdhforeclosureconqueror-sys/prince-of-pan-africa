@@ -29,3 +29,97 @@
 @media(max-width:640px){.trust-progress-row{display:grid}.trust-metric-grid{grid-template-columns:1fr 1fr}.trust-metric-card{padding:.8rem}.trust-guide-body ol{grid-template-columns:1fr}.trust-task-card select{width:100%}.trust-roadmap{margin-left:-.25rem;margin-right:-.25rem}.trust-milestone{min-width:170px}.society-active-container-card .society-actions{display:grid}}
 @media(max-width:420px){.trust-metric-grid{grid-template-columns:1fr}}
 .trust-related-reading{display:grid!important;gap:.35rem;align-items:start}.trust-related-reading strong{color:#f5e6b3}.trust-related-reading em{font-style:normal;color:#fff7df}.trust-reading-link{width:max-content;border:1px solid rgba(240,199,94,.5);border-radius:999px;background:rgba(216,163,26,.18);color:#f8f1dc;font-weight:900;padding:.35rem .7rem;cursor:pointer}.trust-reading-link:hover{background:rgba(216,163,26,.32)}.trust-related-reading small{color:#d8ccb2}
+
+.trust-container-guide {
+  display: grid;
+  gap: 1rem;
+}
+
+.trust-guide-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.trust-guide-picker button,
+.trust-guide-tasks button {
+  border: 1px solid rgba(250, 204, 21, 0.35);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.72);
+  color: #f8fafc;
+  cursor: pointer;
+  font-weight: 700;
+  padding: 0.4rem 0.65rem;
+}
+
+.trust-guide-picker button.is-active {
+  background: linear-gradient(135deg, #facc15, #f97316);
+  color: #1f1300;
+}
+
+.trust-guide-entry {
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 1.25rem;
+  background: rgba(2, 6, 23, 0.38);
+  padding: 1rem;
+}
+
+.trust-core-question {
+  color: #fde68a;
+}
+
+.trust-guide-two,
+.trust-guide-three {
+  display: grid;
+  gap: 0.9rem;
+  margin-top: 1rem;
+}
+
+.trust-guide-two {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.trust-guide-three {
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+
+.trust-guide-block {
+  border: 1px solid rgba(34, 197, 94, 0.22);
+  border-radius: 1rem;
+  background: rgba(15, 23, 42, 0.48);
+  padding: 0.85rem;
+}
+
+.trust-guide-block h4,
+.trust-guide-tasks h4 {
+  margin: 0 0 0.55rem;
+}
+
+.trust-guide-block ul,
+.trust-guide-tasks ul {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.trust-guide-block li,
+.trust-guide-tasks li {
+  margin: 0.35rem 0;
+}
+
+.trust-guide-tasks {
+  margin-top: 1rem;
+}
+
+.trust-guide-tasks li {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: space-between;
+}
+
+.trust-guide-tasks span {
+  color: #cbd5e1;
+  font-size: 0.85rem;
+  text-transform: capitalize;
+}
