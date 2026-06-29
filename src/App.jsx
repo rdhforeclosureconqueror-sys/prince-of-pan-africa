@@ -449,6 +449,7 @@ function AppRoutes({ user, rbac, isAdmin, canAccessOrganizer, authChecked, refre
         ) : null}
 
         <Route path="/simba-main-hub" element={<SocietyBuilderRoute authChecked={authChecked} user={user} rbac={rbac}><SimbaMainHubPage /></SocietyBuilderRoute>} />
+        <Route path="/society-builder" element={<SocietyBuilderRoute authChecked={authChecked} user={user} rbac={rbac}><SocietyBuilderPage /></SocietyBuilderRoute>} />
         <Route path="/societies" element={<SocietyBuilderRoute authChecked={authChecked} user={user} rbac={rbac}><MySocietiesPage /></SocietyBuilderRoute>} />
         <Route path="/societies/start" element={<SocietyBuilderRoute authChecked={authChecked} user={user} rbac={rbac}><SocietyFormationPage /></SocietyBuilderRoute>} />
         <Route path="/societies/register-chapter" element={<SocietyBuilderRoute authChecked={authChecked} user={user} rbac={rbac}><SocietyFormationPage /></SocietyBuilderRoute>} />
