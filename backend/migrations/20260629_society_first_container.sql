@@ -1,7 +1,7 @@
 -- Society Container Registry foundation for the First Container / 100-Day Formation Container only.
 -- Future containers (90-Day, Institution, Ecosystem, Wealth, Property, Federation, Legacy) are intentionally not installed here.
 CREATE TABLE IF NOT EXISTS society_containers (
-  id INTEGER PRIMARY KEY,
+  id SERIAL PRIMARY KEY,
   society_id INTEGER NOT NULL,
   container_type VARCHAR(128) NOT NULL DEFAULT 'first_container_100_day',
   title VARCHAR(255) NOT NULL,
@@ -15,15 +15,15 @@ CREATE TABLE IF NOT EXISTS society_containers (
   active_milestone_id INTEGER,
   source_guide VARCHAR(255) NOT NULL DEFAULT 'Mutual Aid Society Handbook / First 100 Days Container',
   created_by INTEGER,
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS ix_society_containers_society_id ON society_containers (society_id);
 CREATE INDEX IF NOT EXISTS ix_society_containers_container_type ON society_containers (container_type);
 CREATE INDEX IF NOT EXISTS ix_society_containers_status ON society_containers (status);
 
 CREATE TABLE IF NOT EXISTS society_container_milestones (
-  id INTEGER PRIMARY KEY,
+  id SERIAL PRIMARY KEY,
   container_id INTEGER NOT NULL,
   title VARCHAR(255) NOT NULL,
   description TEXT NOT NULL DEFAULT '',
@@ -31,15 +31,15 @@ CREATE TABLE IF NOT EXISTS society_container_milestones (
   phase_label VARCHAR(128) NOT NULL DEFAULT '',
   percent_weight INTEGER NOT NULL DEFAULT 0,
   status VARCHAR(64) NOT NULL DEFAULT 'not_started',
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS ix_society_container_milestones_container_id ON society_container_milestones (container_id);
 CREATE INDEX IF NOT EXISTS ix_society_container_milestones_sequence_order ON society_container_milestones (sequence_order);
 CREATE INDEX IF NOT EXISTS ix_society_container_milestones_status ON society_container_milestones (status);
 
 CREATE TABLE IF NOT EXISTS society_trust_tasks (
-  id INTEGER PRIMARY KEY,
+  id SERIAL PRIMARY KEY,
   society_id INTEGER NOT NULL,
   container_id INTEGER NOT NULL,
   milestone_id INTEGER,
@@ -59,9 +59,9 @@ CREATE TABLE IF NOT EXISTS society_trust_tasks (
   completion_notes TEXT NOT NULL DEFAULT '',
   created_from_template BOOLEAN NOT NULL DEFAULT TRUE,
   created_by INTEGER,
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  completed_at DATETIME
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  completed_at TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS ix_society_trust_tasks_society_id ON society_trust_tasks (society_id);
 CREATE INDEX IF NOT EXISTS ix_society_trust_tasks_container_id ON society_trust_tasks (container_id);
