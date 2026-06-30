@@ -997,6 +997,81 @@ class SocietyFirstTenMember(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, onupdate=datetime.utcnow)
 
 
+class SocietyRoleOpening(Base):
+    __tablename__ = "society_role_openings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    society_id: Mapped[int] = mapped_column(ForeignKey("societies.id"), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    purpose: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    responsibilities: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    required_behaviors: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    handbook_chapters: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    recommended_assessments: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    status: Mapped[str] = mapped_column(String(64), nullable=False, default="open", index=True)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, onupdate=datetime.utcnow)
+
+
+class SocietyRoleCandidateReview(Base):
+    __tablename__ = "society_role_candidate_reviews"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    society_id: Mapped[int] = mapped_column(ForeignKey("societies.id"), nullable=False, index=True)
+    role_opening_id: Mapped[int] = mapped_column(ForeignKey("society_role_openings.id"), nullable=False, index=True)
+    candidate_member_id: Mapped[int] = mapped_column(ForeignKey("society_first_ten_members.id"), nullable=False, index=True)
+    alignment_label: Mapped[str] = mapped_column(String(64), nullable=False, default="Emerging Alignment", index=True)
+    behavioral_confidence: Mapped[str] = mapped_column(String(128), nullable=False, default="Limited evidence")
+    behavioral_evidence: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    assessment_evidence: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    growth_path: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    missing_assessments: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    current_strengths: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    handbook_references: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    complementary_teammates: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    reviewer_notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    decision: Mapped[str] = mapped_column(String(64), nullable=False, default="community_review", index=True)
+    development_plan: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, onupdate=datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint("role_opening_id", "candidate_member_id", name="uq_role_candidate_review"),)
+
+
+class SocietyRoleDiscussionNote(Base):
+    __tablename__ = "society_role_discussion_notes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    society_id: Mapped[int] = mapped_column(ForeignKey("societies.id"), nullable=False, index=True)
+    role_opening_id: Mapped[int] = mapped_column(ForeignKey("society_role_openings.id"), nullable=False, index=True)
+    candidate_review_id: Mapped[int | None] = mapped_column(ForeignKey("society_role_candidate_reviews.id"), nullable=True, index=True)
+    note: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class SocietyRoleAppointmentHistory(Base):
+    __tablename__ = "society_role_appointment_history"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    society_id: Mapped[int] = mapped_column(ForeignKey("societies.id"), nullable=False, index=True)
+    role_opening_id: Mapped[int] = mapped_column(ForeignKey("society_role_openings.id"), nullable=False, index=True)
+    candidate_member_id: Mapped[int] = mapped_column(ForeignKey("society_first_ten_members.id"), nullable=False, index=True)
+    role_title: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    start_date: Mapped[datetime | None] = mapped_column(Date, nullable=True)
+    reason: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    supporting_evidence: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    community_notes: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    review_date: Mapped[datetime | None] = mapped_column(Date, nullable=True, index=True)
+    mentor: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    training_status: Mapped[str] = mapped_column(String(128), nullable=False, default="Not started")
+    successor: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
 class SocietyPurpose(Base):
     __tablename__ = "society_purposes"
 
