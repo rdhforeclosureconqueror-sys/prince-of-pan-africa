@@ -34,3 +34,5 @@ export const getTrustTaskReaderReference = (id, taskId) => get(`/society-builder
 export const getSocietyIntelligence = (id, debug = false) => get(`/society-builder/societies/${id}/intelligence${debug ? "?debug=true" : ""}`);
 
 export const getInstitutionIntelligence = (id, debug = false) => get(`/society-builder/institutions/${id}/intelligence${debug ? "?debug=true" : ""}`);
+
+export const getOpportunityIntelligence = (id, debug = false) => get(`/society-builder/opportunities/intelligence${id ? `?society_id=${id}${debug ? "&debug=true" : ""}` : `${debug ? "?debug=true" : ""}`}`);

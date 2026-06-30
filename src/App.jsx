@@ -36,6 +36,7 @@ import SocietyInstitutionalProfilePage from "./pages/SocietyInstitutionalProfile
 import SocietyDirectoryPage from "./pages/SocietyDirectoryPage";
 import SocietyTrustBoardPage from "./pages/SocietyTrustBoardPage";
 import SocietyIntelligenceDashboardPage from "./pages/SocietyIntelligenceDashboardPage";
+import OpportunityIntelligencePage from "./pages/OpportunityIntelligencePage";
 import First100DaysChapterReaderPage from "./pages/First100DaysChapterReaderPage";
 import MutualAidAdminPlanningPage from "./pages/MutualAidAdminPlanningPage";
 import MutualAidPilotReadinessPage from "./pages/MutualAidPilotReadinessPage";
@@ -466,6 +467,7 @@ function AppRoutes({ user, rbac, isAdmin, canAccessOrganizer, authChecked, refre
         <Route path="/societies/:societyId/directory" element={<SocietyBuilderRoute authChecked={authChecked} user={user} rbac={rbac}><SocietyDirectoryPage /></SocietyBuilderRoute>} />
         <Route path="/societies/:societyId/trust-board" element={<SocietyBuilderRoute authChecked={authChecked} user={user} rbac={rbac}><SocietyTrustBoardPage /></SocietyBuilderRoute>} />
         <Route path="/societies/:societyId/intelligence" element={<SocietyBuilderRoute authChecked={authChecked} user={user} rbac={rbac}><SocietyIntelligenceDashboardPage user={user} rbac={rbac} /></SocietyBuilderRoute>} />
+        <Route path="/societies/:societyId/opportunities" element={<SocietyBuilderRoute authChecked={authChecked} user={user} rbac={rbac}><OpportunityIntelligencePage user={user} rbac={rbac} /></SocietyBuilderRoute>} />
         <Route path="/societies/:societyId/containers/first-100-days/chapter/:chapterId" element={<SocietyBuilderRoute authChecked={authChecked} user={user} rbac={rbac}><First100DaysChapterReaderPage /></SocietyBuilderRoute>} />
         <Route path="/societies/:societyId" element={<SocietyBuilderRoute authChecked={authChecked} user={user} rbac={rbac}><SocietyHomePage /></SocietyBuilderRoute>} />
         <Route path="/admin/societies/chapters" element={<AdminSocietyBuilderRoute authChecked={authChecked} user={user} rbac={rbac} isAdmin={isAdmin}><SocietyChapterAdminPage /></AdminSocietyBuilderRoute>} />

@@ -14,6 +14,7 @@ from app.dependencies.auth import get_current_user, require_auth, require_permis
 from app.models import Society, SocietyBlueprintAudit, SocietyRoleOpening, SocietyRoleCandidateReview, SocietyRoleDiscussionNote, SocietyRoleAppointmentHistory, SocietyContainer, SocietyContainerMilestone, SocietyCovenant, SocietyFirstTenMember, SocietyInstitutionalProfile, SocietyMembership, SocietyPurpose, SocietyTrustTask, User, Audiobook, AudiobookChapter
 from app.services.society_intelligence import generate_society_intelligence
 from app.services.institution_intelligence import generate_institution_intelligence
+from app.services.opportunity_intelligence import generate_opportunity_intelligence
 from app.services.society_builder import (
     DEFAULT_COVENANT,
     FIRST_CONTAINER_TYPE,
@@ -406,6 +407,16 @@ def institution_intelligence(institution_id: int, debug: bool = False, current_u
         return generate_institution_intelligence(db, institution_id=institution.id, include_debug=include_debug)
     except ValueError:
         raise HTTPException(status_code=404, detail="Institution not found")
+
+
+@router.get("/opportunities/intelligence")
+def opportunity_intelligence(society_id: int | None = None, debug: bool = False, current_user: User = Depends(require_permission("society_builder:read_admin")), db: Session = Depends(get_db)):
+    require_society_builder_enabled(db, current_user)
+    include_debug = debug and user_has_permission(db, current_user, "society_builder:read_admin")
+    try:
+        return generate_opportunity_intelligence(db, society_id=society_id, include_debug=include_debug)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Society not found")
 
 @router.patch("/societies/{society_id}")
 def patch_society(society_id: int, payload: SocietyPatchPayload, current_user: User = Depends(require_permission("society_builder:update_self")), db: Session = Depends(get_db)):
