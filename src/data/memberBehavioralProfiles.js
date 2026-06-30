@@ -1,3 +1,7 @@
+// Deprecated: these static profiles are fallback-only. New intelligence features should
+// prefer backend-generated Member Intelligence read models when live society data exists.
+export const memberBehavioralProfilesStatus = "deprecated_fallback_only";
+
 export const sampleMemberBehavioralProfiles = Object.freeze([
   {
     key: "amina-johnson",
