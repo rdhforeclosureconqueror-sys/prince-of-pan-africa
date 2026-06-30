@@ -1,4 +1,4 @@
-import { getRoleBlueprintByKey } from "./mutualAidRoleBlueprints";
+import { getRoleBlueprintByKey } from "./mutualAidRoleBlueprints.js";
 
 const ASSESSMENT_IMPORTANCE = {
   "Leadership archetype assessment": "leadership style, responsibility holding, and shared accountability",
@@ -23,6 +23,15 @@ function unique(items) {
 
 function completedAssessmentNames(profile) {
   return (profile.completedAssessments || []).map((assessment) => assessment.name);
+}
+
+function missingAssessmentNames(profile, blueprint) {
+  const completedNames = completedAssessmentNames(profile);
+  const explicitlyMissing = profile.missingAssessments || [];
+  return unique([
+    ...blueprint.recommendedAssessments.filter((name) => !completedNames.includes(name)),
+    ...explicitlyMissing.filter((name) => blueprint.recommendedAssessments.includes(name)),
+  ]);
 }
 
 function matchingTraitEvidence(profile, blueprint) {
@@ -69,15 +78,14 @@ export function interpretMemberRoleAlignment(profile, roleKey) {
   const blueprint = getRoleBlueprintByKey(roleKey);
   if (!profile || !blueprint) return null;
 
-  const completedNames = completedAssessmentNames(profile);
-  const missingAssessments = blueprint.recommendedAssessments.filter((name) => !completedNames.includes(name));
+  const missingAssessments = missingAssessmentNames(profile, blueprint);
   const evidence = matchingTraitEvidence(profile, blueprint);
   const archetypes = archetypeMatches(profile, blueprint);
   const overallAlignment = alignmentLabel(evidence.length, missingAssessments.length, archetypes.length);
   const confidence = confidenceFor(profile, missingAssessments, evidence.length);
 
   const strengthPool = unique([
-    ...profile.demonstratedStrengths,
+    ...(profile.behavioralStrengths || profile.demonstratedStrengths || []),
     ...evidence.flatMap((item) => item.matchingTraits.map((trait) => trait.replace(/\b\w/g, (letter) => letter.toUpperCase()))),
   ]).slice(0, 7);
 
@@ -102,6 +110,12 @@ export function interpretMemberRoleAlignment(profile, roleKey) {
       ? `${profile.displayName}'s ${archetypes.join(" and ")} pattern appears connected to this role blueprint.`
       : `${profile.displayName}'s current archetype evidence can still be interpreted alongside completed assessments; no automatic role conclusion is made.`,
     strengthsAlreadyDemonstrated: strengthPool,
+    behavioralStrengths: profile.behavioralStrengths || strengthPool,
+    developmentAreas: profile.developmentAreas || [],
+    consideredRoles: profile.consideredRoles || [],
+    pastAppointments: profile.pastAppointments || [],
+    roleAppointmentHistory: profile.roleAppointmentHistory || [],
+    evidenceSources: profile.evidence || evidence,
     areasThatCouldBeStrengthened: growthAreas.map((area) => `To become even stronger in this responsibility, consider developing ${area}.`),
     missingAssessmentEvidence: missingAssessments.map((name) => ({
       name,
@@ -114,6 +128,8 @@ export function interpretMemberRoleAlignment(profile, roleKey) {
     confidenceExplanation: missingAssessments.length
       ? "Additional assessment evidence would improve confidence because one or more recommended assessments are not yet complete."
       : "Confidence reflects completed assessment evidence currently available for this role blueprint.",
+    missingInformation: missingAssessments.length ? missingAssessments : ["No missing role assessment evidence identified."],
+    suggestedNextAssessment: missingAssessments[0] || profile.suggestedNextAssessment || "Continue periodic reassessment",
     communityDecisionReminder: "This report interprets evidence for community review. It does not rank members, appoint members, or replace the community decision process.",
   };
 }
