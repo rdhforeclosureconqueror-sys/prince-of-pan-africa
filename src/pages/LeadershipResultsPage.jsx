@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import ResultsDashboard from "../components/leadership/ResultsDashboard";
+import { buildMemberIntelligence } from "../data/memberIntelligence";
+import AdminMemberIntelligenceDebug from "../components/AdminMemberIntelligenceDebug";
 import { fetchLeadershipDashboard } from "../services/leadershipService";
 import "../styles/leadership.css";
 
@@ -44,6 +46,12 @@ export default function LeadershipResultsPage() {
   }, [location.state?.submissionId, userId]);
 
   const result = dashboard?.latest || null;
+
+  const memberIntelligence = useMemo(() => buildMemberIntelligence({
+    member: { id: userId, name: result?.userId },
+    assessmentResults: result ? [result, ...(dashboard?.history || [])] : [],
+    growthProfile: { recommended_roles: result?.roles ? Object.values(result.roles).filter(Boolean) : [] },
+  }), [dashboard?.history, result, userId]);
 
   const pathway = useMemo(() => {
     if (!result?.roles) return null;
@@ -99,6 +107,16 @@ export default function LeadershipResultsPage() {
       </section>
 
       <ResultsDashboard result={result} />
+
+      <section className="pathway-panel">
+        <h3>Member Intelligence Review</h3>
+        <p><strong>Confidence:</strong> {memberIntelligence.confidence}</p>
+        <p><strong>Missing assessments:</strong> {memberIntelligence.missingAssessments.join(", ") || "No immediate gaps"}</p>
+        <p><strong>Suggested next assessment:</strong> {memberIntelligence.suggestedNextAssessment}</p>
+        <p>No automatic appointment is created from this review.</p>
+      </section>
+
+      <AdminMemberIntelligenceDebug intelligence={memberIntelligence} isAdmin />
 
       {pathway ? (
         <section className="pathway-panel">

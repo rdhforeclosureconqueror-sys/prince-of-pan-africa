@@ -9,6 +9,8 @@ import { getDailyHistoricalSpotlight } from "../data/dailyHistoricalSpotlights";
 import ApplicationCard from "../components/ApplicationCard";
 import { SIMBA_APPLICATIONS } from "../data/applications";
 import { TIMELINE_A_AFRICA_ORIGINS } from "../data/timelineA_africaOrigins";
+import { buildMemberIntelligence } from "../data/memberIntelligence";
+import AdminMemberIntelligenceDebug from "../components/AdminMemberIntelligenceDebug";
 import swahiliLessons from "../../public/languages/swahili_30days.json";
 import "../styles/dashboard.css";
 import "../styles/applications.css";
@@ -372,14 +374,20 @@ export default function MemberDashboard() {
   const growthBadges = Array.isArray(growthProfile?.badges) ? growthProfile.badges : [];
   const growthTimeline = Array.isArray(growthProfile?.timeline) ? growthProfile.timeline : [];
   const completedAssessments = latestAssessmentResults.length ? latestAssessmentResults : latestCompletedAssessments(assessmentResults);
+  const memberIntelligence = buildMemberIntelligence({
+    member: { id: memberId, name: memberName, email: overview?.user?.email || overview?.email },
+    assessmentResults: completedAssessments,
+    growthProfile,
+    appointments: membership?.appointments || membership?.role_appointments || [],
+  });
 
   const latestAssessment = completedAssessments[0] || growthTimeline[0] || null;
   const latestAssessmentName = latestAssessment?.assessment_name || latestAssessment?.title || "No assessment completed yet";
   const latestAssessmentDate = latestAssessment?.completed_at || latestAssessment?.completion_date || null;
-  const recommendedAssessmentRaw = growthSummary.recommended_next_assessment?.assessment_name || latestAssessment?.recommended_next_assessment?.assessment_name || "Leadership Archetype Assessment";
+  const recommendedAssessmentRaw = memberIntelligence.suggestedNextAssessment || growthSummary.recommended_next_assessment?.assessment_name || latestAssessment?.recommended_next_assessment?.assessment_name || "Leadership Archetype Assessment";
   const recommendedAssessment = adultSafeAssessmentName(recommendedAssessmentRaw, youthProgrammingEligible);
   const currentStage = growthSummary.completed_assessments > 0 ? `${growthSummary.completed_assessments} assessment${growthSummary.completed_assessments === 1 ? "" : "s"} completed` : completedAssessments.length ? `${completedAssessments.length} assessment${completedAssessments.length === 1 ? "" : "s"} completed` : "Beginning the journey";
-  const currentGrowthFocus = latestAssessment?.opportunities_for_growth?.[0] || latestAssessment?.category || growthSummary.recommended_next_assessment?.reason || "Complete your next Garvey assessment to reveal your focus.";
+  const currentGrowthFocus = memberIntelligence.developmentAreas?.[0] || latestAssessment?.opportunities_for_growth?.[0] || latestAssessment?.category || growthSummary.recommended_next_assessment?.reason || "Complete your next Garvey assessment to reveal your focus.";
   const currentFocusTitle = completedAssessments.length ? "Developing Leadership Through Self-Awareness" : "Beginning Your Growth Journey";
   const currentFocusDescription = completedAssessments.length
     ? `Based on your most recent assessment, continue strengthening your leadership style by completing ${recommendedAssessment}.`
@@ -427,6 +435,7 @@ export default function MemberDashboard() {
   const snapshotStats = [
     ["Books Read", summary?.books_completed ?? 0],
     ["Assessments Completed", growthSummary.completed_assessments ?? completedAssessments.length],
+    ["Intelligence Confidence", memberIntelligence.confidence],
     ["STAR Earned", currentStar],
     ["Current Membership", membership?.label || membershipStatusLabel],
     ["Badges Earned", growthBadges.length || starRewards.filter((reward) => reward.unlocked).length],
@@ -646,6 +655,8 @@ export default function MemberDashboard() {
 
         <section className="cosmic-section member-hub-card member-hub-card--wide living-section learning-hub-card">
           <p className="section-kicker">Learning Paths</p><h2>Quiet options when you are ready for more</h2>
+          <section className="cosmic-section"><p className="section-kicker">Member Intelligence</p><h2>{memberIntelligence.isFallback ? "Fallback behavioral profile active" : "Live intelligence active"}</h2><p>{memberIntelligence.isFallback ? memberIntelligence.fallbackReason : memberIntelligence.confidenceCalculation}</p><ul className="recent-growth-list"><li>Confidence: {memberIntelligence.confidence}</li><li>Evidence: {memberIntelligence.evidence.length} source(s)</li><li>Missing: {memberIntelligence.missingAssessments.slice(0, 2).join(", ") || "No immediate gaps"}</li><li>Next assessment: {recommendedAssessment}</li></ul><AdminMemberIntelligenceDebug intelligence={memberIntelligence} isAdmin={isAdminOrOperator} /></section>
+
           <div className="learning-hub-grid"><Link to="/library"><strong>Continue Reading</strong><span>{learningPath?.title || "Library"}</span></Link><Link to="/study"><strong>Continue Audiobook</strong><span>Listen and study</span></Link><a href="/languages/swahili.html"><strong>Continue Swahili</strong><span>{swahiliWord ? `Today: ${swahiliWord.swahili}` : "Practice language"}</span></a><a href="/languages/yoruba.html"><strong>Continue Learning</strong><span>Yoruba practice</span></a><Link to="/assessments"><strong>Continue Assessment</strong><span>{recommendedAssessment}</span></Link><Link to="/timeline"><strong>Historical Study</strong><span>{historicalSpotlightTitle}</span></Link></div>
         </section>
 

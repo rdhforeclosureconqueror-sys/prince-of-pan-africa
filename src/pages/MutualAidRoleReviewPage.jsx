@@ -1,6 +1,9 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import "../styles/library.css";
 import { getAllSampleMemberBehavioralProfiles } from "../data/memberBehavioralProfiles";
+import { getAssessmentResults, getGrowthProfile } from "../api/assessments";
+import { buildMemberIntelligence, memberIntelligenceToBehavioralProfile, manualAdminMemberIntelligenceChecklist } from "../data/memberIntelligence";
+import AdminMemberIntelligenceDebug from "../components/AdminMemberIntelligenceDebug";
 import { getAllRoleBlueprints } from "../data/mutualAidRoleBlueprints";
 import { interpretMemberRoleAlignment } from "../data/roleInterpretationEngine";
 
@@ -14,12 +17,26 @@ function ReportList({ title, items, emptyText = "No items to show yet." }) {
 }
 
 export default function MutualAidRoleReviewPage() {
-  const members = getAllSampleMemberBehavioralProfiles();
+  const sampleMembers = getAllSampleMemberBehavioralProfiles();
   const roles = getAllRoleBlueprints();
-  const [memberKey, setMemberKey] = useState(members[0]?.key || "");
+  const [liveIntelligence, setLiveIntelligence] = useState(null);
+
+  useEffect(() => {
+    let mounted = true;
+    Promise.allSettled([getAssessmentResults(), getGrowthProfile()]).then(([results, growth]) => {
+      if (!mounted) return;
+      const assessmentResults = results.status === "fulfilled" ? (results.value?.latest_results || results.value?.results || []) : [];
+      const growthProfile = growth.status === "fulfilled" ? growth.value?.growth_profile : null;
+      setLiveIntelligence(buildMemberIntelligence({ assessmentResults, growthProfile, sampleProfileKey: "amina-johnson" }));
+    });
+    return () => { mounted = false; };
+  }, []);
+  const liveProfile = liveIntelligence ? memberIntelligenceToBehavioralProfile(liveIntelligence) : null;
+  const members = liveProfile && !liveProfile.isFallback ? [liveProfile, ...sampleMembers] : sampleMembers;
+  const [memberKey, setMemberKey] = useState("live-current-member");
   const [roleKey, setRoleKey] = useState("treasurer");
 
-  const selectedMember = members.find((member) => member.key === memberKey) || members[0];
+  const selectedMember = (memberKey === "live-current-member" && liveProfile) ? liveProfile : members.find((member) => member.key === memberKey) || liveProfile || members[0];
   const report = useMemo(() => interpretMemberRoleAlignment(selectedMember, roleKey), [selectedMember, roleKey]);
 
   if (!report) {
@@ -29,7 +46,7 @@ export default function MutualAidRoleReviewPage() {
   return (
     <main className="library-shell">
       <section className="library-inner cosmic-readable-shell role-review-shell">
-        <p className="library-pill library-pill--green">Internal Phase 1C preview</p>
+        <p className="library-pill library-pill--green">Live Member Intelligence Integration</p>
         <h1>Mutual Aid Role Review</h1>
         <p>
           Compare a member behavioral profile with a role blueprint. This page interprets evidence for community
@@ -40,7 +57,8 @@ export default function MutualAidRoleReviewPage() {
           <label>
             Selected member
             <select value={memberKey} onChange={(event) => setMemberKey(event.target.value)}>
-              {members.map((member) => <option key={member.key} value={member.key}>{member.displayName}</option>)}
+              {liveProfile ? <option value="live-current-member">Current member intelligence {liveProfile.isFallback ? "(fallback)" : "(live)"}</option> : null}
+              {sampleMembers.map((member) => <option key={member.key} value={member.key}>{member.displayName} (deprecated fallback)</option>)}
             </select>
           </label>
           <label>
@@ -66,8 +84,11 @@ export default function MutualAidRoleReviewPage() {
         </section>
 
         <section className="library-card role-review-panel">
-          <h2>Why This Alignment Exists</h2>
+          <h2>Why This Recommendation Exists</h2>
           <ul>{report.whyThisAlignmentExists.map((item) => <li key={item}>{item}</li>)}</ul>
+          <p><strong>Confidence:</strong> {report.confidence}</p>
+          <p><strong>Missing information:</strong> {report.missingInformation.join(", ")}</p>
+          <p><strong>Suggested next assessment:</strong> {report.suggestedNextAssessment}</p>
         </section>
 
         <div className="library-grid role-review-grid">
@@ -93,6 +114,10 @@ export default function MutualAidRoleReviewPage() {
             <ul>{report.complementaryTeamMembers.map((type) => <li key={type}>{type}</li>)}</ul>
           </section>
         </div>
+
+        <section className="library-card role-review-panel"><h2>Manual Admin Test Checklist</h2><ol>{manualAdminMemberIntelligenceChecklist.map((item) => <li key={item}>{item}</li>)}</ol></section>
+
+        <AdminMemberIntelligenceDebug intelligence={selectedMember.rawMemberIntelligence || liveIntelligence} isAdmin />
 
         <p className="role-review-reminder">{report.communityDecisionReminder}</p>
       </section>
