@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime, timedelta
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies.auth import get_current_user, require_auth, require_permission
-from app.models import Society, SocietyBlueprintAudit, SocietyContainer, SocietyContainerMilestone, SocietyCovenant, SocietyFirstTenMember, SocietyInstitutionalProfile, SocietyMembership, SocietyPurpose, SocietyTrustTask, User, Audiobook, AudiobookChapter
+from app.models import Society, SocietyBlueprintAudit, SocietyRoleOpening, SocietyRoleCandidateReview, SocietyRoleDiscussionNote, SocietyRoleAppointmentHistory, SocietyContainer, SocietyContainerMilestone, SocietyCovenant, SocietyFirstTenMember, SocietyInstitutionalProfile, SocietyMembership, SocietyPurpose, SocietyTrustTask, User, Audiobook, AudiobookChapter
 from app.services.society_builder import (
     DEFAULT_COVENANT,
     FIRST_CONTAINER_TYPE,
@@ -182,6 +182,34 @@ class TrustTaskCreatePayload(BaseModel):
     due_date: str | None = None
     priority: str = "normal"
     blocked_reason: str = ""
+
+
+class RoleOpeningPayload(BaseModel):
+    title: str = Field(min_length=1, max_length=255)
+    purpose: str = ""
+    responsibilities: list[str] = []
+    required_behaviors: list[str] = []
+    handbook_chapters: list[str] = []
+    recommended_assessments: list[str] = []
+
+
+class ReviewerNotesPayload(BaseModel):
+    reviewer_notes: str = ""
+
+
+class DiscussionNotePayload(BaseModel):
+    candidate_review_id: int | None = None
+    note: str = Field(min_length=1, max_length=5000)
+
+
+class DecisionPayload(BaseModel):
+    decision: str
+    reason: str = ""
+    start_date: str | None = None
+    review_date: str | None = None
+    mentor: str = ""
+    training_status: str = "Not started"
+
 
 
 
@@ -599,6 +627,191 @@ def update_trust_task(society_id: int, task_id: int, payload: TrustTaskPatchPayl
     db.commit()
     db.refresh(task)
     return {"ok": True, "task": task_dict(task), "container": container_dict(db, container) if container else None}
+
+def _row_public(row) -> dict | None:
+    return None if row is None else {c.name: getattr(row, c.name) for c in row.__table__.columns}
+
+
+def _parse_date(value: str | None, fallback: date | None = None) -> date | None:
+    if not value:
+        return fallback
+    return date.fromisoformat(value)
+
+
+def _role_opening_or_404(db: Session, society_id: int, role_id: int) -> SocietyRoleOpening:
+    row = db.query(SocietyRoleOpening).filter_by(id=role_id, society_id=society_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Role opening not found")
+    return row
+
+
+def _review_or_404(db: Session, society_id: int, role_id: int, review_id: int) -> SocietyRoleCandidateReview:
+    row = db.query(SocietyRoleCandidateReview).filter_by(id=review_id, society_id=society_id, role_opening_id=role_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Candidate review not found")
+    return row
+
+
+def _candidate_name(member: SocietyFirstTenMember | None) -> str:
+    return member.name if member else "Unknown member"
+
+
+def _candidate_fit(role: SocietyRoleOpening, member: SocietyFirstTenMember, teammates: list[SocietyFirstTenMember]) -> dict:
+    behaviors = [b.lower() for b in (role.required_behaviors or [])]
+    evidence = []
+    strengths = []
+    growth = []
+    score = 0
+    if member.reliability_score >= 4:
+        evidence.append("Behavioral evidence: dependable follow-through in the First Ten profile."); strengths.append("Reliability"); score += 2
+    if member.confidentiality_score >= 4:
+        evidence.append("Behavioral evidence: trusted with sensitive information in confidentiality observations."); strengths.append("Confidentiality"); score += 2
+    if member.relationship_capacity_score >= 4:
+        evidence.append("Behavioral evidence: steady relationship capacity and collaboration."); strengths.append("Relationship capacity"); score += 2
+    if member.skill_capacity_score >= 4:
+        evidence.append("Behavioral evidence: practical skill capacity for shared responsibilities."); strengths.append("Skill capacity"); score += 2
+    if member.financial_steadiness_score >= 4:
+        evidence.append("Behavioral evidence: financial steadiness for roles involving resources or records."); strengths.append("Financial steadiness"); score += 2
+    if any(word in " ".join(behaviors) for word in ["finance", "money", "treasury", "transparent"]):
+        if member.financial_steadiness_score >= 4: score += 1
+        else: growth.append("Practice two-person financial review before carrying treasury responsibility.")
+    if any(word in " ".join(behaviors) for word in ["listen", "facilitat", "meeting"]):
+        if member.relationship_capacity_score >= 4: score += 1
+        else: growth.append("Shadow meeting facilitation and receive mentoring on listening practices.")
+    if member.notes:
+        evidence.append(member.notes)
+    if member.possible_contribution:
+        strengths.append(member.possible_contribution)
+    if not growth:
+        growth.append("Continue role-specific practice with a mentor and document learning after the first review cycle.")
+    if score >= 8:
+        label = "Strong Alignment"
+    elif score >= 5:
+        label = "Good Alignment"
+    else:
+        label = "Emerging Alignment"
+    confidence = "Substantial community evidence" if score >= 8 else "Developing community evidence" if score >= 5 else "Limited evidence; review with care"
+    completed = {"First Ten behavioral profile"}
+    missing = [a for a in (role.recommended_assessments or []) if a not in completed]
+    complements = [m.name for m in teammates if m.id != member.id and (m.reliability_score >= 4 or m.relationship_capacity_score >= 4)][:3]
+    return {"alignment_label": label, "behavioral_confidence": confidence, "behavioral_evidence": evidence or ["No behavioral notes recorded yet."], "assessment_evidence": list(completed), "growth_path": growth, "missing_assessments": missing, "current_strengths": strengths or ["Invite reviewers to record observed strengths."], "handbook_references": role.handbook_chapters or [], "complementary_teammates": complements}
+
+
+def _development_plan(role: SocietyRoleOpening, review: SocietyRoleCandidateReview) -> dict:
+    return {"suggested_assessments": review.missing_assessments or role.recommended_assessments or ["Role fit reflection"], "handbook_chapters": role.handbook_chapters or ["Mutual Aid Society operating handbook"], "recommended_mentor": (review.complementary_teammates or ["Society facilitator"])[0], "suggested_practice_opportunities": ["Shadow the role in one meeting", "Co-lead a small responsibility", "Review notes with a mentor"], "estimated_review_timeline": "Review again in 30–60 days"}
+
+@router.get("/societies/{society_id}/role-assignment/dashboard")
+def role_assignment_dashboard(society_id: int, current_user: User = Depends(require_permission("society_builder:read_self")), db: Session = Depends(get_db)):
+    require_society_builder_enabled(db, current_user)
+    society = _get_society(db, society_id)
+    _require_member_access(db, current_user, society)
+    openings = db.query(SocietyRoleOpening).filter_by(society_id=society.id).order_by(SocietyRoleOpening.created_at.desc()).all()
+    reviews = db.query(SocietyRoleCandidateReview).filter_by(society_id=society.id).all()
+    history = db.query(SocietyRoleAppointmentHistory).filter_by(society_id=society.id).order_by(SocietyRoleAppointmentHistory.created_at.desc()).all()
+    return {"ok": True, "society": safe_society_summary(db, society), "current_members": first_ten_summary(db, society.id), "open_roles": [_row_public(r) for r in openings if r.status == "open"], "filled_roles": [_row_public(r) for r in openings if r.status == "appointed"], "vacant_roles": [_row_public(r) for r in openings if r.status in {"open", "under_review"}], "roles_under_review": [_row_public(r) for r in openings if r.status == "under_review"], "recently_appointed": [_row_public(h) for h in history[:5]], "needs_development": [_row_public(r) for r in reviews if r.decision == "needs_development"], "upcoming_reviews": [_row_public(h) for h in history if h.review_date][:10]}
+
+
+@router.post("/societies/{society_id}/role-assignment/open-roles")
+def create_role_opening(society_id: int, payload: RoleOpeningPayload, current_user: User = Depends(require_permission("society_builder:update_self")), db: Session = Depends(get_db)):
+    require_society_builder_enabled(db, current_user)
+    society = _get_society(db, society_id)
+    _require_manage_access(db, current_user, society)
+    row = SocietyRoleOpening(society_id=society.id, created_by=current_user.id, **payload.model_dump())
+    db.add(row); db.flush()
+    audit(db, actor_user_id=current_user.id, action="role_opened", entity_id=society.id, after={"role_opening_id": row.id, "title": row.title})
+    db.commit(); db.refresh(row)
+    return {"ok": True, "role": _row_public(row)}
+
+
+@router.get("/societies/{society_id}/role-assignment/open-roles/{role_id}")
+def get_role_opening(society_id: int, role_id: int, current_user: User = Depends(require_permission("society_builder:read_self")), db: Session = Depends(get_db)):
+    require_society_builder_enabled(db, current_user)
+    society = _get_society(db, society_id); _require_member_access(db, current_user, society)
+    role = _role_opening_or_404(db, society.id, role_id)
+    reviews = db.query(SocietyRoleCandidateReview).filter_by(role_opening_id=role.id).all()
+    return {"ok": True, "society": safe_society_summary(db, society), "role": _row_public(role), "candidate_reviews": [_row_public(r) for r in reviews]}
+
+
+@router.post("/societies/{society_id}/role-assignment/open-roles/{role_id}/suggest-candidates")
+def suggest_role_candidates(society_id: int, role_id: int, current_user: User = Depends(require_permission("society_builder:update_self")), db: Session = Depends(get_db)):
+    require_society_builder_enabled(db, current_user)
+    society = _get_society(db, society_id); _require_manage_access(db, current_user, society)
+    role = _role_opening_or_404(db, society.id, role_id)
+    members = db.query(SocietyFirstTenMember).filter_by(society_id=society.id).order_by(SocietyFirstTenMember.created_at.asc(), SocietyFirstTenMember.id.asc()).all()
+    groups = {"Strong Alignment": [], "Good Alignment": [], "Emerging Alignment": []}
+    for member in members:
+        fit = _candidate_fit(role, member, members)
+        review = db.query(SocietyRoleCandidateReview).filter_by(role_opening_id=role.id, candidate_member_id=member.id).first()
+        if not review:
+            review = SocietyRoleCandidateReview(society_id=society.id, role_opening_id=role.id, candidate_member_id=member.id, created_by=current_user.id)
+            db.add(review)
+        for k, v in fit.items(): setattr(review, k, v)
+        db.flush()
+        groups[fit["alignment_label"]].append({"candidate_member": _row_public(member), "review": _row_public(review)})
+    role.status = "under_review"
+    audit(db, actor_user_id=current_user.id, action="role_candidates_suggested", entity_id=society.id, after={"role_opening_id": role.id})
+    db.commit()
+    return {"ok": True, "role": _row_public(role), "suggested_candidates": groups, "language_guardrail": "No ranking numbers, percentages, Best label, AI appointments, or automatic promotions are used."}
+
+
+@router.get("/societies/{society_id}/role-assignment/open-roles/{role_id}/reviews/{review_id}")
+def get_candidate_review(society_id: int, role_id: int, review_id: int, current_user: User = Depends(require_permission("society_builder:read_self")), db: Session = Depends(get_db)):
+    require_society_builder_enabled(db, current_user)
+    society = _get_society(db, society_id); _require_member_access(db, current_user, society)
+    role = _role_opening_or_404(db, society.id, role_id); review = _review_or_404(db, society.id, role.id, review_id)
+    candidate = db.query(SocietyFirstTenMember).filter_by(id=review.candidate_member_id).first()
+    notes = db.query(SocietyRoleDiscussionNote).filter_by(candidate_review_id=review.id).order_by(SocietyRoleDiscussionNote.created_at.asc()).all()
+    return {"ok": True, "candidate": _row_public(candidate), "role": _row_public(role), "review": _row_public(review), "discussion_notes": [_row_public(n) for n in notes]}
+
+
+@router.patch("/societies/{society_id}/role-assignment/open-roles/{role_id}/reviews/{review_id}")
+def update_candidate_review_notes(society_id: int, role_id: int, review_id: int, payload: ReviewerNotesPayload, current_user: User = Depends(require_permission("society_builder:update_self")), db: Session = Depends(get_db)):
+    require_society_builder_enabled(db, current_user)
+    society = _get_society(db, society_id); _require_manage_access(db, current_user, society)
+    role = _role_opening_or_404(db, society.id, role_id); review = _review_or_404(db, society.id, role.id, review_id)
+    review.reviewer_notes = payload.reviewer_notes
+    audit(db, actor_user_id=current_user.id, action="role_candidate_review_note_updated", entity_id=society.id, after={"review_id": review.id})
+    db.commit(); db.refresh(review)
+    return {"ok": True, "review": _row_public(review)}
+
+
+@router.post("/societies/{society_id}/role-assignment/open-roles/{role_id}/discussion-notes")
+def add_discussion_note(society_id: int, role_id: int, payload: DiscussionNotePayload, current_user: User = Depends(require_permission("society_builder:update_self")), db: Session = Depends(get_db)):
+    require_society_builder_enabled(db, current_user)
+    society = _get_society(db, society_id); _require_manage_access(db, current_user, society)
+    role = _role_opening_or_404(db, society.id, role_id)
+    row = SocietyRoleDiscussionNote(society_id=society.id, role_opening_id=role.id, candidate_review_id=payload.candidate_review_id, note=payload.note, created_by=current_user.id)
+    db.add(row); db.flush(); audit(db, actor_user_id=current_user.id, action="role_discussion_note_added", entity_id=society.id, after={"note_id": row.id})
+    db.commit(); db.refresh(row)
+    return {"ok": True, "discussion_note": _row_public(row)}
+
+
+@router.post("/societies/{society_id}/role-assignment/open-roles/{role_id}/reviews/{review_id}/decision")
+def record_role_decision(society_id: int, role_id: int, review_id: int, payload: DecisionPayload, current_user: User = Depends(require_permission("society_builder:update_self")), db: Session = Depends(get_db)):
+    require_society_builder_enabled(db, current_user)
+    society = _get_society(db, society_id); _require_manage_access(db, current_user, society)
+    role = _role_opening_or_404(db, society.id, role_id); review = _review_or_404(db, society.id, role.id, review_id)
+    allowed = {"appoint", "delay", "needs_development", "not_needed_right_now"}
+    if payload.decision not in allowed: raise HTTPException(status_code=400, detail="Decision must be Appoint, Delay, Needs Development, or Not Needed Right Now")
+    review.decision = payload.decision
+    appointment = None
+    if payload.decision == "appoint":
+        notes = db.query(SocietyRoleDiscussionNote).filter_by(role_opening_id=role.id).all()
+        appointment = SocietyRoleAppointmentHistory(society_id=society.id, role_opening_id=role.id, candidate_member_id=review.candidate_member_id, role_title=role.title, start_date=_parse_date(payload.start_date, date.today()), reason=payload.reason, supporting_evidence=review.behavioral_evidence + review.assessment_evidence, community_notes=[n.note for n in notes], review_date=_parse_date(payload.review_date, date.today() + timedelta(days=90)), mentor=payload.mentor, training_status=payload.training_status, created_by=current_user.id)
+        db.add(appointment); role.status = "appointed"
+    else:
+        review.development_plan = _development_plan(role, review); role.status = "open" if payload.decision == "not_needed_right_now" else "under_review"
+    audit(db, actor_user_id=current_user.id, action="role_appointment_decision_recorded", entity_id=society.id, after={"review_id": review.id, "decision": payload.decision})
+    db.commit()
+    return {"ok": True, "software_boundary": "The software recorded the community decision; it did not appoint anyone automatically.", "review": _row_public(review), "appointment": _row_public(appointment)}
+
+
+@router.get("/societies/{society_id}/role-assignment/appointment-history")
+def appointment_history(society_id: int, current_user: User = Depends(require_permission("society_builder:read_self")), db: Session = Depends(get_db)):
+    require_society_builder_enabled(db, current_user)
+    society = _get_society(db, society_id); _require_member_access(db, current_user, society)
+    rows = db.query(SocietyRoleAppointmentHistory).filter_by(society_id=society.id).order_by(SocietyRoleAppointmentHistory.created_at.desc()).all()
+    return {"ok": True, "history": [_row_public(r) for r in rows]}
 
 @router.get("/admin/chapter-applications")
 def chapter_applications(current_user: User = Depends(require_permission("society_builder:review_chapters")), db: Session = Depends(get_db)):
