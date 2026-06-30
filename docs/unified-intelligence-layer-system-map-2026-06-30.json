@@ -1,0 +1,79 @@
+{
+  "date": "2026-06-30",
+  "purpose": "Goal-oriented architecture map for integrating existing Society Builder, assessment, role-fit, container, trust-board, governance, and mutual-aid systems into a unified intelligence layer.",
+  "documentation_only": true,
+  "integration_spine": "Society Builder",
+  "source_of_truth": {
+    "society_context": ["Society", "SocietyMembership"],
+    "container_context": ["SocietyContainer", "SocietyContainerMilestone", "SocietyTrustTask"],
+    "member_society_profile": ["SocietyInstitutionalProfile"],
+    "first_founders_candidates": ["SocietyFirstTenMember"],
+    "role_review": ["SocietyRoleOpening", "SocietyRoleCandidateReview", "SocietyRoleDiscussionNote", "SocietyRoleAppointmentHistory"],
+    "garvey_assessment_evidence": ["GarveySyncEvent", "MemberProfile.attributes.growth_profile", "MemberProfile.attributes.garvey_assessment_completions"],
+    "legacy_assessment_evidence": ["LeadershipAssessment"],
+    "society_purpose_rules": ["SocietyPurpose", "SocietyCovenant"],
+    "mutual_aid_fund_operations": ["MutualAidFund", "MutualAidRequest", "MutualAidReview", "MutualAidDecision", "MutualAidDisbursement"]
+  },
+  "static_to_live_replacements": {
+    "src/data/memberBehavioralProfiles.js": "Replace in production role review with live behavioral profile adapter from Garvey, MemberProfile, SocietyInstitutionalProfile, and First Ten evidence.",
+    "src/pages/MutualAidRoleReviewPage.jsx": "Convert to live Society Builder role review or deprecate after /societies/:societyId/role-assignment exists.",
+    "src/data/roleInterpretationEngine.js": "Reuse language/rules, but live interpretation should write SocietyRoleCandidateReview.",
+    "src/data/mutualAidRoleBlueprints.js": "Keep as canonical seed data until backend blueprint catalog or migration exists."
+  },
+  "pre_adaptive_kanban_required_work": [
+    "Expose persisted role assignment via frontend API client.",
+    "Add live Society Builder role assignment UI.",
+    "Seed role openings from existing role blueprints.",
+    "Create live behavioral profile adapter from existing evidence sources.",
+    "Map Garvey assessment completions to role blueprint recommended assessments.",
+    "Write interpretation summaries to SocietyRoleCandidateReview.",
+    "Surface role coverage on Society Home.",
+    "Annotate Trust Board tasks with linked-role coverage without changing current Kanban behavior.",
+    "Add privacy, consent, and permission checks for assessment-derived evidence."
+  ],
+  "deferred": [
+    "Adaptive Kanban",
+    "Automatic task assignment",
+    "Automatic role appointment",
+    "Passport, badges, reputation, or negative scores",
+    "Full Meeting Builder",
+    "Full Care Teams and private needs workflow",
+    "Day 100 Report generation",
+    "Recommitment workflow",
+    "Next Phase Planner",
+    "Society-scoped treasury/fund accounting integration",
+    "Role-driven RBAC permission grants"
+  ],
+  "phase_roadmap": [
+    {"phase": 0, "name": "Document and freeze source-of-truth boundaries"},
+    {"phase": 1, "name": "Wire persisted role assignment into frontend Society Builder"},
+    {"phase": 2, "name": "Seed role openings from Role Blueprint Library"},
+    {"phase": 3, "name": "Build live behavioral profile adapter"},
+    {"phase": 4, "name": "Connect Garvey evidence to role interpretation"},
+    {"phase": 5, "name": "Connect role interpretation to First Ten and role openings"},
+    {"phase": 6, "name": "Connect role coverage to Trust Board and 100-Day Container"},
+    {"phase": 7, "name": "Add governance and dashboard summaries"},
+    {"phase": 8, "name": "Build later operating modules after the intelligence spine works"}
+  ],
+  "next_files_to_modify": {
+    "backend_immediate": [
+      "backend/app/routes/society_builder.py",
+      "backend/app/services/society_builder.py",
+      "backend/app/routes/garvey.py",
+      "backend/app/routes/member.py"
+    ],
+    "frontend_immediate": [
+      "src/api/societyBuilder.js",
+      "src/pages/SocietyHomePage.jsx",
+      "src/pages/SocietyRoleAssignmentPage.jsx",
+      "src/pages/SocietyTrustBoardPage.jsx",
+      "src/pages/MutualAidRoleReviewPage.jsx",
+      "src/App.jsx"
+    ],
+    "seed_data": [
+      "src/data/mutualAidRoleBlueprints.js",
+      "src/data/roleInterpretationEngine.js",
+      "src/data/memberBehavioralProfiles.js"
+    ]
+  }
+}
