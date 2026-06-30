@@ -32,3 +32,5 @@ export const updateTrustTask = (id, taskId, payload) => api(`/society-builder/so
 export const getTrustTaskReaderReference = (id, taskId) => get(`/society-builder/societies/${id}/trust-board/tasks/${taskId}/reader-reference`);
 
 export const getSocietyIntelligence = (id, debug = false) => get(`/society-builder/societies/${id}/intelligence${debug ? "?debug=true" : ""}`);
+
+export const getInstitutionIntelligence = (id, debug = false) => get(`/society-builder/institutions/${id}/intelligence${debug ? "?debug=true" : ""}`);
