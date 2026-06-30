@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "verify-system": "python backend/verification/run_full_verification.py",
-    "validate:daily-spotlights": "node scripts/validateDailyHistoricalSpotlights.mjs"
+    "validate:daily-spotlights": "node scripts/validateDailyHistoricalSpotlights.mjs",
+    "validate:mutual-aid-role-blueprints": "node scripts/validateMutualAidRoleBlueprints.mjs"
   },
   "dependencies": {
     "axios": "^1.6.2",
