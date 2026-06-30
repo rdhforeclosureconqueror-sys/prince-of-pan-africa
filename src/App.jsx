@@ -50,6 +50,7 @@ import MutualAidPilotSmokeTestsPage from "./pages/MutualAidPilotSmokeTestsPage";
 import MutualAidSecurityDashboard from "./pages/MutualAidSecurityDashboard";
 import MutualAidDocumentationDashboard from "./pages/MutualAidDocumentationDashboard";
 import MutualAidRoleBlueprintLibraryPage from "./pages/MutualAidRoleBlueprintLibraryPage";
+import MutualAidRoleReviewPage from "./pages/MutualAidRoleReviewPage";
 import { MutualAidRequestFormPage, MutualAidRequestStatusPage } from "./pages/MutualAidRequestPage";
 import { MutualAidAdminRequestDetailPage, MutualAidAdminReviewQueuePage } from "./pages/MutualAidAdminReviewPage";
 import {
@@ -441,6 +442,7 @@ function AppRoutes({ user, rbac, isAdmin, canAccessOrganizer, authChecked, refre
         <Route path="/admin/mutual-aid" element={<AdminPlanningRoute authChecked={authChecked} user={user} isAdmin={isAdmin} />} />
         <Route path="/admin/mutual-aid/pilot-readiness" element={<AdminPilotReadinessRoute authChecked={authChecked} user={user} isAdmin={isAdmin} />} />
         <Route path="/admin/mutual-aid/role-blueprints" element={<AdminMutualAidPilotShellRoute authChecked={authChecked} user={user} isAdmin={isAdmin}><MutualAidRoleBlueprintLibraryPage /></AdminMutualAidPilotShellRoute>} />
+        <Route path="/admin/mutual-aid/role-review" element={<AdminMutualAidPilotShellRoute authChecked={authChecked} user={user} isAdmin={isAdmin}><MutualAidRoleReviewPage /></AdminMutualAidPilotShellRoute>} />
         <Route path="/admin/mutual-aid/allowlist-preview" element={<AdminAllowlistPreviewRoute authChecked={authChecked} user={user} isAdmin={isAdmin} />} />
         {(isAdmin || ENABLE_MUTUAL_AID_OPERATIONS_DASHBOARD || ENABLE_MUTUAL_AID_OBSERVABILITY) ? (
           <Route path="/admin/mutual-aid/dashboard" element={<AdminMutualAidOperationsDashboardRoute authChecked={authChecked} user={user} isAdmin={isAdmin} />} />
