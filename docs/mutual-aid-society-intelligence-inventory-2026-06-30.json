@@ -1,0 +1,49 @@
+{
+  "date": "2026-06-30",
+  "scope": "Repo-wide Mutual Aid Society and archetype intelligence inspection",
+  "documentation_only": true,
+  "mutual_aid_society_capabilities": {
+    "society_registry": {"status": "implemented", "models": ["Society"], "routes": ["/society-builder/societies", "/society-builder/societies/{id}"]},
+    "society_membership": {"status": "implemented", "models": ["SocietyMembership"]},
+    "institutional_profiles": {"status": "implemented", "models": ["SocietyInstitutionalProfile"], "maps_to": ["skills_assets_seed", "needs_seed"]},
+    "first_ten": {"status": "implemented", "models": ["SocietyFirstTenMember"], "routes": ["/society-builder/societies/{id}/first-ten"]},
+    "purpose_builder": {"status": "implemented", "models": ["SocietyPurpose"], "routes": ["/society-builder/societies/{id}/purpose"]},
+    "covenant_builder": {"status": "implemented", "models": ["SocietyCovenant"], "routes": ["/society-builder/societies/{id}/covenant"]},
+    "first_100_days": {"status": "implemented_mvp", "models": ["SocietyContainer", "SocietyContainerMilestone", "SocietyTrustTask"], "routes": ["/society-builder/societies/{id}/containers/first-100-days/activate", "/society-builder/societies/{id}/trust-board"]},
+    "role_assignment": {"status": "implemented_mvp", "models": ["SocietyRoleOpening", "SocietyRoleCandidateReview", "SocietyRoleDiscussionNote", "SocietyRoleAppointmentHistory"]},
+    "mutual_aid_fund_runtime": {"status": "implemented_separate", "models": ["MutualAidFund", "MutualAidRequest", "MutualAidReview", "MutualAidDecision", "MutualAidDisbursement", "MutualAidCommitteeMember", "MutualAidReconciliationReport"]},
+    "meeting_builder": {"status": "missing"},
+    "care_teams": {"status": "missing"},
+    "day_100_report": {"status": "missing"},
+    "recommitment": {"status": "missing"},
+    "next_phase_planner": {"status": "missing"}
+  },
+  "intelligence_capabilities": {
+    "role_blueprint_library": {"status": "implemented_static_frontend", "files": ["src/data/mutualAidRoleBlueprints.js", "src/pages/MutualAidRoleBlueprintLibraryPage.jsx"]},
+    "member_behavioral_profiles": {"status": "implemented_static_sample", "files": ["src/data/memberBehavioralProfiles.js"]},
+    "role_interpretation_engine": {"status": "implemented_static_frontend", "files": ["src/data/roleInterpretationEngine.js"]},
+    "role_review_preview": {"status": "implemented_static_admin", "files": ["src/pages/MutualAidRoleReviewPage.jsx"]},
+    "persisted_role_assignment_workflow": {"status": "implemented_mvp_backend", "files": ["backend/app/models.py", "backend/app/routes/society_builder.py", "backend/migrations/20260630_role_assignment_workflow.sql"]},
+    "garvey_assessment_integration": {"status": "exists_elsewhere_not_connected_to_role_fit", "files": ["backend/app/routes/garvey.py", "backend/app/routes/assessment.py", "backend/app/routes/member.py", "src/api/assessments.js"]}
+  },
+  "highest_priority_gaps": [
+    "Seed backend role openings from role blueprint library",
+    "Connect role assignment to real assessment/Garvey evidence with consent",
+    "Surface role vacancies and appointment history on society dashboard",
+    "Connect role coverage to First 100 Days trust-board tasks",
+    "Connect Treasurer role review to treasury setup and controls",
+    "Build Meeting Builder for Facilitator and Recordkeeper roles",
+    "Build Needs Map and Care Teams for Care Coordinator role",
+    "Add Day 100 Report, Recommitment, and Next Phase Planner"
+  ],
+  "recommended_phases": [
+    "Connect role-fit review to Society Builder foundation",
+    "Connect First Ten and assessments",
+    "Connect role coverage to 100-Day Planner and handbook",
+    "Connect Treasurer to treasury/fund setup",
+    "Build Meeting Builder and connect Facilitator/Recordkeeper",
+    "Build Needs Map/Care Teams and connect Care Coordinator",
+    "Build Day 100 Report, Recommitment, and Next Phase Planner",
+    "Deprecate duplicate previews and harden permissions"
+  ]
+}
