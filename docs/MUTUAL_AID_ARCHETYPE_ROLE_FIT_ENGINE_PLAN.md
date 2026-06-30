@@ -340,40 +340,76 @@ Do not edit the handbook content. Add contextual side panels, callouts, or optio
 
 ## 14. Phased Build Plan
 
-### Phase 1 — Planning and Seed Data
+### Phase 1 — Build Scope: First Usable Role-Fit Loop
+
+Phase 1 should deliver the first end-to-end role-fit loop for the Mutual Aid Society hub. It should be narrow enough to ship safely, but complete enough for a society to select a role, review a member's current assessment evidence, see missing assessment prompts, and use the output at the relevant 100-day handbook moments.
+
+Phase 1 includes these five workstreams:
+
+#### 14.1.1 Role Blueprint Data
 
 - Add role blueprint seed data for all core handbook roles and extended 100-day process roles.
-- Add assessment interpretation rules for current Garvey inventory.
-- Add migrations for blueprints, cached profiles, role-fit reviews, and team-balance reviews.
-- Add unit tests for blueprint validation and missing required fields.
+- Store the blueprint data in `mutual_aid_role_blueprints` with versioning, active/inactive flags, and JSON fields for responsibilities, archetypes, behavioral traits, need profiles, recommended assessments, growth pathways, and complementary teammates.
+- Add assessment interpretation rules for the current Garvey inventory in `assessment_interpretation_rules`.
+- Include validation tests that fail when any required role lacks purpose, responsibilities, best-fit archetypes, recommended assessments, missing-assessment prompts, growth pathway, or complementary teammate types.
+- Treat this role data as operational guidance, not appointment authority.
 
-### Phase 2 — Member Profile Generator
+#### 14.1.2 Member Profile Interpretation
 
-- Build service that reads Garvey assessment results and emits the member profile structure.
-- Normalize completed and missing assessments.
-- Map Garvey evidence into primary/secondary archetypes, strongest traits, growth areas, and style fields.
-- Add self-view API and UI card.
+- Build the first profile generator that reads existing Garvey assessment result history and produces a cached `member_archetype_profiles` record.
+- Interpret completed assessments, missing assessments, primary archetypes, secondary archetypes, strongest traits, current growth areas, leadership style, trust style, loyalty style, collaboration style, communication style, conflict style, service style, and reliability indicators.
+- Use only Garvey assessment evidence in the first pass; participation and labor-exchange evidence should remain a later enhancement unless already available through stable service boundaries.
+- Include a confidence score that clearly drops when key recommended assessments are missing.
+- Include the profile note that the profile reflects current assessment evidence and can change as the member grows.
 
-### Phase 3 — Role-Fit Review Engine
+#### 14.1.3 Role-Fit Review UI
 
-- Implement role-fit scoring and confidence logic.
-- Generate role-fit explanations, missing-assessment prompts, training, practice tasks, mentor types, and complementary teammate suggestions.
-- Add candidate review UI for authorized society leaders.
-- Add tests for empowering language guardrails.
+- Add a role-fit review panel in the Mutual Aid Society hub for authorized society leaders and role-selection groups.
+- Allow the reviewer to choose a member and target role, generate a role-fit review, and see overall role alignment, supporting archetypes, strong traits, traits to strengthen, missing assessments, suggested training, practice tasks, mentor type, and complementary teammates.
+- Display the required community decision note prominently: the engine informs the society's discernment; the community makes the decision.
+- Use only empowering language in the UI and tests; avoid fixed-label or rejection language.
+- Keep raw Garvey result detail behind existing privacy boundaries and show interpreted summaries by default.
 
-### Phase 4 — 100-Day Handbook Side Panels
+#### 14.1.4 Missing Assessment Prompts
 
-- Add optional widgets beside the relevant handbook chapters without rewriting handbook content.
-- Add chapter-specific suggested member types and role coverage prompts.
-- Add treasury, care team, first meeting, Day 100, recommitment, and next-phase planner integrations.
+- Implement role-specific missing-assessment prompts using the standard line: "To better understand your fit for this responsibility, complete these assessments."
+- Explain why each recommended assessment matters for the selected role.
+- Prioritize prompts for high-trust and high-risk roles such as Treasurer, Assistant Treasurer, Founder/Admin, Preparedness Lead, Care Coordinator, Conflict Mediator, and Assessment Facilitator.
+- Show prompt urgency based on role criticality and assessment coverage rather than presenting missing data as a member deficiency.
+- Add tests for Treasurer and Care Coordinator prompt generation because those roles exercise trust, reliability, communication, and care evidence requirements.
 
-### Phase 5 — Team Balance Engine
+#### 14.1.5 100-Day Integration Points
+
+- Add optional engine side panels or callouts without changing handbook text, chapter order, or handbook structure.
+- Support Chapter 5 by helping identify first-ten coverage across founders, treasurers, care carriers, documenters, connectors, stabilizers, and facilitators.
+- Support Chapter 8 by comparing Treasurer and Assistant Treasurer candidates against the treasury blueprint.
+- Support Chapter 11 by suggesting care-team candidates with care, empathy, follow-through, communication, and reliability evidence.
+- Support Chapter 13 by suggesting Facilitator and Recordkeeper candidates for the first meeting.
+- Support Chapters 14–15 by showing best-fit archetypes and recommended member types for weekly planner tasks.
+- Support Chapters 21–23 with optional role coverage, team balance, assessment completion, recommitment, and next-phase role coverage summaries.
+
+#### 14.1.6 Explicit Phase 1 Non-Goals
+
+- Do not build the full Member Development Passport.
+- Do not expose a passport UI, passport progress tracker, passport credential, or passport completion state.
+- Do not change Garvey scoring or assessment logic.
+- Do not automatically appoint, reject, demote, or remove members from roles.
+- Do not redesign the 100-Day Mutual Aid Society Handbook.
+
+### Phase 2 — Role-Fit Hardening and Profile Refinement
+
+- Expand profile interpretation with clearer secondary archetype ranking, role suggestions, and roles a member may grow into.
+- Add self-view profile cards for members, including privacy controls for what role-selection groups can see.
+- Add regression tests for confidence scoring, empowering language, missing-assessment explanations, and community decision notes.
+- Refine suggested training, practice tasks, mentor types, and complementary teammate rules after early society review.
+
+### Phase 3 — Team Balance Engine
 
 - Build team-balance review API and dashboard.
 - Detect missing stabilizers, documenters, mediators, executors, connectors, care capacity, follow-through risk, and vision-without-structure risk.
 - Add first-ten and committee analysis flows.
 
-### Phase 6 — Participation Evidence and Admin Tools
+### Phase 4 — Participation Evidence and Admin Tools
 
 - Add optional Simba participation evidence into confidence and reliability scoring.
 - Add admin tools for updating role blueprints and interpretation rules.
