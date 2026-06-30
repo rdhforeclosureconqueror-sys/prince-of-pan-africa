@@ -9,8 +9,10 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.authz import user_has_permission
 from app.dependencies.auth import get_current_user, require_auth, require_permission
 from app.models import Society, SocietyBlueprintAudit, SocietyRoleOpening, SocietyRoleCandidateReview, SocietyRoleDiscussionNote, SocietyRoleAppointmentHistory, SocietyContainer, SocietyContainerMilestone, SocietyCovenant, SocietyFirstTenMember, SocietyInstitutionalProfile, SocietyMembership, SocietyPurpose, SocietyTrustTask, User, Audiobook, AudiobookChapter
+from app.services.society_intelligence import generate_society_intelligence
 from app.services.society_builder import (
     DEFAULT_COVENANT,
     FIRST_CONTAINER_TYPE,
@@ -378,6 +380,19 @@ def get_society_directory(society_id: int, current_user: User = Depends(require_
     _require_member_access(db, current_user, society)
     return {"ok": True, "society": safe_society_summary(db, society), "directory": society_directory(db, society.id), "presets": society_profile_presets(society)}
 
+
+
+
+@router.get("/societies/{society_id}/intelligence")
+def society_intelligence(society_id: int, debug: bool = False, current_user: User = Depends(require_permission("society_builder:read_self")), db: Session = Depends(get_db)):
+    require_society_builder_enabled(db, current_user)
+    society = _get_society(db, society_id)
+    _require_member_access(db, current_user, society)
+    include_debug = debug and user_has_permission(db, current_user, "society_builder:read_admin")
+    try:
+        return generate_society_intelligence(db, society_id=society.id, include_debug=include_debug)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Society not found")
 
 @router.patch("/societies/{society_id}")
 def patch_society(society_id: int, payload: SocietyPatchPayload, current_user: User = Depends(require_permission("society_builder:update_self")), db: Session = Depends(get_db)):
