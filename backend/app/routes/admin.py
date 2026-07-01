@@ -1,12 +1,12 @@
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies.auth import require_permission
-from app.services.intelligence_health import diagnostic_history, run_full_intelligence_diagnostic
+from app.services.intelligence_health import diagnostic_history, generate_public_diagnostic_report, get_public_diagnostic_report, run_full_intelligence_diagnostic
 from app.models import (
     ActivityLog,
     Audiobook,
@@ -89,6 +89,7 @@ def admin_ai_profiles(_: None = Depends(require_permission("admin:read_users")))
 
 # Backward-compatible admin surfaces used by legacy and pilot dashboards.
 legacy_router = APIRouter(prefix="/admin", tags=["Admin Compatibility"])
+public_router = APIRouter(tags=["Public Intelligence Diagnostics"])
 
 
 @legacy_router.get("/overview")
@@ -189,3 +190,19 @@ def run_intelligence_health_diagnostic(_: None = Depends(require_permission("adm
 @legacy_router.get("/intelligence-health/history")
 def get_intelligence_health_history(_: None = Depends(require_permission("admin:read_dashboard"))):
     return {"ok": True, "history": diagnostic_history()}
+
+
+@legacy_router.post("/intelligence-health/public-report")
+def create_public_intelligence_health_report(_: None = Depends(require_permission("admin:read_dashboard"))):
+    run = run_full_intelligence_diagnostic()
+    report = generate_public_diagnostic_report(run)
+    return {"ok": True, "report": report}
+
+
+
+@public_router.get("/public/intelligence-diagnostics/{token}")
+def get_public_intelligence_health_report(token: str):
+    report = get_public_diagnostic_report(token)
+    if not report:
+        raise HTTPException(status_code=404, detail="Public diagnostic report not found or expired")
+    return report

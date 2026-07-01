@@ -40,6 +40,7 @@ import OpportunityIntelligencePage from "./pages/OpportunityIntelligencePage";
 import DecisionSupportPage from "./pages/DecisionSupportPage";
 import ExecutionPlanningPage from "./pages/ExecutionPlanningPage";
 import IntelligenceLoopPage from "./pages/IntelligenceLoopPage";
+import PublicIntelligenceDiagnosticReportPage from "./pages/PublicIntelligenceDiagnosticReportPage";
 import First100DaysChapterReaderPage from "./pages/First100DaysChapterReaderPage";
 import MutualAidAdminPlanningPage from "./pages/MutualAidAdminPlanningPage";
 import MutualAidPilotReadinessPage from "./pages/MutualAidPilotReadinessPage";
@@ -442,6 +443,7 @@ function AppRoutes({ user, rbac, isAdmin, canAccessOrganizer, authChecked, refre
         <Route path="/" element={<Home user={user} isAdmin={isAdmin} canAccessOrganizer={canAccessOrganizer} authChecked={authChecked} onAuthChange={refreshAuth} />} />
         <Route path="/dashboard" element={<DashboardRoute authChecked={authChecked} user={user} rbac={rbac} isAdmin={isAdmin} />} />
         <Route path="/star-rewards" element={<StarRewardsPage />} />
+        <Route path="/public/intelligence-diagnostics/:token" element={<PublicIntelligenceDiagnosticReportPage />} />
         <Route path="/applications" element={<ApplicationsPage />} />
         <Route path="/admin" element={<Navigate to="/dashboard" replace />} />
         <Route path="/admin/mutual-aid" element={<AdminPlanningRoute authChecked={authChecked} user={user} isAdmin={isAdmin} />} />

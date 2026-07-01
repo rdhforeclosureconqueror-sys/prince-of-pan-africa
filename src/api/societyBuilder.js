@@ -47,3 +47,5 @@ export const getInstitutionalLearning = (id, debug = false) => get(`/society-bui
 
 export const runIntelligenceHealthDiagnostic = () => post("/admin/intelligence-health/run", {});
 export const getIntelligenceHealthHistory = () => get("/admin/intelligence-health/history");
+export const generatePublicIntelligenceDiagnosticReport = () => post("/admin/intelligence-health/public-report", {});
+export const getPublicIntelligenceDiagnosticReport = (token) => get(`/public/intelligence-diagnostics/${encodeURIComponent(token)}`);

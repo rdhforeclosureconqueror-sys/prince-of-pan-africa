@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { getIntelligenceHealthHistory, runIntelligenceHealthDiagnostic } from "../api/societyBuilder";
+import { generatePublicIntelligenceDiagnosticReport, getIntelligenceHealthHistory, runIntelligenceHealthDiagnostic } from "../api/societyBuilder";
 
 const statusIcon = (layer) => {
   if (layer?.status === "FAIL") return "🔴 Failure";
@@ -13,6 +13,8 @@ export default function IntelligenceHealthMonitor() {
   const [diagnostic, setDiagnostic] = useState(null);
   const [history, setHistory] = useState([]);
   const [error, setError] = useState("");
+  const [publicReport, setPublicReport] = useState(null);
+  const [generatingReport, setGeneratingReport] = useState(false);
 
   const loadHistory = async () => {
     const res = await getIntelligenceHealthHistory();
@@ -33,7 +35,21 @@ export default function IntelligenceHealthMonitor() {
     }
   };
 
+  const generateReport = async () => {
+    setGeneratingReport(true); setError("");
+    try {
+      const res = await generatePublicIntelligenceDiagnosticReport();
+      setPublicReport(res.report);
+      await loadHistory();
+    } catch (err) {
+      setError(err?.message || "Public diagnostic report generation failed.");
+    } finally {
+      setGeneratingReport(false);
+    }
+  };
+
   const result = diagnostic || history[0];
+  const publicUrl = publicReport?.token ? `${window.location.origin}/public/intelligence-diagnostics/${publicReport.token}` : "";
   const healthTrend = useMemo(() => result?.comparison_to_previous || {}, [result]);
 
   return (
@@ -41,14 +57,18 @@ export default function IntelligenceHealthMonitor() {
       <p className="section-kicker">Admin Only · Read-Only Diagnostic</p>
       <h2 id="intelligence-health-title">🧠 Intelligence Health Monitor</h2>
       <p className="admin-subtext">Runs deterministic isolated fixtures through Member, Society, Institution, Opportunity, Predictive, Decision Support, Execution Planning, Execution Intelligence, Institutional Memory, and Institutional Learning layers without touching production records, workflow tasks, assignments, notifications, calendars, payments, businesses, or persisted intelligence outputs.</p>
-      <button className="hero-btn" type="button" onClick={run} disabled={running}>{running ? "Running Full Intelligence Diagnostic..." : "Run Full Intelligence Diagnostic"}</button>
+      <div className="hero-actions">
+        <button className="hero-btn" type="button" onClick={run} disabled={running}>{running ? "Running Full Intelligence Diagnostic..." : "Run Full Intelligence Diagnostic"}</button>
+        <button className="hero-btn secondary" type="button" onClick={generateReport} disabled={generatingReport}>{generatingReport ? "Generating Public Report..." : "Generate Public Diagnostic Report"}</button>
+      </div>
+      {publicUrl && <article className="stat-card"><h3>Public Diagnostic Report</h3><p>This URL is public, read-only, sanitized, fixture-only, and expires at {publicReport.expires_at}.</p><input readOnly value={publicUrl} onFocus={(event) => event.target.select()} aria-label="Public diagnostic report URL" /><button type="button" onClick={() => navigator.clipboard?.writeText(publicUrl)}>Copy public URL</button></article>}
       {error && <p className="admin-error">⚠️ {error}</p>}
 
       <div className="dashboard-grid">
-        <div className="stat-card"><h3>Overall Health</h3><h2>{result?.overall_health_percent ?? "—"}%</h2></div>
-        <div className="stat-card"><h3>Regression Count</h3><h2>{result?.regression_count ?? 0}</h2></div>
+        <div className="stat-card"><h3>Overall Health</h3><h2>{(result?.overall_health_percent ?? result?.overall_health?.percent) ?? "—"}%</h2></div>
+        <div className="stat-card"><h3>Regression Count</h3><h2>{result?.regression_count ?? result?.regression_summary?.count ?? 0}</h2></div>
         <div className="stat-card"><h3>Warnings</h3><h2>{result?.warnings?.length ?? 0}</h2></div>
-        <div className="stat-card"><h3>Critical Failures</h3><h2>{result?.critical_failures?.length ?? 0}</h2></div>
+        <div className="stat-card"><h3>Critical Failures</h3><h2>{result?.critical_failures?.length ?? result?.failed_layers?.length ?? 0}</h2></div>
         <div className="stat-card"><h3>Last Successful Diagnostic</h3><p>{result?.last_successful_diagnostic || "No previous successful run"}</p></div>
         <div className="stat-card"><h3>Health Trend</h3><p>{healthTrend.available ? `${healthTrend.health_trend > 0 ? "+" : ""}${healthTrend.health_trend}%` : "No previous run"}</p></div>
       </div>
