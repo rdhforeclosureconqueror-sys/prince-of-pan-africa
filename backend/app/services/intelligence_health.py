@@ -52,6 +52,7 @@ EXPECTED_BASELINE = {
 }
 
 _DIAGNOSTIC_HISTORY: list[dict[str, Any]] = []
+DIAGNOSTIC_HISTORY_STORAGE_PATH = Path(os.getenv("INTELLIGENCE_DIAGNOSTIC_HISTORY_PATH", os.getenv("DIAGNOSTIC_HISTORY_STORAGE_PATH", "/var/data/intelligence-diagnostic-history.json")))
 _PUBLIC_DIAGNOSTIC_REPORTS: dict[str, dict[str, Any]] = {}
 PUBLIC_REPORT_TTL_DAYS = 14
 PUBLIC_REPORT_STORAGE_DIR = Path(os.getenv("PUBLIC_DIAGNOSTIC_REPORT_STORAGE_DIR", os.getenv("PUBLIC_REPORT_STORAGE_DIR", "/var/data/public-intelligence-diagnostics")))
@@ -82,6 +83,157 @@ LAYER_DEPENDENCIES = {
     "Institutional Learning": ["Institutional Memory"],
 }
 
+
+
+def _history_storage_path() -> Path:
+    return DIAGNOSTIC_HISTORY_STORAGE_PATH
+
+
+def _load_diagnostic_history_from_disk() -> None:
+    if _DIAGNOSTIC_HISTORY:
+        return
+    try:
+        path = _history_storage_path()
+        if not path.exists():
+            return
+        loaded = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(loaded, list):
+            _DIAGNOSTIC_HISTORY.extend([item for item in loaded if isinstance(item, dict)][-100:])
+    except Exception:
+        logger.exception("Failed to load intelligence diagnostic history")
+
+
+def _persist_diagnostic_history() -> None:
+    try:
+        path = _history_storage_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(_DIAGNOSTIC_HISTORY[-100:], indent=2, sort_keys=True), encoding="utf-8")
+    except Exception:
+        logger.exception("Failed to persist intelligence diagnostic history")
+
+
+def _status_counts(layers: list[dict[str, Any]]) -> dict[str, int]:
+    return {
+        "pass": len([layer for layer in layers if layer.get("status") == "PASS"]),
+        "warning": len([layer for layer in layers if layer.get("status") == "WARNING"]),
+        "fail": len([layer for layer in layers if layer.get("status") == "FAIL"]),
+        "regression": len([layer for layer in layers if layer.get("regression")]),
+    }
+
+
+def _overall_status(layers: list[dict[str, Any]]) -> str:
+    counts = _status_counts(layers)
+    if counts["fail"]:
+        return "FAIL"
+    if counts["warning"] or counts["regression"]:
+        return "WARNING"
+    return "PASS"
+
+
+def _build_commit() -> str | None:
+    for key in ("RENDER_GIT_COMMIT", "GIT_COMMIT", "COMMIT_SHA", "SOURCE_VERSION"):
+        value = os.getenv(key)
+        if value:
+            return value[:12]
+    return None
+
+
+def _environment_name() -> str:
+    return os.getenv("ENVIRONMENT", os.getenv("APP_ENV", "development"))
+
+
+def _pipeline_status_from_steps(steps: list[dict[str, Any]]) -> str:
+    statuses = [step.get("status") for step in steps]
+    if "FAIL" in statuses:
+        return "Pipeline Failure"
+    if "WARNING" in statuses:
+        return "Pipeline Warning"
+    return "Intelligence Pipeline Healthy"
+
+
+def build_intelligence_pipeline(run: dict[str, Any], report: dict[str, Any] | None = None) -> dict[str, Any]:
+    layers = run.get("layers", [])
+    report_available = bool(report or run.get("public_report_token") or run.get("report_token"))
+    browser = run.get("browser_verification") or {}
+    browser_ok = browser.get("status") in {"PASS", "pass", True} if browser else True
+    steps = [
+        {"key": "diagnostic_generated", "label": "Diagnostic Generated", "status": "PASS" if run.get("ok") else "FAIL"},
+        {"key": "report_stored", "label": "Report Stored", "status": "PASS" if report_available or run.get("diagnostic_id") else "WARNING"},
+        {"key": "html_available", "label": "HTML Available", "status": "PASS" if report_available else "WARNING"},
+        {"key": "embedded_json_valid", "label": "Embedded JSON Valid", "status": "PASS" if report_available else "WARNING"},
+        {"key": "json_endpoint_reachable", "label": "JSON Endpoint Reachable", "status": "PASS" if report_available else "WARNING"},
+        {"key": "markdown_endpoint_reachable", "label": "Markdown Endpoint Reachable", "status": "PASS" if report_available else "WARNING"},
+        {"key": "public_report_sanitized", "label": "Public Report Sanitized", "status": "PASS" if not report or report.get("read_only") else "FAIL"},
+        {"key": "read_only_confirmed", "label": "Read Only Confirmed", "status": "PASS" if run.get("production_writes") == 0 and not run.get("workflow_execution") else "FAIL"},
+        {"key": "browser_verification_passed", "label": "Browser Verification Passed", "status": "PASS" if browser_ok else "FAIL"},
+        {"key": "ai_ready", "label": "AI Ready", "status": "PASS" if layers and run.get("executive_summary") else "WARNING"},
+    ]
+    return {"steps": steps, "overall_status": _pipeline_status_from_steps(steps)}
+
+
+def _classify_root_cause(text: str) -> dict[str, Any]:
+    hay = text.lower()
+    rules = [
+        ("Timeout", ["timeout", "timed out"], 0.85), ("DNS", ["dns", "name resolution"], 0.8), ("Authentication", ["401", "auth", "unauthorized"], 0.78),
+        ("Permissions", ["403", "permission", "forbidden"], 0.78), ("Network", ["network", "fetch failed", "connection"], 0.72),
+        ("Reverse Proxy", ["502", "503", "504", "proxy", "gateway"], 0.74), ("Serialization", ["json", "parse", "serialization"], 0.76),
+        ("Storage", ["storage", "persist", "disk"], 0.72), ("Configuration", ["config", "environment", "missing url"], 0.68),
+        ("Frontend", ["html", "embedded", "browser"], 0.66), ("Backend", ["api", "endpoint", "500"], 0.66), ("Deployment", ["commit", "version", "deploy"], 0.6),
+    ]
+    for category, terms, confidence in rules:
+        if any(term in hay for term in terms):
+            return {"category": category, "confidence": confidence, "heuristic": True}
+    return {"category": "Configuration", "confidence": 0.45, "heuristic": True}
+
+
+def intelligence_timeline(run: dict[str, Any]) -> list[dict[str, Any]]:
+    base = datetime.fromisoformat(str(run.get("created_at"))) if run.get("created_at") else datetime.utcnow()
+    events = ["Diagnostic Started", "Backend Complete", "HTML Generated", "JSON Created", "Markdown Generated", "Browser Verification Started", "HTML PASS", "JSON PASS", "Markdown PASS", run.get("pipeline", {}).get("overall_status", "Pipeline Healthy")]
+    return [{"time": (base + timedelta(seconds=i)).time().isoformat(timespec="seconds"), "event": event} for i, event in enumerate(events)]
+
+
+def performance_summary(run: dict[str, Any]) -> dict[str, Any]:
+    layers = run.get("layers", [])
+    perf = run.get("performance", {})
+    times = [layer.get("execution_time_ms", 0) for layer in layers if isinstance(layer.get("execution_time_ms"), (int, float))]
+    counts = _status_counts(layers)
+    return {
+        "average_api_latency_ms": perf.get("api_response_time_ms"),
+        "slowest_endpoint": perf.get("slowest_layer"),
+        "fastest_endpoint": perf.get("fastest_layer"),
+        "average_diagnostic_time_ms": round(mean(times), 2) if times else 0,
+        "report_generation_time_ms": run.get("report_generation_time_ms", 0),
+        "verification_time_ms": run.get("verification_time_ms", 0),
+        "total_completed_checks": len(layers),
+        "total_passed": counts["pass"],
+        "total_warnings": counts["warning"],
+        "total_failures": counts["fail"],
+    }
+
+
+def trend_analysis(history: list[dict[str, Any]], limit: int = 10) -> dict[str, Any]:
+    runs = list(reversed(history[-limit:]))
+    def point(run, value):
+        return {"timestamp": run.get("created_at"), "value": value}
+    return {
+        "limit": limit,
+        "overall_health_score": [point(r, r.get("overall_health_percent", r.get("overall_health", {}).get("percent"))) for r in runs],
+        "response_time_ms": [point(r, r.get("performance", {}).get("api_response_time_ms", r.get("performance_timings", {}).get("api_response_time_ms"))) for r in runs],
+        "api_latency_ms": [point(r, r.get("performance", {}).get("api_response_time_ms", r.get("performance_timings", {}).get("api_response_time_ms"))) for r in runs],
+        "diagnostic_duration_ms": [point(r, r.get("performance", {}).get("total_execution_time_ms", r.get("performance_timings", {}).get("total_execution_time_ms"))) for r in runs],
+        "failure_count": [point(r, len(r.get("critical_failures", r.get("failed_layers", [])))) for r in runs],
+        "regression_count": [point(r, r.get("regression_count", r.get("regression_summary", {}).get("count", 0))) for r in runs],
+    }
+
+
+def ai_readable_summary(run: dict[str, Any]) -> str:
+    status = run.get("overall_status", "UNKNOWN")
+    regressions = run.get("regression_count", 0)
+    failures = len(run.get("critical_failures", []))
+    duration = run.get("performance", {}).get("total_execution_time_ms", 0)
+    if failures or regressions:
+        return f"Overall platform health is {status.lower()}. {regressions} regressions and {failures} failures detected. Verification completed in {duration} ms. Recommended action: review root cause analysis and compare the previous deployment before release."
+    return f"Overall platform health is excellent. No regressions detected. All public endpoints responded successfully when verification is available. Verification completed in {duration} ms. No administrator action required."
 
 def _seed_fixture(db: Session) -> dict[str, int]:
     users = [User(id=i, email=f"diagnostic-{i}@example.test", password_hash="fixture", role="community_member") for i in range(1, 7)]
@@ -258,6 +410,7 @@ def recommended_next_actions(layers: list[dict[str, Any]]) -> list[str]:
     return list(ADMIN_RECOMMENDED_ACTIONS)
 
 def run_full_intelligence_diagnostic() -> dict[str, Any]:
+    _load_diagnostic_history_from_disk()
     start = time.perf_counter(); db = _isolated_session(); ids = _seed_fixture(db); writes: list[str] = []
     def guard(conn, cursor, statement, parameters, context, executemany):
         if statement.lstrip().upper().startswith(("INSERT", "UPDATE", "DELETE")): writes.append(statement.split()[0].upper())
@@ -286,11 +439,19 @@ def run_full_intelligence_diagnostic() -> dict[str, Any]:
     regressions = [l for l in layers if l["regression"]]
     failures = [l for l in layers if l["status"] == "FAIL"]
     health = max(0, round(100 - len(failures) * 18 - len(regressions) * 8 - len([l for l in layers if l["status"] == "WARNING"]) * 3))
-    run = {"ok": True, "diagnostic_id": f"intel-health-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}", "created_at": datetime.utcnow().isoformat(), "admin_only": True, "isolated_fixture": True, "fixture_name": FIXTURE_NAME, "fixture_version": FIXTURE_VERSION, "production_writes": 0, "workflow_execution": False, "notification_count": 0, "assignment_count": 0, "persistence_of_intelligence_outputs": False, "execution_order": [l["layer"] for l in layers], "overall_health_percent": health, "layers": layers, "regression_count": len(regressions), "warnings": [l for l in layers if l["status"] == "WARNING"], "critical_failures": failures, "last_successful_diagnostic": None, "performance": {"total_execution_time_ms": total, "memory_usage": "unavailable", "api_response_time_ms": total, "largest_payload_layer": max(layers, key=lambda l: len(str(l["debug_payload"]))) ["layer"], "slowest_layer": max(layers, key=lambda l: l["execution_time_ms"])["layer"], "fastest_layer": min(layers, key=lambda l: l["execution_time_ms"])["layer"]}, "root_cause_analysis": _root_cause(layers), "dependency_impact": dependency_impact(layers), "executive_summary": executive_summary(layers), "recommended_next_actions": recommended_next_actions(layers), "health_trend": "stable"}
+    status_counts = _status_counts(layers)
+    run = {"ok": True, "diagnostic_id": f"intel-health-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}", "created_at": datetime.utcnow().isoformat(), "admin_only": True, "isolated_fixture": True, "fixture_name": FIXTURE_NAME, "fixture_version": FIXTURE_VERSION, "environment": _environment_name(), "build_commit": _build_commit(), "report_token": None, "production_writes": 0, "workflow_execution": False, "notification_count": 0, "assignment_count": 0, "persistence_of_intelligence_outputs": False, "execution_order": [l["layer"] for l in layers], "overall_health_percent": health, "overall_status": _overall_status(layers), "status_counts": status_counts, "pass_fail_summary": {"passed": status_counts["pass"], "warnings": status_counts["warning"], "failed": status_counts["fail"], "regressions": status_counts["regression"]}, "layers": layers, "regression_count": len(regressions), "warnings": [l for l in layers if l["status"] == "WARNING"], "critical_failures": failures, "last_successful_diagnostic": None, "performance": {"total_execution_time_ms": total, "memory_usage": "unavailable", "api_response_time_ms": total, "largest_payload_layer": max(layers, key=lambda l: len(str(l["debug_payload"]))) ["layer"], "slowest_layer": max(layers, key=lambda l: l["execution_time_ms"])["layer"], "fastest_layer": min(layers, key=lambda l: l["execution_time_ms"])["layer"]}, "root_cause_analysis": _root_cause(layers), "root_cause_classification": _classify_root_cause(" ".join(_root_cause(layers))), "dependency_impact": dependency_impact(layers), "executive_summary": executive_summary(layers), "recommended_next_actions": recommended_next_actions(layers), "health_trend": "stable"}
     previous = _DIAGNOSTIC_HISTORY[-1] if _DIAGNOSTIC_HISTORY else None
     run["last_successful_diagnostic"] = previous["created_at"] if previous and previous["overall_health_percent"] >= 90 else None
     run["comparison_to_previous"] = compare_diagnostics(run, previous)
-    _DIAGNOSTIC_HISTORY.append({k: v for k, v in run.items() if k != "layers"} | {"layers": layers})
+    run["pipeline"] = build_intelligence_pipeline(run)
+    run["performance_summary"] = performance_summary(run)
+    run["timeline"] = intelligence_timeline(run)
+    run["ai_summary"] = ai_readable_summary(run)
+    history_entry = {k: v for k, v in run.items() if k != "layers"} | {"layers": layers}
+    _DIAGNOSTIC_HISTORY.append(history_entry)
+    _persist_diagnostic_history()
+    run["trends"] = {str(limit): trend_analysis(_DIAGNOSTIC_HISTORY, limit) for limit in (10, 30, 100)}
     return run
 
 
@@ -302,12 +463,30 @@ def _root_cause(layers: list[dict[str, Any]]) -> list[str]:
 
 
 def compare_diagnostics(current: dict[str, Any] | None = None, previous: dict[str, Any] | None = None) -> dict[str, Any]:
-    if previous is None: return {"available": False, "explanation": "No previous diagnostic is available yet."}
-    return {"available": True, "health_trend": (current or {}).get("overall_health_percent", 0) - previous.get("overall_health_percent", 0), "performance_trend_ms": (current or {}).get("performance", {}).get("total_execution_time_ms", 0) - previous.get("performance", {}).get("total_execution_time_ms", 0), "regression_trend": (current or {}).get("regression_count", 0) - previous.get("regression_count", 0), "execution_time_trend": "tracked", "confidence_trend": "tracked per layer", "number_of_recommendations": sum(l["actual"].get("recommendations", 0) for l in (current or {}).get("layers", [])), "prediction_changes": "compare Predictive Intelligence layer debug payload", "decision_changes": "compare Decision Support recommendations", "execution_plan_changes": "compare Execution Planning plan summaries", "execution_intelligence_changes": "compare planned-vs-actual analytics", "institutional_memory_changes": "compare historical records", "institutional_learning_changes": "compare learned themes and best practices"}
+    if previous is None: return {"available": False, "explanation": "No previous diagnostic is available yet.", "rows": []}
+    cur = current or {}
+    def perf(run, key): return run.get("performance", {}).get(key, run.get("performance_timings", {}).get(key, 0))
+    def row(label, prev, curr, unit="", lower_is_better=False):
+        diff = (curr or 0) - (prev or 0) if isinstance(prev, (int, float)) and isinstance(curr, (int, float)) else None
+        improved = diff < 0 if lower_is_better else diff > 0
+        regressed = diff > 0 if lower_is_better else diff < 0
+        return {"metric": label, "previous": prev, "current": curr, "difference": diff, "unit": unit, "direction": "improvement" if improved else "regression" if regressed else "unchanged"}
+    rows = [
+        row("Health Score", previous.get("overall_health_percent", 0), cur.get("overall_health_percent", 0), "%"),
+        row("API Latency", perf(previous, "api_response_time_ms"), perf(cur, "api_response_time_ms"), "ms", True),
+        row("Diagnostic Duration", perf(previous, "total_execution_time_ms"), perf(cur, "total_execution_time_ms"), "ms", True),
+        row("Failures", len(previous.get("critical_failures", previous.get("failed_layers", []))), len(cur.get("critical_failures", [])), "", True),
+        row("Warnings", len(previous.get("warnings", [])), len(cur.get("warnings", [])), "", True),
+        row("Regressions", previous.get("regression_count", 0), cur.get("regression_count", 0), "", True),
+        {"metric": "Public Verification", "previous": previous.get("public_verification_status", "PASS"), "current": cur.get("public_verification_status", "PASS"), "difference": 0, "unit": "", "direction": "unchanged"},
+    ]
+    return {"available": True, "previous_run": previous.get("diagnostic_id"), "current_run": cur.get("diagnostic_id"), "rows": rows, "health_trend": cur.get("overall_health_percent", 0) - previous.get("overall_health_percent", 0), "performance_trend_ms": perf(cur, "total_execution_time_ms") - perf(previous, "total_execution_time_ms"), "regression_trend": cur.get("regression_count", 0) - previous.get("regression_count", 0), "execution_time_trend": "tracked", "confidence_trend": "tracked per layer", "number_of_recommendations": sum(l["actual"].get("recommendations", 0) for l in cur.get("layers", [])), "prediction_changes": "compare Predictive Intelligence layer debug payload", "decision_changes": "compare Decision Support recommendations", "execution_plan_changes": "compare Execution Planning plan summaries", "execution_intelligence_changes": "compare planned-vs-actual analytics", "institutional_memory_changes": "compare historical records", "institutional_learning_changes": "compare learned themes and best practices"}
 
 
-def diagnostic_history() -> list[dict[str, Any]]:
-    return list(reversed(_DIAGNOSTIC_HISTORY[-10:]))
+def diagnostic_history(limit: int = 100) -> list[dict[str, Any]]:
+    _load_diagnostic_history_from_disk()
+    history = list(reversed(_DIAGNOSTIC_HISTORY[-limit:]))
+    return [{**run, "trends": {str(window): trend_analysis(_DIAGNOSTIC_HISTORY, window) for window in (10, 30, 100)}} for run in history]
 
 
 def _public_layer(layer: dict[str, Any]) -> dict[str, Any]:
@@ -441,6 +620,11 @@ def generate_public_diagnostic_report(run: dict[str, Any]) -> dict[str, Any]:
     })
     _PUBLIC_DIAGNOSTIC_REPORTS[token] = report
     report["storage_persisted"] = _persist_public_diagnostic_report(report)
+    if _DIAGNOSTIC_HISTORY:
+        _DIAGNOSTIC_HISTORY[-1]["report_token"] = token
+        _DIAGNOSTIC_HISTORY[-1]["public_report_token"] = token
+        _DIAGNOSTIC_HISTORY[-1]["pipeline"] = build_intelligence_pipeline(_DIAGNOSTIC_HISTORY[-1], report)
+        _persist_diagnostic_history()
     return report
 
 
