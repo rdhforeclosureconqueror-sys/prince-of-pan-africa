@@ -71,12 +71,14 @@ export default function IntelligenceHealthMonitor() {
   const [publicReportError, setPublicReportError] = useState("");
   const [publicReportState, setPublicReportState] = useState(null);
   const [publicReportUrl, setPublicReportUrl] = useState("");
+  const [publicReportCopyMessage, setPublicReportCopyMessage] = useState("");
   const [generatingReport, setGeneratingReport] = useState(false);
 
   const clearPublicReport = () => {
     setPublicReportState(null);
     setPublicReportUrl("");
     setPublicReportError("");
+    setPublicReportCopyMessage("");
   };
 
   const loadHistory = useCallback(async () => {
@@ -103,7 +105,7 @@ export default function IntelligenceHealthMonitor() {
 
   const run = async () => {
     if (running || generatingReport) return;
-    setRunning(true); setError(""); setPublicReportError("");
+    setRunning(true); setError(""); setPublicReportError(""); setPublicReportCopyMessage("");
     try {
       const res = await withTimeout(runIntelligenceHealthDiagnostic());
       if (!mountedRef.current) return;
@@ -118,7 +120,7 @@ export default function IntelligenceHealthMonitor() {
 
   const generateReport = async () => {
     if (running || generatingReport) return;
-    setGeneratingReport(true); setError(""); setPublicReportError("");
+    setGeneratingReport(true); setError(""); setPublicReportError(""); setPublicReportCopyMessage("");
     try {
       const res = await withTimeout(generatePublicIntelligenceDiagnosticReport(), "Public report generation timed out.");
       if (!mountedRef.current) return;
@@ -131,6 +133,19 @@ export default function IntelligenceHealthMonitor() {
       if (mountedRef.current) setPublicReportError(adminErrorMessage("Public report could not be generated", err));
     } finally {
       if (mountedRef.current) setGeneratingReport(false);
+    }
+  };
+
+  const copyPublicReportUrl = async () => {
+    if (!safePublicReportUrl) return;
+    try {
+      if (!navigator.clipboard?.writeText) {
+        throw new Error("Clipboard API unavailable");
+      }
+      await navigator.clipboard.writeText(safePublicReportUrl);
+      if (mountedRef.current) setPublicReportCopyMessage("Copied public diagnostic URL.");
+    } catch (_err) {
+      if (mountedRef.current) setPublicReportCopyMessage("Copy failed. Select the URL manually.");
     }
   };
 
@@ -149,7 +164,7 @@ export default function IntelligenceHealthMonitor() {
         <button className="hero-btn" type="button" onClick={run} disabled={actionDisabled}>{running ? "Running Full Intelligence Diagnostic..." : "Run Full Intelligence Diagnostic"}</button>
         <button className="hero-btn secondary" type="button" onClick={generateReport} disabled={actionDisabled}>{generatingReport ? "Generating Public Report..." : "Generate Public Diagnostic Report"}</button>
       </div>
-      {safePublicReportUrl && <article className="stat-card"><h3>Public Diagnostic Report</h3><p>This URL is public, read-only, sanitized, fixture-only, and expires at {publicReportState?.expires_at || "the configured expiration time"}.</p><input readOnly value={safePublicReportUrl} onFocus={(event) => event.target.select()} aria-label="Public diagnostic report URL" /><p><a href={safePublicReportUrl} target="_blank" rel="noopener noreferrer">Open public diagnostic report</a></p><button type="button" onClick={() => navigator.clipboard?.writeText(safePublicReportUrl)}>Copy public URL</button><button type="button" onClick={clearPublicReport}>Clear Public Report Link</button></article>}
+      {(publicReportState || safePublicReportUrl) && <article className="stat-card"><h3>Public Diagnostic Report</h3><p>This URL is public, read-only, sanitized, fixture-only, and expires at {publicReportState?.expires_at || "the configured expiration time"}.</p>{safePublicReportUrl && <><label htmlFor="public-diagnostic-report-url"><strong>Public diagnostic URL</strong></label><div className="hero-actions"><input id="public-diagnostic-report-url" readOnly value={safePublicReportUrl} onFocus={(event) => event.target.select()} aria-label="Public diagnostic report URL" /><button type="button" onClick={copyPublicReportUrl}>Copy URL</button></div><p><a href={safePublicReportUrl} target="_blank" rel="noopener noreferrer">Open public diagnostic report</a></p></>}{publicReportCopyMessage && <p role="status">{publicReportCopyMessage}</p>}<button type="button" onClick={clearPublicReport}>Clear Public Report Link</button></article>}
       {error && <article className="stat-card admin-error"><h3>Diagnostics unavailable</h3><p>⚠️ {error}</p></article>}
       {publicReportError && <article className="stat-card admin-error"><h3>Public report could not be generated</h3><p>⚠️ {publicReportError}</p><button type="button" onClick={clearPublicReport}>Clear Public Report Link</button></article>}
       {historyError && !layers.length && <article className="stat-card"><h3>Last run could not be loaded</h3><p>Diagnostics unavailable</p></article>}

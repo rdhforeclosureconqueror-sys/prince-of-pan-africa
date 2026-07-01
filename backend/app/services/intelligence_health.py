@@ -135,7 +135,19 @@ def _compare(layer: str, actual: dict[str, Any], elapsed: float, output: dict[st
     regression = _severity(diffs.get("score", 0))
     status = "FAIL" if regression == "Critical" else "WARNING" if regression or actual.get("confidence") != expected.get("confidence") else "PASS"
     if status == "PASS" and any(v != 0 for v in diffs.values()): status = "WARNING"
-    likely = "Leadership scoring algorithm changed." if layer in {"Member Intelligence", "Society Intelligence"} and regression else "Baseline drift detected in deterministic fixture output." if regression else "No unexpected change detected."
+    drift_fields = [f"{key} expected {expected.get(key)} actual {actual.get(key)}" for key, diff in diffs.items() if diff != 0]
+    if actual.get("confidence") != expected.get("confidence"):
+        drift_fields.append(f"confidence expected {expected.get('confidence')} actual {actual.get('confidence')}")
+    if actual.get("priority") != expected.get("priority"):
+        drift_fields.append(f"priority expected {expected.get('priority')} actual {actual.get('priority')}")
+    drift_summary = "; ".join(drift_fields)
+    likely = (
+        "Leadership scoring algorithm changed."
+        if layer in {"Member Intelligence", "Society Intelligence"} and regression
+        else f"Baseline drift detected in deterministic fixture output: {drift_summary}."
+        if regression or drift_fields
+        else "No unexpected change detected."
+    )
     return {"layer": layer, "status": status, "regression": regression, "expected": expected, "actual": actual, "difference_summary": diffs, "confidence_difference": {"expected": expected.get("confidence"), "actual": actual.get("confidence")}, "missing_evidence_difference": actual.get("missing_count") - expected.get("missing_count", 0), "priority_difference": {"expected": expected.get("priority"), "actual": actual.get("priority")}, "execution_time_ms": round(elapsed, 2), "debug_payload": output.get("debug") or {"sample_keys": sorted(output.keys())[:12]}, "explanation": f"{layer} {status}: expected score {expected.get('score')} and actual score {actual.get('score')}. {likely}", "likely_cause": likely}
 
 

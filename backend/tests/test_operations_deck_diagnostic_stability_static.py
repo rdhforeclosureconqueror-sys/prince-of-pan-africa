@@ -103,6 +103,42 @@ def test_public_report_link_is_plain_safe_anchor_and_clearable():
     assert "useNavigate" not in MONITOR
 
 
+def test_public_report_url_renders_as_selectable_read_only_text_with_copy_button():
+    assert 'id="public-diagnostic-report-url"' in MONITOR
+    assert 'aria-label="Public diagnostic report URL"' in MONITOR
+    assert "readOnly value={safePublicReportUrl}" in MONITOR
+    assert "event.target.select()" in MONITOR
+    assert ">Copy URL</button>" in MONITOR
+
+
+def test_public_report_copy_uses_clipboard_and_surfaces_success_or_manual_fallback():
+    assert "const copyPublicReportUrl = async () =>" in MONITOR
+    assert "navigator.clipboard.writeText(safePublicReportUrl)" in MONITOR
+    assert "Copied public diagnostic URL." in MONITOR
+    assert "Copy failed. Select the URL manually." in MONITOR
+    assert 'role="status"' in MONITOR
+
+
+def test_public_report_copy_and_open_do_not_rerun_or_mutate_diagnostic_state():
+    copy_body = MONITOR.split("const copyPublicReportUrl = async () =>", 1)[1].split("const result =", 1)[0]
+    assert "runIntelligenceHealthDiagnostic" not in copy_body
+    assert "generatePublicIntelligenceDiagnosticReport" not in copy_body
+    assert "setDiagnosticRunState" not in copy_body
+    assert "setHistory" not in copy_body
+    assert "loadHistory" not in copy_body
+    anchor_fragment = MONITOR.split("Open public diagnostic report", 1)[0].rsplit("<a ", 1)[1]
+    assert "onClick" not in anchor_fragment
+    assert "href={safePublicReportUrl}" in anchor_fragment
+
+
+def test_operations_deck_handles_missing_malformed_or_empty_public_urls_without_crashing():
+    assert "PUBLIC_REPORT_MISSING_URL_MESSAGE" in MONITOR
+    assert "return { publicReportState, publicReportUrl: \"\", error: PUBLIC_REPORT_MISSING_URL_MESSAGE }" in MONITOR
+    assert "const safePublicReportUrl = isSafePublicReportHref(publicReportUrl) ? publicReportUrl : \"\";" in MONITOR
+    assert "{(publicReportState || safePublicReportUrl) &&" in MONITOR
+    assert "{safePublicReportUrl &&" in MONITOR
+
+
 def test_public_route_registered_without_admin_wrapper():
     assert '<Route path="/public/intelligence-diagnostics/:token" element={<PublicIntelligenceDiagnosticReportPage />} />' in APP
     route_fragment = APP.split('<Route path="/public/intelligence-diagnostics/:token"')[1].split('/>')[0]
