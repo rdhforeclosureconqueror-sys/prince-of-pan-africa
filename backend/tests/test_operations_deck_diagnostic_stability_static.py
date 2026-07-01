@@ -195,9 +195,29 @@ def test_public_report_browser_verification_validates_html_json_and_markdown():
     assert 'node.getAttribute("type") !== "application/json"' in MONITOR
     assert "JSON.parse(node.textContent" in MONITOR
     assert "await response.json()" in MONITOR
-    assert "markdown.trim().startsWith(\"# Public Diagnostic Report\")" in MONITOR
+    assert "isAiReadableDiagnosticMarkdown(markdown)" in MONITOR
+    assert "Public Intelligence Diagnostic Report" in MONITOR
     assert "Markdown did not begin with an AI-readable public diagnostic heading." in MONITOR
 
+
+
+def test_public_report_verification_and_pipeline_share_browser_source_of_truth():
+    assert "browserDrivenPipelineSteps" in MONITOR
+    assert "displayedPipelineSteps = browserVerificationStarted ? browserDrivenPipelineSteps : pipelineSteps" in MONITOR
+    assert "displayedPipelineOverallStatus" in MONITOR
+    assert "publicReportVerificationPassed(publicReportVerification)" in MONITOR
+    assert "browserVerified && (result?.ai_summary || result?.executive_summary)" in MONITOR
+    assert "publicReportVerification?.json?.status === PUBLIC_REPORT_VERIFICATION_PASS" in MONITOR
+    assert "publicReportVerification?.markdown?.status === PUBLIC_REPORT_VERIFICATION_PASS" in MONITOR
+
+
+def test_public_report_json_validation_uses_required_keys_not_string_patterns():
+    assert "PUBLIC_REPORT_REQUIRED_JSON_KEYS" in MONITOR
+    assert 'validatePublicDiagnosticJson(parsed, "Embedded diagnostic-data JSON")' in MONITOR
+    assert 'validatePublicDiagnosticJson(parsed, "JSON report")' in MONITOR
+    assert "missing required diagnostic keys" in MONITOR
+    assert "parsed.public_report !== true" in MONITOR
+    assert "parsed.read_only !== true" in MONITOR
 
 def test_public_report_browser_verification_failures_do_not_crash_operations_deck():
     assert "PUBLIC_REPORT_VERIFICATION_FAIL" in MONITOR
