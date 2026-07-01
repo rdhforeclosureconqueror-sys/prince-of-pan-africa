@@ -1967,3 +1967,76 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+/* Executive Intelligence Health Command Center */
+.intelligence-health-monitor {
+  max-width: 1180px;
+}
+
+.intelligence-health-monitor .wide-card,
+.intelligence-health-monitor .ai-coo-recommendation {
+  max-width: none;
+  width: 100%;
+}
+
+.mission-control {
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: 22px;
+  padding: 1.25rem;
+  margin: 2rem 0;
+  background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.16), transparent 34%), rgba(2, 6, 23, 0.72);
+  box-shadow: 0 0 36px rgba(56, 189, 248, 0.12), inset 0 0 30px rgba(15, 23, 42, 0.8);
+}
+
+.executive-brief-grid {
+  align-items: stretch;
+  margin-bottom: 1.5rem;
+}
+
+.executive-priority {
+  border-color: rgba(251, 146, 60, 0.45);
+}
+
+.state-healthy {
+  border-color: rgba(34, 197, 94, 0.65);
+  box-shadow: 0 0 28px rgba(34, 197, 94, 0.18);
+}
+
+.state-at-risk {
+  border-color: rgba(234, 179, 8, 0.7);
+  box-shadow: 0 0 28px rgba(234, 179, 8, 0.18);
+}
+
+.state-critical {
+  border-color: rgba(239, 68, 68, 0.75);
+  box-shadow: 0 0 28px rgba(239, 68, 68, 0.22);
+}
+
+.dependency-chain {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  margin: 1rem 0;
+}
+
+.dependency-node {
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 999px;
+  padding: 0.65rem 0.9rem;
+  color: #f8fafc;
+  background: rgba(15, 23, 42, 0.86);
+  cursor: pointer;
+}
+
+.dependency-node.healthy { border-color: #22c55e; }
+.dependency-node.warning { border-color: #eab308; }
+.dependency-node.regression { border-color: #f97316; }
+.dependency-node.failure { border-color: #ef4444; }
+.dependency-node.upstream { box-shadow: 0 0 16px rgba(56, 189, 248, 0.24); }
+.dependency-node.downstream { box-shadow: 0 0 16px rgba(168, 85, 247, 0.22); }
+.dependency-node.selected {
+  transform: translateY(-2px) scale(1.03);
+  border-width: 2px;
+  box-shadow: 0 0 22px rgba(255, 255, 255, 0.28);
+}

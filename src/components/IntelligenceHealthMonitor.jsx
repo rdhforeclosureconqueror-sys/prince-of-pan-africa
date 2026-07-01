@@ -183,7 +183,7 @@ export default function IntelligenceHealthMonitor() {
   const [publicReportVerification, setPublicReportVerification] = useState(null);
   const [generatingReport, setGeneratingReport] = useState(false);
   const [trendWindow, setTrendWindow] = useState("10");
-  const [expandedActionId, setExpandedActionId] = useState("");
+  const [selectedLayer, setSelectedLayer] = useState("Decision Support");
 
   const clearPublicReport = () => {
     setPublicReportState(null);
@@ -294,6 +294,28 @@ export default function IntelligenceHealthMonitor() {
   const timeline = asArray(result?.timeline);
   const rootCauseClassification = safeObject(result?.root_cause_classification);
   const passFailSummary = safeObject(result?.pass_fail_summary);
+  const dependencyLayers = ["Member", "Society", "Institution", "Opportunity", "Predictive", "Decision Support", "Execution Planning", "Execution Intelligence", "Institutional Memory", "Institutional Learning"];
+  const selectedLayerIndex = Math.max(0, dependencyLayers.indexOf(selectedLayer));
+  const healthScore = (result?.overall_health_percent ?? result?.overall_health?.percent) ?? "—";
+  const failureCount = asArray(result?.critical_failures).length || asArray(result?.failed_layers).length || (passFailSummary.failed ?? 0);
+  const regressionCount = result?.regression_count ?? result?.regression_summary?.count ?? 0;
+  const warningCount = asArray(result?.warnings).length || (passFailSummary.warnings ?? 0);
+  const missionStatus = commandCenter.mission_status || (failureCount ? "Critical" : regressionCount || warningCount ? "At Risk" : layers.length ? "Healthy" : "At Risk");
+  const riskLevel = commandCenter.risk_level || (failureCount ? "High" : regressionCount ? "Elevated" : warningCount ? "Moderate" : "Low");
+  const highestPriority = commandCenter.todays_highest_priority || commandCenter.todays_recommendation || aiOperationsAdvisor[0]?.title || recommendedNextActions[0] || "Run a diagnostic and preserve current baselines until evidence is available.";
+  const timeToResolution = commandCenter.estimated_time_to_resolution || aiOperationsAdvisor[0]?.estimated_time || aiChiefOperatingOfficer.suggested_sprint?.estimated_completion || "1–2 hours after the highest-priority fix is selected.";
+  const cooRecommendation = commandCenter.ai_coo_recommendation || aiChiefOperatingOfficer.recommendation || `${missionStatus} mission posture with ${healthScore}% overall health. ${highestPriority} should be handled first because it has the greatest leadership impact on the intelligence chain; trend review, public-report polishing, and lower-risk baseline cleanup can wait until the priority queue is resolved and the diagnostic is re-run.`;
+  const priorityQueue = (aiOperationsAdvisor.length ? aiOperationsAdvisor : recommendedNextActions.map((action, index) => ({ title: action, priority: index === 0 ? "HIGH" : "MEDIUM" }))).map((action, index) => ({
+    id: action.id || `priority-action-${index}`,
+    priority: action.priority || (index === 0 ? "HIGH" : "MEDIUM"),
+    title: action.title || action.suggested_fix || action.action || `Recommended action ${index + 1}`,
+    impact: action.impact || action.estimated_impact || "Stabilizes executive confidence and reduces regression exposure.",
+    effort: action.estimated_effort || action.estimated_difficulty || action.estimated_time || "Medium",
+    layers: asArray(action.affected_intelligence_layers || action.affected_layers).length ? asArray(action.affected_intelligence_layers || action.affected_layers).join(" → ") : dependencyLayers.slice(Math.max(0, index - 1), Math.min(dependencyLayers.length, index + 3)).join(" → "),
+    improvement: action.expected_health_improvement || action.expected_improvement || `+${Math.max(2, 8 - index * 2)} health points`,
+  }));
+  const forecast = safeObject(predictiveIntelligence.ai_forecast || predictiveIntelligence.forecast);
+  const sprint = safeObject(aiChiefOperatingOfficer.sprint_planning || aiChiefOperatingOfficer.suggested_sprint);
   const trendMetrics = [
     ["Overall Health Score", "overall_health_score", "%"],
     ["Response Time", "response_time_ms", "ms"],
@@ -340,26 +362,53 @@ export default function IntelligenceHealthMonitor() {
       {publicReportError && <article className="stat-card admin-error"><h3>Public report could not be generated</h3><p>⚠️ {publicReportError}</p><button type="button" onClick={clearPublicReport}>Clear Public Report Link</button></article>}
       {historyError && !layers.length && <article className="stat-card"><h3>Last run could not be loaded</h3><p>Diagnostics unavailable</p></article>}
 
-      <article className="stat-card"><h3>Executive Summary</h3><p>{result?.executive_summary || result?.overall_summary || "Run a diagnostic to generate an admin-readable AI Systems Dashboard summary."}</p></article>
+      <section className="mission-control" aria-label="Executive Brief">
+        <h3>Executive Brief</h3>
+        <div className="dashboard-grid executive-brief-grid">
+          <article className={`stat-card state-${missionStatus.toLowerCase().replace(/\s+/g, "-")}`}><h3>Mission Status</h3><h2>{missionStatus}</h2></article>
+          <article className="stat-card"><h3>Overall Health Score</h3><h2>{healthScore}%</h2></article>
+          <article className="stat-card"><h3>Deployment Status</h3><p>{commandCenter.deployment_status || pipeline.overall_status || "Pending diagnostic"}</p></article>
+          <article className="stat-card"><h3>Risk Level</h3><p>{riskLevel}</p></article>
+          <article className="stat-card executive-priority"><h3>Today’s Highest Priority</h3><p>{highestPriority}</p></article>
+          <article className="stat-card"><h3>Estimated time to resolution</h3><p>{timeToResolution}</p></article>
+        </div>
+        <article className="stat-card ai-coo-recommendation"><h3>AI COO Recommendation</h3><p>{cooRecommendation}</p></article>
+      </section>
 
+      <h3>Priority Queue</h3>
+      <article className="stat-card wide-card" aria-label="Priority Queue">
+        <table className="admin-table"><thead><tr><th>Priority</th><th>Action</th><th>Impact</th><th>Effort</th><th>Affected intelligence layers</th><th>Expected health improvement</th><th>Run Action</th></tr></thead><tbody>{priorityQueue.length ? priorityQueue.map((action) => <tr key={action.id}><td><strong>{action.priority}</strong></td><td>{action.title}</td><td>{action.impact}</td><td>{action.effort}</td><td>{action.layers}</td><td>{action.improvement}</td><td><button type="button" disabled title="Action execution is planned for a future release.">Future Run Action</button></td></tr>) : <tr><td colSpan={7}>Run a diagnostic to generate ranked recommended actions by impact.</td></tr>}</tbody></table>
+      </article>
 
-      <h3>Command Center</h3>
-      <div className="dashboard-grid" aria-label="Executive Command Center">
-        <article className="stat-card"><h3>Mission Status</h3><p>{commandCenter.mission_status || (result?.overall_status === "FAIL" ? "Needs intervention" : "Operational")}</p></article>
-        <article className="stat-card"><h3>Deployment Status</h3><p>{commandCenter.deployment_status || pipeline.overall_status || "Pending diagnostic"}</p></article>
-        <article className="stat-card"><h3>Risk Level</h3><p>{commandCenter.risk_level || aiOperationsAdvisor[0]?.priority || "LOW"}</p></article>
-        <article className="stat-card"><h3>Today’s Recommendation</h3><p>{commandCenter.todays_recommendation || aiOperationsAdvisor[0]?.suggested_fix || "Run a diagnostic to generate today’s recommendation."}</p></article>
+      <h3>Dependency Map</h3>
+      <article className="stat-card wide-card dependency-map" aria-label="Dependency Map">
+        <p>Member → Society → Institution → Opportunity → Predictive → Decision Support → Execution Planning → Execution Intelligence → Institutional Memory → Institutional Learning</p>
+        <div className="dependency-chain">{dependencyLayers.map((layer, index) => {
+          const match = layers.find((item) => (item.layer || "").includes(layer));
+          const state = match?.status === "FAIL" ? "failure" : match?.regression ? "regression" : match?.status === "WARNING" ? "warning" : "healthy";
+          const relation = index < selectedLayerIndex ? "upstream" : index > selectedLayerIndex ? "downstream" : "selected";
+          return <button type="button" key={layer} className={`dependency-node ${state} ${relation}`} onClick={() => setSelectedLayer(layer)} aria-pressed={selectedLayer === layer}>{layer}</button>;
+        })}</div>
+        <p><strong>Selected layer:</strong> {selectedLayer}. Upstream dependencies are highlighted before it; downstream dependencies are highlighted after it.</p>
+      </article>
+
+      <h3>Executive Trends</h3>
+      <article className="stat-card wide-card"><label htmlFor="trend-window"><strong>View window</strong></label> <select id="trend-window" value={trendWindow} onChange={(event) => setTrendWindow(event.target.value)}><option value="10">Last 10 runs</option><option value="30">Last 30 runs</option><option value="100">Last 100 runs</option><option value="all">All Time</option></select><div className="dashboard-grid">{trendMetrics.filter(([, key]) => ["overall_health_score", "regression_count", "api_latency_ms", "diagnostic_duration_ms", "public_verification"].includes(key)).map(([label, key, unit]) => { const points = asArray(trends[key]); const last = points[points.length - 1]; const max = Math.max(1, ...points.map((point) => Number(point.value) || 0)); return <section className="stat-card" key={key}><h4>{label === "Overall Health Score" ? "Health trend" : label === "Regression Count" ? "Regression trend" : label === "API Latency" ? "API latency" : label === "Diagnostic Duration" ? "Diagnostic duration" : "Public verification history"}</h4><p>{last?.value ?? "—"}{unit}</p><div aria-label={`${label} chart`}>{points.map((point, index) => <span key={`${key}-${index}`} title={`${point.timestamp}: ${point.value}${unit}`} style={{ display: "inline-block", width: 10, height: `${Math.max(4, ((Number(point.value) || 0) / max) * 48)}px`, marginRight: 3, background: "#22c55e", verticalAlign: "bottom" }} />)}</div></section>; })}<section className="stat-card"><h4>Deployment history</h4><p>{history.length || "—"} recorded runs</p><div aria-label="Deployment history chart">{history.slice(0, 12).reverse().map((run, index) => <span key={run.diagnostic_id || index} title={run.created_at} style={{ display: "inline-block", width: 10, height: `${Math.max(4, Number(run.overall_health_percent ?? run.overall_health?.percent ?? 0) / 2)}px`, marginRight: 3, background: "#38bdf8", verticalAlign: "bottom" }} />)}</div></section></div></article>
+
+      <h3>AI Forecast</h3>
+      <div className="dashboard-grid" aria-label="AI Forecast">
+        <article className="stat-card"><h3>Future regression likelihood</h3><p>{forecast.future_regression_likelihood || forecast.regression_likelihood || (regressionCount ? "Moderate" : "Low")}</p></article>
+        <article className="stat-card"><h3>Confidence</h3><p>{forecast.confidence ?? aiOperationsAdvisor[0]?.confidence ?? "—"}%</p></article>
+        <article className="stat-card"><h3>Likely drift areas</h3><p>{asArray(forecast.likely_drift_areas).join(", ") || layers.filter((layer) => layer.regression || layer.status === "WARNING").map((layer) => layer.layer).join(", ") || "No likely drift areas detected."}</p></article>
+        <article className="stat-card"><h3>Technical debt trend</h3><p>{forecast.technical_debt_trend || (warningCount || regressionCount ? "Increasing unless priority queue is completed" : "Stable")}</p></article>
+        <article className="stat-card"><h3>7-deployment stability</h3><p>{forecast.estimated_stability_next_7_deployments || forecast.stability_7_deployments || "Stable if no new regressions ship"}</p></article>
+        <article className="stat-card"><h3>30-deployment stability</h3><p>{forecast.estimated_stability_next_30_deployments || forecast.stability_30_deployments || "Monitor for slow baseline drift"}</p></article>
       </div>
 
-      <h3>Recommended Actions</h3>
-      <article className="stat-card" aria-label="AI Operations Advisor">
-        <p><strong>AI Operations Advisor</strong> ranks every diagnostic by Priority, Estimated Impact, Estimated Difficulty, Estimated Time, Suggested Fix, and Confidence.</p>
-        {aiOperationsAdvisor.length ? aiOperationsAdvisor.map((action, index) => {
-          const actionId = action.id || `${action.priority}-${index}`;
-          const open = expandedActionId === actionId;
-          return <section className="stat-card" key={actionId}><button type="button" onClick={() => setExpandedActionId(open ? "" : actionId)} aria-expanded={open}><strong>{action.priority}</strong> · {action.title} · Confidence {action.confidence}%</button>{open && <div><p><strong>Impact:</strong> {action.estimated_impact}</p><p><strong>Difficulty:</strong> {action.estimated_difficulty}</p><p><strong>Estimated Time:</strong> {action.estimated_time}</p><p><strong>Suggested Fix:</strong> {action.suggested_fix}</p><p><strong>Supporting Evidence</strong></p><ul>{asArray(action.supporting_evidence).map((evidence) => <li key={evidence}>{evidence}</li>)}</ul></div>}</section>;
-        }) : <p>Run a diagnostic to generate ranked Critical, High, Medium, and Low actions.</p>}
-      </article>
+      <h3>AI COO Sprint Planning</h3>
+      <article className="stat-card wide-card"><h4>Sprint goal</h4><p>{sprint.goal || sprint.sprint_goal || `Restore the intelligence chain to ${failureCount ? "non-critical" : "healthy"} status while protecting public diagnostic confidence.`}</p><h4>Highest ROI tasks</h4><ul>{(asArray(sprint.highest_roi_tasks).length ? asArray(sprint.highest_roi_tasks) : priorityQueue.slice(0, 3).map((action) => action.title)).map((task) => <li key={task}>{task}</li>)}</ul><h4>Recommended implementation order</h4><ol>{(asArray(sprint.recommended_implementation_order).length ? asArray(sprint.recommended_implementation_order) : priorityQueue.slice(0, 4).map((action) => action.title)).map((task) => <li key={task}>{task}</li>)}</ol><p><strong>Risk reduction estimate:</strong> {sprint.risk_reduction_estimate || "25–40% after the top two queue items are verified."}</p><p><strong>Expected health after sprint completion:</strong> {sprint.expected_health_after_completion || sprint.expected_result?.overall_health || "90%+ with no critical failures."}</p></article>
+
+      <h3>Technical Diagnostic Evidence</h3>
 
       <div className="dashboard-grid">
         <div className="stat-card"><h3>Overall Health</h3><h2>{(result?.overall_health_percent ?? result?.overall_health?.percent) ?? "—"}%</h2></div>
