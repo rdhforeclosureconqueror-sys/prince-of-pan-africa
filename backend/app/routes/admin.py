@@ -1,12 +1,13 @@
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import PlainTextResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies.auth import require_permission
-from app.services.intelligence_health import diagnostic_history, generate_public_diagnostic_report, get_public_diagnostic_report, run_full_intelligence_diagnostic
+from app.services.intelligence_health import diagnostic_history, generate_public_diagnostic_report, get_public_diagnostic_report, public_diagnostic_error, public_report_to_markdown, run_full_intelligence_diagnostic, validate_public_report_token
 from app.models import (
     ActivityLog,
     Audiobook,
@@ -200,9 +201,27 @@ def create_public_intelligence_health_report(_: None = Depends(require_permissio
 
 
 
-@public_router.get("/public/intelligence-diagnostics/{token}")
-def get_public_intelligence_health_report(token: str):
+def _safe_public_report_or_error(token: str):
+    if not validate_public_report_token(token):
+        raise HTTPException(status_code=400, detail=public_diagnostic_error("Public diagnostic report token is malformed or missing.", "malformed_public_report_token"))
     report = get_public_diagnostic_report(token)
     if not report:
-        raise HTTPException(status_code=404, detail="Public diagnostic report not found or expired")
+        raise HTTPException(status_code=404, detail=public_diagnostic_error("Public diagnostic report not found.", "public_report_not_found"))
+    if report.get("expiration_status") == "expired":
+        raise HTTPException(status_code=410, detail=public_diagnostic_error("Public diagnostic report has expired.", "public_report_expired"))
     return report
+
+
+@public_router.get("/public/intelligence-diagnostics/{token}.json")
+def get_public_intelligence_health_report_json(token: str):
+    return _safe_public_report_or_error(token)
+
+
+@public_router.get("/public/intelligence-diagnostics/{token}.md", response_class=PlainTextResponse)
+def get_public_intelligence_health_report_markdown(token: str):
+    return PlainTextResponse(public_report_to_markdown(_safe_public_report_or_error(token)), media_type="text/markdown; charset=utf-8")
+
+
+@public_router.get("/public/intelligence-diagnostics/{token}")
+def get_public_intelligence_health_report(token: str):
+    return _safe_public_report_or_error(token)
