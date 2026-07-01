@@ -171,6 +171,7 @@ export default function IntelligenceHealthMonitor() {
   const [publicReportCopyMessage, setPublicReportCopyMessage] = useState("");
   const [publicReportVerification, setPublicReportVerification] = useState(null);
   const [generatingReport, setGeneratingReport] = useState(false);
+  const [trendWindow, setTrendWindow] = useState("10");
 
   const clearPublicReport = () => {
     setPublicReportState(null);
@@ -268,6 +269,24 @@ export default function IntelligenceHealthMonitor() {
   const safePublicReportJsonUrl = safePublicReportUrl ? `${safePublicReportUrl}.json` : "";
   const safePublicReportMarkdownUrl = safePublicReportUrl ? `${safePublicReportUrl}.md` : "";
   const publicReportVerificationMessage = publicReportVerificationStatusText(publicReportVerification);
+  const trends = safeObject(safeObject(result?.trends)[trendWindow] || safeObject(history[0]?.trends)[trendWindow]);
+  const comparisonRows = asArray(healthTrend.rows);
+  const pipeline = safeObject(result?.pipeline);
+  const pipelineSteps = asArray(pipeline.steps);
+  const performanceSummary = safeObject(result?.performance_summary);
+  const timeline = asArray(result?.timeline);
+  const rootCauseClassification = safeObject(result?.root_cause_classification);
+  const passFailSummary = safeObject(result?.pass_fail_summary);
+  const trendMetrics = [
+    ["Overall Health Score", "overall_health_score", "%"],
+    ["Response Time", "response_time_ms", "ms"],
+    ["API Latency", "api_latency_ms", "ms"],
+    ["Diagnostic Duration", "diagnostic_duration_ms", "ms"],
+    ["Failure Count", "failure_count", ""],
+    ["Regression Count", "regression_count", ""],
+  ];
+  const directionIcon = (direction) => direction === "improvement" ? "🟢" : direction === "regression" ? "🔴" : "🟡";
+  const pipelineIcon = (status) => status === "PASS" ? "🟢" : status === "FAIL" ? "🔴" : "🟡";
 
   return (
     <section className="cosmic-section intelligence-health-monitor" aria-labelledby="intelligence-health-title">
@@ -293,6 +312,49 @@ export default function IntelligenceHealthMonitor() {
         <div className="stat-card"><h3>Last Successful Diagnostic</h3><p>{result?.last_successful_diagnostic || "No previous successful run"}</p></div>
         <div className="stat-card"><h3>Health Trend</h3><p>{healthTrend.available ? `${healthTrend.health_trend > 0 ? "+" : ""}${healthTrend.health_trend}%` : "No previous run"}</p></div>
       </div>
+
+      <h3>Intelligence Pipeline</h3>
+      <article className="stat-card" aria-label="Intelligence Pipeline">
+        <div className="dashboard-grid">
+          {(pipelineSteps.length ? pipelineSteps : [
+            { key: "diagnostic_generated", label: "Diagnostic Generated", status: result?.ok ? "PASS" : "WARNING" },
+            { key: "report_stored", label: "Report Stored", status: publicReportState ? "PASS" : "WARNING" },
+            { key: "html_available", label: "HTML Available", status: publicReportVerification?.html?.status === "pass" ? "PASS" : "WARNING" },
+            { key: "embedded_json_valid", label: "Embedded JSON Valid", status: publicReportVerification?.htmlEmbeddedData?.status === "pass" ? "PASS" : "WARNING" },
+            { key: "json_endpoint_reachable", label: "JSON Endpoint Reachable", status: publicReportVerification?.json?.status === "pass" ? "PASS" : "WARNING" },
+            { key: "markdown_endpoint_reachable", label: "Markdown Endpoint Reachable", status: publicReportVerification?.markdown?.status === "pass" ? "PASS" : "WARNING" },
+            { key: "public_report_sanitized", label: "Public Report Sanitized", status: publicReportState?.read_only ? "PASS" : "WARNING" },
+            { key: "read_only_confirmed", label: "Read Only Confirmed", status: result?.production_writes === 0 && !result?.workflow_execution ? "PASS" : "FAIL" },
+            { key: "browser_verification_passed", label: "Browser Verification Passed", status: publicReportVerificationPassed(publicReportVerification) ? "PASS" : "WARNING" },
+            { key: "ai_ready", label: "AI Ready", status: result?.ai_summary || result?.executive_summary ? "PASS" : "WARNING" },
+          ]).map((step) => <p key={step.key || step.label}><strong>{pipelineIcon(step.status)} {step.label}</strong>: {step.status}</p>)}
+        </div>
+        <h2>{pipelineIcon((pipeline.overall_status || "").includes("Failure") ? "FAIL" : (pipeline.overall_status || "").includes("Warning") ? "WARNING" : "PASS")} {pipeline.overall_status || "Pipeline Warning"}</h2>
+      </article>
+
+      <h3>Deployment Comparison</h3>
+      <table className="admin-table"><thead><tr><th>Metric</th><th>Previous Run</th><th>Current Run</th><th>Difference</th></tr></thead><tbody>{comparisonRows.length ? comparisonRows.map((row) => <tr key={row.metric}><td>{directionIcon(row.direction)} {row.metric}</td><td>{row.previous}{row.unit}</td><td>{row.current}{row.unit}</td><td>{row.difference > 0 ? "+" : ""}{row.difference}{row.unit} · {row.direction}</td></tr>) : <tr><td colSpan={4}>No previous run is available yet.</td></tr>}</tbody></table>
+
+      <h3>Trend Analysis</h3>
+      <article className="stat-card"><label htmlFor="trend-window"><strong>View window</strong></label> <select id="trend-window" value={trendWindow} onChange={(event) => setTrendWindow(event.target.value)}><option value="10">Last 10 runs</option><option value="30">Last 30 runs</option><option value="100">Last 100 runs</option></select><div className="dashboard-grid">{trendMetrics.map(([label, key, unit]) => { const points = asArray(trends[key]); const last = points[points.length - 1]; const max = Math.max(1, ...points.map((point) => Number(point.value) || 0)); return <section className="stat-card" key={key}><h4>{label}</h4><p>{last?.value ?? "—"}{unit}</p><div aria-label={`${label} trend`}>{points.map((point, index) => <span key={`${key}-${index}`} title={`${point.timestamp}: ${point.value}${unit}`} style={{ display: "inline-block", width: 10, height: `${Math.max(4, ((Number(point.value) || 0) / max) * 48)}px`, marginRight: 3, background: "#22c55e", verticalAlign: "bottom" }} />)}</div></section>; })}</div></article>
+
+      <h3>Executive Performance Summary</h3>
+      <div className="dashboard-grid">
+        <article className="stat-card"><h3>Average API latency</h3><h2>{performanceSummary.average_api_latency_ms ?? result?.performance?.api_response_time_ms ?? "—"}ms</h2></article>
+        <article className="stat-card"><h3>Slowest endpoint</h3><p>{performanceSummary.slowest_endpoint ?? result?.performance?.slowest_layer ?? "—"}</p></article>
+        <article className="stat-card"><h3>Fastest endpoint</h3><p>{performanceSummary.fastest_endpoint ?? result?.performance?.fastest_layer ?? "—"}</p></article>
+        <article className="stat-card"><h3>Average diagnostic time</h3><p>{performanceSummary.average_diagnostic_time_ms ?? "—"}ms</p></article>
+        <article className="stat-card"><h3>Report generation time</h3><p>{performanceSummary.report_generation_time_ms ?? 0}ms</p></article>
+        <article className="stat-card"><h3>Verification time</h3><p>{performanceSummary.verification_time_ms ?? 0}ms</p></article>
+        <article className="stat-card"><h3>Total completed checks</h3><p>{performanceSummary.total_completed_checks ?? layers.length}</p></article>
+        <article className="stat-card"><h3>Passed / Warnings / Failures</h3><p>{performanceSummary.total_passed ?? passFailSummary.passed ?? 0} / {performanceSummary.total_warnings ?? passFailSummary.warnings ?? 0} / {performanceSummary.total_failures ?? passFailSummary.failed ?? 0}</p></article>
+      </div>
+
+      <h3>Intelligence Timeline</h3>
+      <article className="stat-card"><ol>{timeline.length ? timeline.map((event, index) => <li key={`${event.time}-${index}`}><strong>{event.time}</strong> {event.event}</li>) : <li>Run a diagnostic to replay timeline events.</li>}</ol></article>
+
+      <h3>AI Summary</h3>
+      <article className="stat-card"><p>{result?.ai_summary || result?.executive_summary || "Run a diagnostic to generate an AI-readable operational summary."}</p></article>
 
       <h3>Layer Status</h3>
       <div className="dashboard-grid">
@@ -328,11 +390,11 @@ export default function IntelligenceHealthMonitor() {
         <article className="stat-card"><h3>Regression Summary</h3>{layers.filter((l) => l.regression).length ? layers.filter((l) => l.regression).map((l) => <p key={l.layer}>{l.layer}: {l.regression} ({safeObject(l.difference_summary).score ?? "—"})</p>) : <p>None</p>}</article>
         <article className="stat-card"><h3>Critical Failures</h3>{asArray(result?.critical_failures).length ? asArray(result.critical_failures).map((l, i) => <p key={l.layer || i}>{l.layer || "Unknown Layer"}: {l.explanation || "Diagnostics unavailable"}</p>) : <p>None</p>}</article>
         <article className="stat-card"><h3>Performance Metrics</h3><pre className="data-note">{JSON.stringify(result?.performance || result?.performance_timings || {}, null, 2)}</pre></article>
-        <article className="stat-card"><h3>Root Cause Analysis</h3>{asArray(result?.root_cause_analysis).length ? asArray(result.root_cause_analysis).map((line) => <p key={line}>{line}</p>) : <p>Run a diagnostic to view root-cause tracing.</p>}</article>
+        <article className="stat-card"><h3>Root Cause Analysis</h3>{rootCauseClassification.category && <p><strong>Classification:</strong> {rootCauseClassification.category} · Confidence {Math.round((rootCauseClassification.confidence || 0) * 100)}%{rootCauseClassification.heuristic ? " · heuristic" : ""}</p>}{asArray(result?.root_cause_analysis).length ? asArray(result.root_cause_analysis).map((line) => <p key={line}>{line}</p>) : <p>Run a diagnostic to view root-cause tracing.</p>}</article>
       </div>
 
       <h3>Diagnostic History</h3>
-      <table className="admin-table"><thead><tr><th>Run</th><th>Health</th><th>Regressions</th><th>Execution Time</th><th>Safety</th></tr></thead><tbody>{history.length ? history.map((run, index) => <tr key={run.diagnostic_id || index}><td>{run.created_at || "Last run could not be loaded"}</td><td>{run.overall_health_percent ?? run.overall_health?.percent ?? "—"}%</td><td>{run.regression_count ?? run.regression_summary?.count ?? 0}</td><td>{run.performance?.total_execution_time_ms ?? run.performance_timings?.total_execution_time_ms ?? "—"}ms</td><td>{run.production_writes === 0 && !run.workflow_execution ? "Read-only" : "Review required"}</td></tr>) : <tr><td colSpan={5}>No diagnostic history yet.</td></tr>}</tbody></table>
+      <div>{history.length ? history.map((run, index) => { const summary = safeObject(run.pass_fail_summary); return <details className="stat-card" key={run.diagnostic_id || index}><summary><strong>{run.created_at || "Timestamp unavailable"}</strong> · Health {run.overall_health_percent ?? run.overall_health?.percent ?? "—"}% · {run.overall_status || "UNKNOWN"} · Duration {run.performance?.total_execution_time_ms ?? run.performance_timings?.total_execution_time_ms ?? "—"}ms · {run.environment || "environment unknown"}</summary><p><strong>Report token:</strong> {run.report_token || run.public_report_token || "—"}</p><p><strong>Version/commit:</strong> {run.build_commit || run.version || run.fixture_version || "—"}</p><p><strong>Pass/fail summary:</strong> {summary.passed ?? run.status_counts?.pass ?? 0} pass · {summary.warnings ?? run.status_counts?.warning ?? 0} warnings · {summary.failed ?? run.status_counts?.fail ?? 0} failures · {summary.regressions ?? run.regression_count ?? 0} regressions</p><pre className="data-note">{JSON.stringify(run, null, 2)}</pre></details>; }) : <article className="stat-card"><p>No diagnostic history yet.</p></article>}</div>
 
       <h3>Compare Previous Run</h3>
       <pre className="data-note">{JSON.stringify(healthTrend, null, 2)}</pre>
