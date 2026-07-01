@@ -46,7 +46,10 @@ def test_public_report_workflow_safety_boundaries():
 
     public = client.get(f"/public/intelligence-diagnostics/{token}")
     assert public.status_code == 200
-    body = public.json()
+    assert "text/html" in public.headers["content-type"]
+    assert 'id="diagnostic-data" type="application/json"' in public.text
+
+    body = client.get(f"/public/intelligence-diagnostics/{token}.json").json()
     raw = str(body)
 
     assert body["public_report"] is True
@@ -116,9 +119,11 @@ def test_public_json_and_markdown_endpoints_are_ai_readable_without_auth():
     assert md_response.status_code == 200
     assert "text/markdown" in md_response.headers["content-type"]
     markdown = md_response.text
-    assert "# Intelligence Diagnostic Report" in markdown
+    assert "# Public Diagnostic Report" in markdown
+    assert "Intelligence Diagnostic Report" in markdown
     assert "## Overall Health" in markdown
-    assert "## Safety Confirmation" in markdown
+    assert "## Safety" in markdown
+    assert "Safety Confirmation" in markdown
     assert "## Layer Results" in markdown
     assert "## Regression Summary" in markdown
     assert "## Root Cause Analysis" in markdown
@@ -186,14 +191,16 @@ def test_public_diagnostic_complete_production_flow_json_markdown_react_and_heal
 
     markdown_response = client.get(f"/public/intelligence-diagnostics/{token}.md")
     assert markdown_response.status_code == 200
-    assert "# Intelligence Diagnostic Report" in markdown_response.text
+    assert "# Public Diagnostic Report" in markdown_response.text
+    assert "Intelligence Diagnostic Report" in markdown_response.text
     assert json_body["fixture_name"] in markdown_response.text
 
     react_page_response = client.get(f"/public/intelligence-diagnostics/{token}")
     assert react_page_response.status_code == 200
-    react_payload = react_page_response.json()
-    assert react_payload["overall_summary"] == json_body["overall_summary"]
-    assert react_payload["layers"][0]["layer"] == json_body["layers"][0]["layer"]
+    assert "text/html" in react_page_response.headers["content-type"]
+    assert 'id="diagnostic-data" type="application/json"' in react_page_response.text
+    assert json_body["overall_summary"] in react_page_response.text
+    assert json_body["layers"][0]["layer"] in react_page_response.text
 
     health = client.get("/admin/intelligence-health/public-report/health", cookies=session_cookie(admin_id))
     assert health.status_code == 200

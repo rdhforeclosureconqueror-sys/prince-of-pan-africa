@@ -57,6 +57,7 @@ PUBLIC_REPORT_TTL_DAYS = 14
 PUBLIC_REPORT_STORAGE_DIR = Path(os.getenv("PUBLIC_DIAGNOSTIC_REPORT_STORAGE_DIR", os.getenv("PUBLIC_REPORT_STORAGE_DIR", "/var/data/public-intelligence-diagnostics")))
 logger = logging.getLogger("mufasa-public-diagnostics")
 PUBLIC_REPORT_TOKEN_PATTERN = re.compile(r"^[A-Za-z0-9_-]{32,128}$")
+PUBLIC_DIAGNOSTIC_BASE_URL = os.getenv("PUBLIC_DIAGNOSTIC_BASE_URL", "https://simbawaujamaa.com").rstrip("/")
 FIXTURE_NAME = "intelligence-health-fixture"
 FIXTURE_VERSION = "v1"
 
@@ -355,6 +356,7 @@ def sanitize_diagnostic_for_public_report(run: dict[str, Any]) -> dict[str, Any]
         "report_name": "Public Intelligence Diagnostic Report",
         "status": "available",
         "expiration_status": "active",
+        "expired": False,
         "overall_summary": run.get("executive_summary", "Diagnostic summary unavailable."),
         "root_cause_analysis": deepcopy(run.get("root_cause_analysis", [])),
         "recommended_admin_actions": list(run.get("recommended_next_actions", ADMIN_RECOMMENDED_ACTIONS)),
@@ -368,6 +370,12 @@ def sanitize_diagnostic_for_public_report(run: dict[str, Any]) -> dict[str, Any]
         "regression_count": run.get("regression_count", 0),
         "warning_count": len(run.get("warnings", [])),
         "critical_failure_count": len(run.get("critical_failures", [])),
+        "status_counts": {
+            "pass": len([layer for layer in layers if layer.get("status") == "PASS"]),
+            "warning": len([layer for layer in layers if layer.get("status") == "WARNING"]),
+            "fail": len([layer for layer in layers if layer.get("status") == "FAIL"]),
+            "regression": len([layer for layer in layers if layer.get("regression")]),
+        },
         "layers": layers,
         "expected_vs_actual_summary": [
             {"layer": layer["layer"], "expected": layer["expected"], "actual": layer["actual"], "difference_summary": layer["difference_summary"]}
@@ -381,7 +389,7 @@ def sanitize_diagnostic_for_public_report(run: dict[str, Any]) -> dict[str, Any]
         "warnings": [{"layer": layer["layer"], "status": layer["status"], "explanation": layer["explanation"]} for layer in layers if layer.get("status") == "WARNING"],
         "performance_timings": deepcopy(run.get("performance", {})),
         "execution_order": list(run.get("execution_order", [])),
-        "source_note": "Sanitized deterministic fixture diagnostics only. No member records, emails, private society records, tokens, raw debug payloads, or sensitive internal IDs are included.",
+        "source_note": "Sanitized deterministic fixture diagnostics only. No member records, emails, private society records, tokens beyond this requested public report token, raw debug payloads, stack traces, secrets, user PII, auth data, payments, businesses, workflow records, private member data, or sensitive internal IDs are included.",
     }
 
 
@@ -425,6 +433,12 @@ def _load_public_diagnostic_report(token: str) -> tuple[dict[str, Any] | None, s
 def generate_public_diagnostic_report(run: dict[str, Any]) -> dict[str, Any]:
     token = secrets.token_urlsafe(32)
     report = sanitize_diagnostic_for_public_report(run) | {"token": token}
+    public_path = f"/public/intelligence-diagnostics/{token}"
+    report.update({
+        "public_url": f"{PUBLIC_DIAGNOSTIC_BASE_URL}{public_path}",
+        "json_url": f"{PUBLIC_DIAGNOSTIC_BASE_URL}{public_path}.json",
+        "markdown_url": f"{PUBLIC_DIAGNOSTIC_BASE_URL}{public_path}.md",
+    })
     _PUBLIC_DIAGNOSTIC_REPORTS[token] = report
     report["storage_persisted"] = _persist_public_diagnostic_report(report)
     return report
@@ -462,7 +476,7 @@ def inspect_public_diagnostic_report(token: str) -> dict[str, Any]:
         _log_public_diagnostic_lookup(diagnostics)
         return {"ok": False, "status": "server_error", "diagnostics": diagnostics}
     if expires_at < datetime.utcnow():
-        expired = deepcopy(report) | {"status": "expired", "expiration_status": "expired"}
+        expired = deepcopy(report) | {"status": "expired", "expiration_status": "expired", "expired": True}
         _PUBLIC_DIAGNOSTIC_REPORTS.pop(token, None)
         try: _public_report_path(token).unlink(missing_ok=True)
         except Exception: pass
@@ -471,6 +485,7 @@ def inspect_public_diagnostic_report(token: str) -> dict[str, Any]:
         return {"ok": False, "status": "expired", "report": expired, "diagnostics": diagnostics}
     active = deepcopy(report)
     active["expiration_status"] = "active"
+    active["expired"] = False
     forbidden = any(key in str(active).lower() for key in ("password_hash", "debug_payload", "diagnostic-admin@example.test"))
     diagnostics.update({"expiration_check": "active", "sanitization_result": "failed" if forbidden else "passed", "final_response_status": 500 if forbidden else 200})
     _log_public_diagnostic_lookup(diagnostics)
@@ -482,6 +497,59 @@ def _log_public_diagnostic_lookup(diagnostics: dict[str, Any]) -> None:
         logger.info("public diagnostic lookup %s", diagnostics)
 
 
+
+def _html_escape(value: Any) -> str:
+    return (
+        str(value)
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+        .replace("'", "&#x27;")
+    )
+
+
+def public_report_to_html(report: dict[str, Any]) -> str:
+    """Render a small public HTML shell with embedded sanitized JSON for non-JS readers."""
+    safe_json = json.dumps(report, ensure_ascii=False, sort_keys=True).replace("</", "<\\/")
+    title = _html_escape(report.get("report_title") or "Public Diagnostic Report")
+    summary = _html_escape(report.get("overall_summary") or "Sanitized diagnostic report.")
+    token = _html_escape(report.get("token") or "")
+    json_url = _html_escape(report.get("json_url") or f"{PUBLIC_DIAGNOSTIC_BASE_URL}/public/intelligence-diagnostics/{token}.json")
+    markdown_url = _html_escape(report.get("markdown_url") or f"{PUBLIC_DIAGNOSTIC_BASE_URL}/public/intelligence-diagnostics/{token}.md")
+    health = report.get("overall_health", {}) if isinstance(report.get("overall_health"), dict) else {}
+    health_percent = _html_escape(health.get("percent", "Unavailable"))
+    layers = report.get("layers", []) if isinstance(report.get("layers"), list) else []
+    layer_items = "".join(
+        f"<li><strong>{_html_escape(layer.get('layer', 'Unknown Layer'))}</strong>: {_html_escape(layer.get('status', 'UNKNOWN'))} — {_html_escape(layer.get('explanation') or layer.get('why_this_changed') or '')}</li>"
+        for layer in layers
+        if isinstance(layer, dict)
+    )
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{title}</title>
+</head>
+<body>
+  <main id="root">
+    <p>Public · Read-Only · Sanitized Fixture Diagnostics</p>
+    <h1>Public Diagnostic Report</h1>
+    <p>{summary}</p>
+    <p><strong>Token:</strong> {token}</p>
+    <p><strong>Overall Health:</strong> {health_percent}%</p>
+    <nav aria-label="Public diagnostic report formats">
+      <a href="{json_url}">View JSON</a>
+      <a href="{markdown_url}">View Markdown</a>
+    </nav>
+    <h2>Layer Results</h2>
+    <ul>{layer_items}</ul>
+  </main>
+  <script id="diagnostic-data" type="application/json">{safe_json}</script>
+</body>
+</html>"""
+
 def public_report_to_markdown(report: dict[str, Any]) -> str:
     def text(value: Any, fallback: str = "Unavailable") -> str:
         return str(value) if value not in (None, "") else fallback
@@ -490,7 +558,9 @@ def public_report_to_markdown(report: dict[str, Any]) -> str:
     no_write = report.get("no_write_confirmation", {}) if isinstance(report.get("no_write_confirmation"), dict) else {}
     performance = report.get("performance_timings", {}) if isinstance(report.get("performance_timings"), dict) else {}
     lines = [
-        "# Intelligence Diagnostic Report",
+        "# Public Diagnostic Report",
+        "",
+        "Intelligence Diagnostic Report",
         "",
         f"**Report:** {text(report.get('report_name') or report.get('report_title'))}",
         f"**Public Report ID:** {text(report.get('token'))}",
@@ -505,9 +575,12 @@ def public_report_to_markdown(report: dict[str, Any]) -> str:
         f"- Regressions: {text(report.get('regression_count', report.get('regression_summary', {}).get('count', 0)))}",
         f"- Warnings: {text(report.get('warning_count', len(report.get('warnings', []))))}",
         f"- Critical failures: {text(report.get('critical_failure_count', len(report.get('failed_layers', []))))}",
+        f"- Status counts: {text(report.get('status_counts'))}",
         f"- Summary: {text(report.get('overall_summary'))}",
         "",
-        "## Safety Confirmation",
+        "## Safety",
+        "",
+        "Safety Confirmation",
         f"- Read only: {text(report.get('read_only'))}",
         f"- Production writes: {text(no_write.get('production_writes', 0))}",
         f"- Workflow execution: {text(no_write.get('workflow_execution', False))}",
@@ -535,6 +608,6 @@ def public_report_to_markdown(report: dict[str, Any]) -> str:
     lines += [f"- {text(item)}" for item in report.get("root_cause_analysis", [])] or ["- No root cause analysis available."]
     lines += ["", "## Performance Metrics"]
     lines += [f"- {key}: {value}" for key, value in performance.items()] or ["- Performance metrics unavailable."]
-    lines += ["", "## Diagnostic History", f"- {text(report.get('diagnostic_history_summary'))}", f"- Previous-run comparison: {text(report.get('previous_run_comparison'))}", "", "## Recommended Admin Actions"]
+    lines += ["", "## Diagnostic History", f"- {text(report.get('diagnostic_history_summary'))}", "", "## Previous Run Comparison", f"- {text(report.get('previous_run_comparison'))}", "", "## Recommended Admin Actions"]
     lines += [f"- {text(item)}" for item in report.get("recommended_admin_actions", [])] or ["- No recommended admin actions."]
     return "\n".join(lines) + "\n"
