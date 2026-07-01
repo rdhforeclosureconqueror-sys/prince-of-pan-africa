@@ -52,6 +52,27 @@ PUBLIC_REPORT_TTL_DAYS = 14
 FIXTURE_NAME = "intelligence-health-fixture"
 FIXTURE_VERSION = "v1"
 
+ADMIN_RECOMMENDED_ACTIONS = [
+    "Review scoring logic",
+    "Review expected baselines",
+    "Do not update baselines until drift is explained",
+    "Re-run diagnostic after changes",
+    "Generate public report only after the monitor is stable",
+]
+
+LAYER_DEPENDENCIES = {
+    "Member Intelligence": [],
+    "Society Intelligence": ["Member Intelligence"],
+    "Institution Intelligence": ["Society Intelligence"],
+    "Opportunity Intelligence": ["Institution Intelligence"],
+    "Predictive Intelligence": ["Opportunity Intelligence"],
+    "Decision Support": ["Opportunity Intelligence", "Predictive Intelligence"],
+    "Execution Planning": ["Decision Support"],
+    "Execution Intelligence": ["Execution Planning"],
+    "Institutional Memory": ["Execution Intelligence"],
+    "Institutional Learning": ["Institutional Memory"],
+}
+
 
 def _seed_fixture(db: Session) -> dict[str, int]:
     users = [User(id=i, email=f"diagnostic-{i}@example.test", password_hash="fixture", role="community_member") for i in range(1, 7)]
@@ -129,6 +150,45 @@ def _severity(diff: int) -> str | None:
     return "Minor"
 
 
+def _score_delta_label(delta: int | None) -> str:
+    if delta is None:
+        return "unknown score delta"
+    if delta == 0:
+        return "no score change"
+    return f"{'+' if delta > 0 else ''}{delta} point score change"
+
+
+def _layer_reason(layer: str, expected: dict[str, Any], actual: dict[str, Any], diffs: dict[str, int]) -> str:
+    score_delta = diffs.get("score", 0)
+    direction = "dropped" if score_delta < 0 else "rose" if score_delta > 0 else "remained stable"
+    reasons: list[str] = []
+    if actual.get("opportunity_count") != expected.get("opportunity_count") and expected.get("opportunity_count") is not None:
+        reasons.append(f"qualifying opportunities changed from {expected.get('opportunity_count')} to {actual.get('opportunity_count')}")
+    if actual.get("recommendations") != expected.get("recommendations"):
+        reasons.append(f"recommendations changed from {expected.get('recommendations')} to {actual.get('recommendations')}")
+    if actual.get("confidence") != expected.get("confidence"):
+        reasons.append(f"confidence changed from {expected.get('confidence')} to {actual.get('confidence')}")
+    if actual.get("missing_count") != expected.get("missing_count"):
+        reasons.append(f"missing evidence changed from {expected.get('missing_count')} to {actual.get('missing_count')}")
+    if actual.get("priority") != expected.get("priority"):
+        reasons.append(f"priority changed from {expected.get('priority')} to {actual.get('priority')}")
+    if not reasons:
+        reasons.append("all tracked fixture indicators matched the baseline")
+    return f"{layer} {direction} from {expected.get('score')} to {actual.get('score')} because {', and '.join(reasons)}."
+
+
+def _suggested_action(layer: str, status: str, regression: str | None, expected: dict[str, Any], actual: dict[str, Any]) -> str:
+    if status == "PASS":
+        return "No baseline update needed; keep monitoring future diagnostic runs."
+    if layer == "Opportunity Intelligence" or actual.get("opportunity_count") != expected.get("opportunity_count"):
+        return "Review Opportunity Intelligence scoring and qualifying-opportunity rules before updating baselines."
+    if regression:
+        return f"Review {layer} scoring logic against the deterministic fixture, then re-run diagnostics before changing baselines."
+    if actual.get("confidence") != expected.get("confidence"):
+        return f"Inspect evidence and confidence labeling for {layer}; do not update baselines until the confidence shift is explained."
+    return f"Review {layer} expected baseline values and re-run diagnostics after confirming the change is intentional."
+
+
 def _compare(layer: str, actual: dict[str, Any], elapsed: float, output: dict[str, Any]) -> dict[str, Any]:
     expected = EXPECTED_BASELINE[layer]
     diffs = {k: actual.get(k) - expected.get(k) for k in expected if isinstance(expected.get(k), int) and isinstance(actual.get(k), int)}
@@ -141,6 +201,7 @@ def _compare(layer: str, actual: dict[str, Any], elapsed: float, output: dict[st
     if actual.get("priority") != expected.get("priority"):
         drift_fields.append(f"priority expected {expected.get('priority')} actual {actual.get('priority')}")
     drift_summary = "; ".join(drift_fields)
+    reason = _layer_reason(layer, expected, actual, diffs)
     likely = (
         "Leadership scoring algorithm changed."
         if layer in {"Member Intelligence", "Society Intelligence"} and regression
@@ -148,8 +209,44 @@ def _compare(layer: str, actual: dict[str, Any], elapsed: float, output: dict[st
         if regression or drift_fields
         else "No unexpected change detected."
     )
-    return {"layer": layer, "status": status, "regression": regression, "expected": expected, "actual": actual, "difference_summary": diffs, "confidence_difference": {"expected": expected.get("confidence"), "actual": actual.get("confidence")}, "missing_evidence_difference": actual.get("missing_count") - expected.get("missing_count", 0), "priority_difference": {"expected": expected.get("priority"), "actual": actual.get("priority")}, "execution_time_ms": round(elapsed, 2), "debug_payload": output.get("debug") or {"sample_keys": sorted(output.keys())[:12]}, "explanation": f"{layer} {status}: expected score {expected.get('score')} and actual score {actual.get('score')}. {likely}", "likely_cause": likely}
+    return {"layer": layer, "status": status, "health_status": status, "regression": regression, "regression_level": regression or "None", "expected": expected, "actual": actual, "score_delta": diffs.get("score", 0), "difference_summary": diffs, "confidence_difference": {"expected": expected.get("confidence"), "actual": actual.get("confidence")}, "missing_evidence_difference": actual.get("missing_count") - expected.get("missing_count", 0), "priority_difference": {"expected": expected.get("priority"), "actual": actual.get("priority")}, "execution_time_ms": round(elapsed, 2), "debug_payload": output.get("debug") or {"sample_keys": sorted(output.keys())[:12]}, "explanation": f"{layer} {status}: expected score {expected.get('score')} and actual score {actual.get('score')} ({_score_delta_label(diffs.get('score', 0))}). {likely}", "plain_language_reason": reason, "why_this_changed": reason, "suggested_admin_action": _suggested_action(layer, status, regression, expected, actual), "likely_cause": likely}
 
+
+
+def dependency_impact(layers: list[dict[str, Any]]) -> dict[str, Any]:
+    changed = [layer for layer in layers if layer.get("status") != "PASS"]
+    first_changed = changed[0].get("layer") if changed else None
+    downstream = set(DIAGNOSTIC_LAYER_ORDER[DIAGNOSTIC_LAYER_ORDER.index(first_changed) + 1:]) if first_changed in DIAGNOSTIC_LAYER_ORDER else set()
+    return {
+        "ordered_chain": list(DIAGNOSTIC_LAYER_ORDER),
+        "first_changed_layer": first_changed,
+        "downstream_affected_layers": [layer.get("layer") for layer in layers if layer.get("layer") in downstream and layer.get("status") != "PASS"],
+        "stable_layers": [layer.get("layer") for layer in layers if layer.get("status") == "PASS"],
+        "chain": [
+            {
+                "layer": name,
+                "state": "first_changed" if name == first_changed else "downstream_affected" if name in downstream and any(l.get("layer") == name and l.get("status") != "PASS" for l in layers) else "stable",
+                "depends_on": LAYER_DEPENDENCIES.get(name, []),
+            }
+            for name in DIAGNOSTIC_LAYER_ORDER
+        ],
+    }
+
+
+def executive_summary(layers: list[dict[str, Any]], run: dict[str, Any] | None = None) -> str:
+    impact = dependency_impact(layers)
+    regression_count = len([layer for layer in layers if layer.get("regression")])
+    first = impact.get("first_changed_layer") or "no layer"
+    downstream = impact.get("downstream_affected_layers") or []
+    downstream_text = " and ".join(downstream[:3]) if downstream else "no downstream layers"
+    if len(downstream) > 3:
+        downstream_text += f" and {len(downstream) - 3} more"
+    recommended = "review Opportunity Intelligence scoring before updating baselines" if first == "Opportunity Intelligence" or "Opportunity Intelligence" in downstream else "review the first changed layer before updating baselines"
+    return f"{regression_count} regressions detected. First drift appears in {first}. {downstream_text} appear downstream affected. No production records were modified. Recommended action: {recommended}."
+
+
+def recommended_next_actions(layers: list[dict[str, Any]]) -> list[str]:
+    return list(ADMIN_RECOMMENDED_ACTIONS)
 
 def run_full_intelligence_diagnostic() -> dict[str, Any]:
     start = time.perf_counter(); db = _isolated_session(); ids = _seed_fixture(db); writes: list[str] = []
@@ -180,7 +277,7 @@ def run_full_intelligence_diagnostic() -> dict[str, Any]:
     regressions = [l for l in layers if l["regression"]]
     failures = [l for l in layers if l["status"] == "FAIL"]
     health = max(0, round(100 - len(failures) * 18 - len(regressions) * 8 - len([l for l in layers if l["status"] == "WARNING"]) * 3))
-    run = {"ok": True, "diagnostic_id": f"intel-health-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}", "created_at": datetime.utcnow().isoformat(), "admin_only": True, "isolated_fixture": True, "fixture_name": FIXTURE_NAME, "fixture_version": FIXTURE_VERSION, "production_writes": 0, "workflow_execution": False, "notification_count": 0, "assignment_count": 0, "persistence_of_intelligence_outputs": False, "execution_order": [l["layer"] for l in layers], "overall_health_percent": health, "layers": layers, "regression_count": len(regressions), "warnings": [l for l in layers if l["status"] == "WARNING"], "critical_failures": failures, "last_successful_diagnostic": None, "performance": {"total_execution_time_ms": total, "memory_usage": "unavailable", "api_response_time_ms": total, "largest_payload_layer": max(layers, key=lambda l: len(str(l["debug_payload"]))) ["layer"], "slowest_layer": max(layers, key=lambda l: l["execution_time_ms"])["layer"], "fastest_layer": min(layers, key=lambda l: l["execution_time_ms"])["layer"]}, "root_cause_analysis": _root_cause(layers), "health_trend": "stable"}
+    run = {"ok": True, "diagnostic_id": f"intel-health-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}", "created_at": datetime.utcnow().isoformat(), "admin_only": True, "isolated_fixture": True, "fixture_name": FIXTURE_NAME, "fixture_version": FIXTURE_VERSION, "production_writes": 0, "workflow_execution": False, "notification_count": 0, "assignment_count": 0, "persistence_of_intelligence_outputs": False, "execution_order": [l["layer"] for l in layers], "overall_health_percent": health, "layers": layers, "regression_count": len(regressions), "warnings": [l for l in layers if l["status"] == "WARNING"], "critical_failures": failures, "last_successful_diagnostic": None, "performance": {"total_execution_time_ms": total, "memory_usage": "unavailable", "api_response_time_ms": total, "largest_payload_layer": max(layers, key=lambda l: len(str(l["debug_payload"]))) ["layer"], "slowest_layer": max(layers, key=lambda l: l["execution_time_ms"])["layer"], "fastest_layer": min(layers, key=lambda l: l["execution_time_ms"])["layer"]}, "root_cause_analysis": _root_cause(layers), "dependency_impact": dependency_impact(layers), "executive_summary": executive_summary(layers), "recommended_next_actions": recommended_next_actions(layers), "health_trend": "stable"}
     previous = _DIAGNOSTIC_HISTORY[-1] if _DIAGNOSTIC_HISTORY else None
     run["last_successful_diagnostic"] = previous["created_at"] if previous and previous["overall_health_percent"] >= 90 else None
     run["comparison_to_previous"] = compare_diagnostics(run, previous)
@@ -216,7 +313,12 @@ def _public_layer(layer: dict[str, Any]) -> dict[str, Any]:
         "missing_evidence_difference": layer.get("missing_evidence_difference"),
         "priority_difference": deepcopy(layer.get("priority_difference", {})),
         "execution_time_ms": layer.get("execution_time_ms"),
+        "score_delta": layer.get("score_delta"),
+        "regression_level": layer.get("regression_level"),
         "explanation": layer.get("explanation"),
+        "plain_language_reason": layer.get("plain_language_reason"),
+        "why_this_changed": layer.get("why_this_changed"),
+        "suggested_admin_action": layer.get("suggested_admin_action"),
     }
 
 
@@ -241,6 +343,8 @@ def sanitize_diagnostic_for_public_report(run: dict[str, Any]) -> dict[str, Any]
         "fixture_version": run.get("fixture_version", FIXTURE_VERSION),
         "generated_at": generated_at.isoformat(),
         "expires_at": expires_at.isoformat(),
+        "overall_summary": run.get("executive_summary", "Diagnostic summary unavailable."),
+        "dependency_impact": deepcopy(run.get("dependency_impact", dependency_impact(run.get("layers", [])))),
         "overall_health": {"percent": run.get("overall_health_percent"), "trend": run.get("health_trend")},
         "layers": layers,
         "expected_vs_actual_summary": [
