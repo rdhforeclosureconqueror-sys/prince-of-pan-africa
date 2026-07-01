@@ -315,6 +315,9 @@ export default function IntelligenceHealthMonitor() {
     improvement: action.expected_health_improvement || action.expected_improvement || `+${Math.max(2, 8 - index * 2)} health points`,
   }));
   const forecast = safeObject(predictiveIntelligence.ai_forecast || predictiveIntelligence.forecast);
+  const initiatives = asArray(aiChiefOperatingOfficer.initiatives);
+  const whyThisMatters = safeObject(aiChiefOperatingOfficer.why_this_matters);
+  const forecastScenarios = asArray(aiChiefOperatingOfficer.forecast_scenarios);
   const sprint = safeObject(aiChiefOperatingOfficer.sprint_planning || aiChiefOperatingOfficer.suggested_sprint);
   const trendMetrics = [
     ["Overall Health Score", "overall_health_score", "%"],
@@ -373,7 +376,13 @@ export default function IntelligenceHealthMonitor() {
           <article className="stat-card"><h3>Estimated time to resolution</h3><p>{timeToResolution}</p></article>
         </div>
         <article className="stat-card ai-coo-recommendation"><h3>AI COO Recommendation</h3><p>{cooRecommendation}</p></article>
+        <article className="stat-card wide-card"><h3>Why This Matters</h3><p><strong>What changed:</strong> {whyThisMatters.what_changed || result?.executive_summary || "Diagnostic output changed against the intelligence baseline."}</p><p><strong>Why it matters:</strong> {whyThisMatters.why_it_matters || "Leadership needs consolidated initiatives instead of duplicate layer recommendations."}</p><p><strong>Fix first:</strong> {whyThisMatters.what_should_be_fixed_first || highestPriority}</p><p><strong>Can wait:</strong> {whyThisMatters.what_can_wait || "Stable layer evidence and lower-risk polish can wait until the top initiative is verified."}</p></article>
       </section>
+
+      <h3>AI COO Initiative Synthesis</h3>
+      <div className="dashboard-grid" aria-label="AI COO Initiative Synthesis">
+        {initiatives.length ? initiatives.map((initiative, index) => <article className="stat-card" key={initiative.id || initiative.title}><h3>Initiative {index + 1}: {initiative.title}</h3><p><strong>Root cause:</strong> {initiative.root_cause}</p><p><strong>Why it matters:</strong> {initiative.why_it_matters}</p><p><strong>Affected layers:</strong> {asArray(initiative.affected_layers).join(", ") || "—"}</p><p><strong>Expected health improvement:</strong> {initiative.expected_health_improvement}</p><p><strong>Estimated effort:</strong> {initiative.estimated_effort}</p><p><strong>Confidence:</strong> {initiative.confidence}%</p><p><strong>Owner/type of work:</strong> {initiative.recommended_owner_type_of_work}</p><p><strong>Status:</strong> {initiative.status || "recommended"}</p></article>) : <article className="stat-card"><p>Run a diagnostic to synthesize repeated layer recommendations into executive initiatives.</p></article>}
+      </div>
 
       <h3>Priority Queue</h3>
       <article className="stat-card wide-card" aria-label="Priority Queue">
@@ -397,16 +406,11 @@ export default function IntelligenceHealthMonitor() {
 
       <h3>AI Forecast</h3>
       <div className="dashboard-grid" aria-label="AI Forecast">
-        <article className="stat-card"><h3>Future regression likelihood</h3><p>{forecast.future_regression_likelihood || forecast.regression_likelihood || (regressionCount ? "Moderate" : "Low")}</p></article>
-        <article className="stat-card"><h3>Confidence</h3><p>{forecast.confidence ?? aiOperationsAdvisor[0]?.confidence ?? "—"}%</p></article>
-        <article className="stat-card"><h3>Likely drift areas</h3><p>{asArray(forecast.likely_drift_areas).join(", ") || layers.filter((layer) => layer.regression || layer.status === "WARNING").map((layer) => layer.layer).join(", ") || "No likely drift areas detected."}</p></article>
-        <article className="stat-card"><h3>Technical debt trend</h3><p>{forecast.technical_debt_trend || (warningCount || regressionCount ? "Increasing unless priority queue is completed" : "Stable")}</p></article>
-        <article className="stat-card"><h3>7-deployment stability</h3><p>{forecast.estimated_stability_next_7_deployments || forecast.stability_7_deployments || "Stable if no new regressions ship"}</p></article>
-        <article className="stat-card"><h3>30-deployment stability</h3><p>{forecast.estimated_stability_next_30_deployments || forecast.stability_30_deployments || "Monitor for slow baseline drift"}</p></article>
+        {forecastScenarios.length ? forecastScenarios.map((scenario) => <article className="stat-card" key={scenario.scenario}><h3>{scenario.scenario}</h3><p><strong>Projected health score:</strong> {scenario.projected_health_score}</p><p><strong>Regression risk:</strong> {scenario.regression_risk}</p><p><strong>Technical debt trend:</strong> {scenario.technical_debt_trend}</p><p><strong>Confidence:</strong> {scenario.confidence}%</p><p><strong>Primary reason:</strong> {scenario.primary_reason}</p></article>) : <><article className="stat-card"><h3>If no action is taken</h3><p><strong>Projected health score:</strong> {healthScore}%</p><p><strong>Regression risk:</strong> {forecast.future_regression_likelihood || forecast.regression_likelihood || (regressionCount ? "Moderate" : "Low")}</p><p><strong>Technical debt trend:</strong> {forecast.technical_debt_trend || (warningCount || regressionCount ? "Increasing" : "Stable")}</p><p><strong>Confidence:</strong> {forecast.confidence ?? aiOperationsAdvisor[0]?.confidence ?? "—"}%</p><p><strong>Primary reason:</strong> Current warnings remain unresolved.</p></article><article className="stat-card"><h3>If recommended sprint is completed</h3><p><strong>Projected health score:</strong> {sprint.expected_health_after_sprint_completion || sprint.expected_health_after_completion || "90%+"}</p><p><strong>Regression risk:</strong> Reduced</p><p><strong>Technical debt trend:</strong> Stabilizing</p><p><strong>Confidence:</strong> {sprint.confidence || sprint.estimated_confidence || "—"}%</p><p><strong>Primary reason:</strong> Highest-ROI sprint tasks are completed and re-verified.</p></article></>}
       </div>
 
       <h3>AI COO Sprint Planning</h3>
-      <article className="stat-card wide-card"><h4>Sprint goal</h4><p>{sprint.goal || sprint.sprint_goal || `Restore the intelligence chain to ${failureCount ? "non-critical" : "healthy"} status while protecting public diagnostic confidence.`}</p><h4>Highest ROI tasks</h4><ul>{(asArray(sprint.highest_roi_tasks).length ? asArray(sprint.highest_roi_tasks) : priorityQueue.slice(0, 3).map((action) => action.title)).map((task) => <li key={task}>{task}</li>)}</ul><h4>Recommended implementation order</h4><ol>{(asArray(sprint.recommended_implementation_order).length ? asArray(sprint.recommended_implementation_order) : priorityQueue.slice(0, 4).map((action) => action.title)).map((task) => <li key={task}>{task}</li>)}</ol><p><strong>Risk reduction estimate:</strong> {sprint.risk_reduction_estimate || "25–40% after the top two queue items are verified."}</p><p><strong>Expected health after sprint completion:</strong> {sprint.expected_health_after_completion || sprint.expected_result?.overall_health || "90%+ with no critical failures."}</p></article>
+      <article className="stat-card wide-card"><h4>Sprint goal</h4><p>{sprint.goal || sprint.sprint_goal || `Restore the intelligence chain to ${failureCount ? "non-critical" : "healthy"} status while protecting public diagnostic confidence.`}</p><h4>Highest ROI tasks</h4><ul>{(asArray(sprint.highest_roi_tasks).length ? asArray(sprint.highest_roi_tasks) : priorityQueue.slice(0, 3).map((action) => action.title)).map((task) => <li key={task}>{task}</li>)}</ul><h4>Recommended implementation order</h4><ol>{(asArray(sprint.recommended_implementation_order).length ? asArray(sprint.recommended_implementation_order) : priorityQueue.slice(0, 4).map((action) => action.title)).map((task) => <li key={task}>{task}</li>)}</ol><p><strong>Risk reduction estimate:</strong> {sprint.risk_reduction_estimate || "25–40% after the top two queue items are verified."}</p><p><strong>Expected health after sprint completion:</strong> {sprint.expected_health_after_sprint_completion || sprint.expected_health_after_completion || sprint.expected_result?.overall_health || "90%+ with no critical failures."}</p><p><strong>Confidence:</strong> {sprint.confidence || sprint.estimated_confidence || "—"}%</p><p><strong>Estimated time to completion:</strong> {sprint.estimated_time_to_completion || sprint.estimated_completion || "—"}</p></article>
 
       <h3>Technical Diagnostic Evidence</h3>
 
