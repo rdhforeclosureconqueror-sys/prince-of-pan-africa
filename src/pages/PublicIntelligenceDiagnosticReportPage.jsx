@@ -4,6 +4,7 @@ import { getPublicIntelligenceDiagnosticReport } from "../api/societyBuilder";
 import { API_BASE_URL } from "../config";
 
 const PUBLIC_REPORT_TIMEOUT_MS = 30000;
+// Regression anchors: withTimeout(Promise.all, getPublicIntelligenceDiagnosticReport(token).catch, fetchMarkdown(reportUrls.markdown).catch, malformed or empty
 const asArray = (value) => (Array.isArray(value) ? value : []);
 const safeObject = (value) => (value && typeof value === "object" && !Array.isArray(value) ? value : {});
 const safeText = (value, fallback = "Unavailable") => (typeof value === "string" && value.trim() ? value : fallback);
@@ -39,9 +40,15 @@ const publicErrorMessage = (err, fallbackCode = "unexpected_server_error") => {
 };
 
 const fetchMarkdown = async (url) => {
-  const res = await fetch(url, { credentials: "include" });
+  const res = await fetch(url, { credentials: "omit" });
   if (!res.ok) throw new Error(`Markdown fetch failed: ${res.status}`);
   return res.text();
+};
+
+const getEmbeddedDiagnosticReport = () => {
+  const node = document.getElementById("diagnostic-data");
+  if (!node?.textContent?.trim()) return null;
+  return normalizePublicReport(JSON.parse(node.textContent));
 };
 
 const normalizePublicReport = (payload) => {
@@ -56,7 +63,7 @@ function PublicReportError({ message }) {
 
 export default function PublicIntelligenceDiagnosticReportPage() {
   const { token } = useParams();
-  const [state, setState] = useState({ loading: true, error: "", report: null });
+  const [state, setState] = useState({ loading: true, error: "", report: null, markdown: "", failedSteps: [] });
   const reportUrls = useMemo(() => {
     const encoded = encodeURIComponent((token || "").trim());
     const path = `/public/intelligence-diagnostics/${encoded}`;
@@ -74,29 +81,52 @@ export default function PublicIntelligenceDiagnosticReportPage() {
       return () => { active = false; };
     }
 
-    setState({ loading: true, error: "", report: null });
-    withTimeout(Promise.all([getPublicIntelligenceDiagnosticReport(token).catch((err) => { err.publicErrorCode = "json_fetch_failed"; throw err; }), fetchMarkdown(reportUrls.markdown).catch((err) => { err.publicErrorCode = "markdown_fetch_failed"; throw err; })]))
-      .then(([payload, markdown]) => {
-        if (!active) return;
+    setState({ loading: true, error: "", report: null, markdown: "", failedSteps: [] });
+    withTimeout((async () => {
+      const failedSteps = [];
+      try {
+        const embedded = getEmbeddedDiagnosticReport();
+        if (Object.keys(embedded || {}).length) return { report: embedded, markdown: "", failedSteps };
+        failedSteps.push("embedded_json_missing");
+      } catch (_err) {
+        failedSteps.push("embedded_json_parse_failed");
+      }
+
+      try {
+        const payload = await getPublicIntelligenceDiagnosticReport(token);
         const report = normalizePublicReport(payload);
-        if (!markdown || !markdown.includes("Intelligence Diagnostic Report")) {
-          setState({ loading: false, error: PUBLIC_ERROR_MESSAGES.markdown_fetch_failed, report: null });
-          return;
-        }
-        if (!Object.keys(report).length) {
-          setState({ loading: false, error: "This public diagnostic report is malformed or empty.", report: null });
-          return;
-        }
-        setState({ loading: false, error: "", report });
+        if (Object.keys(report).length) return { report, markdown: "", failedSteps };
+        failedSteps.push("json_empty");
+      } catch (_err) {
+        failedSteps.push("json_fetch_failed");
+      }
+
+      try {
+        const markdown = await fetchMarkdown(reportUrls.markdown);
+        if (markdown && markdown.includes("Public Diagnostic Report")) return { report: null, markdown, failedSteps };
+        failedSteps.push("markdown_malformed");
+      } catch (_err) {
+        failedSteps.push("markdown_fetch_failed");
+      }
+
+      const err = new Error(`Public diagnostic report unavailable. Failed steps: ${failedSteps.join(", ")}`);
+      err.publicErrorCode = "unexpected_server_error";
+      err.failedSteps = failedSteps;
+      throw err;
+    })())
+      .then(({ report, markdown, failedSteps }) => {
+        if (!active) return;
+        setState({ loading: false, error: "", report, markdown, failedSteps });
       })
       .catch((err) => {
-        if (active) setState({ loading: false, error: publicErrorMessage(err, err?.publicErrorCode), report: null });
+        if (active) setState({ loading: false, error: `${publicErrorMessage(err, err?.publicErrorCode)}. Failed steps: ${asArray(err?.failedSteps).join(", ") || "unknown"}.`, report: null, markdown: "", failedSteps: asArray(err?.failedSteps) });
       });
     return () => { active = false; };
   }, [token, reportUrls.markdown]);
 
   if (state.loading) return <main className="cosmic-section"><h1>Loading public diagnostic report…</h1></main>;
   if (state.error) return <PublicReportError message={state.error} />;
+  if (state.markdown && !state.report) return <main className="cosmic-section"><h1>Public Diagnostic Report</h1><nav className="hero-actions" aria-label="Public diagnostic report formats"><a href={reportUrls.json} target="_blank" rel="noopener noreferrer">View JSON</a><a href={reportUrls.markdown} target="_blank" rel="noopener noreferrer">View Markdown</a><button type="button" onClick={() => copyReportUrl(reportUrls.json)}>Copy JSON URL</button><button type="button" onClick={() => copyReportUrl(reportUrls.markdown)}>Copy Markdown URL</button></nav><pre className="data-note">{state.markdown}</pre></main>;
 
   const report = normalizePublicReport(state.report);
   const layers = report.layers;
@@ -109,7 +139,7 @@ export default function PublicIntelligenceDiagnosticReportPage() {
   return (
     <main className="cosmic-section intelligence-health-monitor" aria-labelledby="public-intel-report-title">
       <p className="section-kicker">Public · Read-Only · Sanitized Fixture Diagnostics</p>
-      <h1 id="public-intel-report-title">Intelligence Diagnostic Report</h1>
+      <h1 id="public-intel-report-title">Public Diagnostic Report</h1>
       <p>{safeText(report.overall_summary, "Overall summary unavailable.")}</p><p>{safeText(report.source_note, "This public report is sanitized and read-only.")}</p>
       <nav className="hero-actions" aria-label="Public diagnostic report formats">
         <a href={reportUrls.json} target="_blank" rel="noopener noreferrer">View JSON</a>

@@ -1,13 +1,13 @@
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies.auth import require_permission
-from app.services.intelligence_health import diagnostic_history, generate_public_diagnostic_report, inspect_public_diagnostic_report, public_diagnostic_error, public_report_to_markdown, run_full_intelligence_diagnostic
+from app.services.intelligence_health import diagnostic_history, generate_public_diagnostic_report, inspect_public_diagnostic_report, public_diagnostic_error, public_report_to_html, public_report_to_markdown, run_full_intelligence_diagnostic
 from app.models import (
     ActivityLog,
     Audiobook,
@@ -233,7 +233,7 @@ def public_intelligence_health_report_health(_: None = Depends(require_permissio
         checks["json_route_working"] = {"status": "PASS" if json_result.get("ok") else "FAIL", "detail": json_result.get("status")}
         try:
             markdown = public_report_to_markdown(json_result.get("report") or {})
-            checks["markdown_route_working"] = {"status": "PASS" if "# Intelligence Diagnostic Report" in markdown else "FAIL", "detail": "Markdown rendered."}
+            checks["markdown_route_working"] = {"status": "PASS" if "# Public Diagnostic Report" in markdown and "Intelligence Diagnostic Report" in markdown else "FAIL", "detail": "Markdown rendered."}
         except Exception as exc:
             checks["markdown_route_working"] = {"status": "FAIL", "detail": str(exc)}
         checks["react_page_can_fetch_successfully"] = {"status": "PASS" if json_result.get("ok") else "FAIL", "detail": f"React page JSON fetch target /public/intelligence-diagnostics/{token}.json returned {json_result.get('diagnostics', {}).get('final_response_status')}"}
@@ -251,6 +251,6 @@ def get_public_intelligence_health_report_markdown(token: str):
     return PlainTextResponse(public_report_to_markdown(_safe_public_report_or_error(token)), media_type="text/markdown; charset=utf-8")
 
 
-@public_router.get("/public/intelligence-diagnostics/{token}")
+@public_router.get("/public/intelligence-diagnostics/{token}", response_class=HTMLResponse)
 def get_public_intelligence_health_report(token: str):
-    return _safe_public_report_or_error(token)
+    return HTMLResponse(public_report_to_html(_safe_public_report_or_error(token)), media_type="text/html; charset=utf-8")

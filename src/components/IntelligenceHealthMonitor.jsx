@@ -19,6 +19,7 @@ const adminErrorMessage = (fallback, err) => `${fallback}${DEBUG_ERRORS && err?.
 const normalizeHistory = (payload) => asArray(payload?.history).filter((run) => run && typeof run === "object");
 const normalizeReport = (payload) => safeObject(payload?.report || payload?.public_report || payload);
 const isNonEmptyString = (value) => typeof value === "string" && value.trim().length > 0;
+const PUBLIC_DIAGNOSTIC_ORIGIN = "https://simbawaujamaa.com";
 const publicReportPathFromToken = (token) => `/public/intelligence-diagnostics/${encodeURIComponent(token.trim())}`;
 const isSafePublicReportHref = (href) => {
   if (!isNonEmptyString(href)) return false;
@@ -46,7 +47,7 @@ export const normalizePublicReportResponse = (payload, origin = window.location.
   }
 
   if (isNonEmptyString(token)) {
-    const tokenUrl = new URL(publicReportPathFromToken(token), origin).href;
+    const tokenUrl = new URL(publicReportPathFromToken(token), PUBLIC_DIAGNOSTIC_ORIGIN).href;
     if (!isSafePublicReportHref(tokenUrl)) return { publicReportState, publicReportUrl: "", error: PUBLIC_REPORT_MISSING_URL_MESSAGE };
     return { publicReportState, publicReportUrl: tokenUrl, error: "" };
   }
@@ -159,6 +160,8 @@ export default function IntelligenceHealthMonitor() {
   const recommendedNextActions = asArray(result?.recommended_next_actions);
   const actionDisabled = running || generatingReport;
   const safePublicReportUrl = isSafePublicReportHref(publicReportUrl) ? publicReportUrl : "";
+  const safePublicReportJsonUrl = safePublicReportUrl ? `${safePublicReportUrl}.json` : "";
+  const safePublicReportMarkdownUrl = safePublicReportUrl ? `${safePublicReportUrl}.md` : "";
 
   return (
     <section className="cosmic-section intelligence-health-monitor" aria-labelledby="intelligence-health-title">
@@ -169,7 +172,7 @@ export default function IntelligenceHealthMonitor() {
         <button className="hero-btn" type="button" onClick={run} disabled={actionDisabled}>{running ? "Running Full Intelligence Diagnostic..." : "Run Full Intelligence Diagnostic"}</button>
         <button className="hero-btn secondary" type="button" onClick={generateReport} disabled={actionDisabled}>{generatingReport ? "Generating Public Report..." : "Generate Public Diagnostic Report"}</button>
       </div>
-      {(publicReportState || safePublicReportUrl) && <article className="stat-card"><h3>Public Diagnostic Report</h3><p>This URL is public, read-only, sanitized, fixture-only, and expires at {publicReportState?.expires_at || "the configured expiration time"}.</p>{safePublicReportUrl && <><label htmlFor="public-diagnostic-report-url"><strong>Public diagnostic URL</strong></label><div className="hero-actions"><input id="public-diagnostic-report-url" readOnly value={safePublicReportUrl} onFocus={(event) => event.target.select()} aria-label="Public diagnostic report URL" /><button type="button" onClick={copyPublicReportUrl}>Copy URL</button></div><p><a href={safePublicReportUrl} target="_blank" rel="noopener noreferrer">Open public diagnostic report</a></p></>}{publicReportCopyMessage && <p role="status">{publicReportCopyMessage}</p>}<button type="button" onClick={clearPublicReport}>Clear Public Report Link</button></article>}
+      {(publicReportState || safePublicReportUrl) && <article className="stat-card"><h3>Public Diagnostic Report</h3><p>This URL is public, read-only, sanitized, fixture-only, and expires at {publicReportState?.expires_at || "the configured expiration time"}.</p>{safePublicReportUrl && <><label htmlFor="public-diagnostic-report-url"><strong>Public diagnostic URL</strong></label><div className="hero-actions"><input id="public-diagnostic-report-url" readOnly value={safePublicReportUrl} onFocus={(event) => event.target.select()} aria-label="Public diagnostic report URL" /><button type="button" onClick={copyPublicReportUrl}>Copy URL</button></div><p><a href={safePublicReportUrl} target="_blank" rel="noopener noreferrer">Open public diagnostic report</a></p><p><strong>Public JSON URL</strong>: <a href={safePublicReportJsonUrl} target="_blank" rel="noopener noreferrer">{safePublicReportJsonUrl}</a></p><p><strong>Public Markdown URL</strong>: <a href={safePublicReportMarkdownUrl} target="_blank" rel="noopener noreferrer">{safePublicReportMarkdownUrl}</a></p></>}{publicReportCopyMessage && <p role="status">{publicReportCopyMessage}</p>}<button type="button" onClick={clearPublicReport}>Clear Public Report Link</button></article>}
       {error && <article className="stat-card admin-error"><h3>Diagnostics unavailable</h3><p>⚠️ {error}</p></article>}
       {publicReportError && <article className="stat-card admin-error"><h3>Public report could not be generated</h3><p>⚠️ {publicReportError}</p><button type="button" onClick={clearPublicReport}>Clear Public Report Link</button></article>}
       {historyError && !layers.length && <article className="stat-card"><h3>Last run could not be loaded</h3><p>Diagnostics unavailable</p></article>}
