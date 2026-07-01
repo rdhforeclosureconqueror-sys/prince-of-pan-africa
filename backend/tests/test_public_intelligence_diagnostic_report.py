@@ -86,3 +86,83 @@ def test_public_report_workflow_safety_boundaries():
 
     assert client.post(f"/public/intelligence-diagnostics/{token}").status_code == 405
     assert client.post("/admin/intelligence-health/run").status_code == 401
+
+
+def test_public_json_and_markdown_endpoints_are_ai_readable_without_auth():
+    client, admin_id = build_client()
+    created = client.post("/admin/intelligence-health/public-report", cookies=session_cookie(admin_id))
+    assert created.status_code == 200
+    token = created.json()["report"]["token"]
+
+    json_response = client.get(f"/public/intelligence-diagnostics/{token}.json")
+    assert json_response.status_code == 200
+    body = json_response.json()
+    raw = str(body)
+    assert body["report_title"] == "Intelligence Diagnostic Report"
+    assert body["token"] == token
+    assert body["read_only"] is True
+    assert body["no_write_confirmation"]["can_rerun_diagnostics"] is False
+    assert body["fixture_name"] == "intelligence-health-fixture"
+    assert body["regression_count"] == body["regression_summary"]["count"]
+    assert "root_cause_analysis" in body
+    assert "recommended_admin_actions" in body
+    assert "diagnostic_history_summary" in body
+    assert "previous_run_comparison" in body
+    assert "debug_payload" not in raw
+    assert "real.member@example.com" not in raw
+    assert "password_hash" not in raw
+
+    md_response = client.get(f"/public/intelligence-diagnostics/{token}.md")
+    assert md_response.status_code == 200
+    assert "text/markdown" in md_response.headers["content-type"]
+    markdown = md_response.text
+    assert "# Intelligence Diagnostic Report" in markdown
+    assert "## Overall Health" in markdown
+    assert "## Safety Confirmation" in markdown
+    assert "## Layer Results" in markdown
+    assert "## Regression Summary" in markdown
+    assert "## Root Cause Analysis" in markdown
+    assert "## Performance Metrics" in markdown
+    assert "## Diagnostic History" in markdown
+    assert "## Recommended Admin Actions" in markdown
+    assert "debug_payload" not in markdown
+    assert "real.member@example.com" not in markdown
+
+
+def test_public_endpoint_invalid_and_expired_errors_are_safe():
+    client, admin_id = build_client()
+    invalid = client.get("/public/intelligence-diagnostics/not valid.json")
+    assert invalid.status_code in (400, 404)
+    assert "Traceback" not in invalid.text
+    assert "stack" not in invalid.text.lower()
+
+    created = client.post("/admin/intelligence-health/public-report", cookies=session_cookie(admin_id))
+    token = created.json()["report"]["token"]
+
+    from app.services import intelligence_health
+
+    intelligence_health._PUBLIC_DIAGNOSTIC_REPORTS[token]["expires_at"] = "2000-01-01T00:00:00"
+    expired = client.get(f"/public/intelligence-diagnostics/{token}.json")
+    assert expired.status_code == 410
+    assert "expired" in expired.text.lower()
+    assert "Traceback" not in expired.text
+
+
+def test_public_reads_do_not_execute_diagnostics_or_mutate_history():
+    client, admin_id = build_client()
+    created = client.post("/admin/intelligence-health/public-report", cookies=session_cookie(admin_id))
+    token = created.json()["report"]["token"]
+
+    from app.services import intelligence_health
+
+    history_count = len(intelligence_health._DIAGNOSTIC_HISTORY)
+    stored_reports = dict(intelligence_health._PUBLIC_DIAGNOSTIC_REPORTS)
+    assert client.get(f"/public/intelligence-diagnostics/{token}.json").status_code == 200
+    assert client.get(f"/public/intelligence-diagnostics/{token}.md").status_code == 200
+    assert len(intelligence_health._DIAGNOSTIC_HISTORY) == history_count
+    assert intelligence_health._PUBLIC_DIAGNOSTIC_REPORTS == stored_reports
+
+
+def test_admin_diagnostic_history_remains_protected():
+    client, _ = build_client()
+    assert client.get("/admin/intelligence-health/history").status_code == 401

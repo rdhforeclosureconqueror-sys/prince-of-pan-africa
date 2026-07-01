@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { getPublicIntelligenceDiagnosticReport } from "../api/societyBuilder";
 
@@ -36,6 +36,14 @@ function PublicReportError({ message }) {
 export default function PublicIntelligenceDiagnosticReportPage() {
   const { token } = useParams();
   const [state, setState] = useState({ loading: true, error: "", report: null });
+  const reportUrls = useMemo(() => {
+    const encoded = encodeURIComponent((token || "").trim());
+    return { json: `/public/intelligence-diagnostics/${encoded}.json`, markdown: `/public/intelligence-diagnostics/${encoded}.md` };
+  }, [token]);
+
+  const copyReportUrl = (url) => {
+    if (navigator?.clipboard?.writeText) navigator.clipboard.writeText(`${window.location.origin}${url}`);
+  };
 
   useEffect(() => {
     let active = true;
@@ -77,6 +85,12 @@ export default function PublicIntelligenceDiagnosticReportPage() {
       <p className="section-kicker">Public · Read-Only · Sanitized Fixture Diagnostics</p>
       <h1 id="public-intel-report-title">Intelligence Diagnostic Report</h1>
       <p>{safeText(report.overall_summary, "Overall summary unavailable.")}</p><p>{safeText(report.source_note, "This public report is sanitized and read-only.")}</p>
+      <nav className="hero-actions" aria-label="Public diagnostic report formats">
+        <a href={reportUrls.json} target="_blank" rel="noopener noreferrer">View JSON</a>
+        <a href={reportUrls.markdown} target="_blank" rel="noopener noreferrer">View Markdown</a>
+        <button type="button" onClick={() => copyReportUrl(reportUrls.json)}>Copy JSON URL</button>
+        <button type="button" onClick={() => copyReportUrl(reportUrls.markdown)}>Copy Markdown URL</button>
+      </nav>
       <div className="dashboard-grid">
         <article className="stat-card"><h2>{health.percent ?? "—"}%</h2><p>Overall health</p></article>
         <article className="stat-card"><h2>{regressionSummary.count ?? 0}</h2><p>Regressions</p></article>

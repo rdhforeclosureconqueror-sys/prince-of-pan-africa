@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import secrets
 import time
 from copy import deepcopy
@@ -49,6 +50,7 @@ EXPECTED_BASELINE = {
 _DIAGNOSTIC_HISTORY: list[dict[str, Any]] = []
 _PUBLIC_DIAGNOSTIC_REPORTS: dict[str, dict[str, Any]] = {}
 PUBLIC_REPORT_TTL_DAYS = 14
+PUBLIC_REPORT_TOKEN_PATTERN = re.compile(r"^[A-Za-z0-9_-]{32,128}$")
 FIXTURE_NAME = "intelligence-health-fixture"
 FIXTURE_VERSION = "v1"
 
@@ -343,9 +345,23 @@ def sanitize_diagnostic_for_public_report(run: dict[str, Any]) -> dict[str, Any]
         "fixture_version": run.get("fixture_version", FIXTURE_VERSION),
         "generated_at": generated_at.isoformat(),
         "expires_at": expires_at.isoformat(),
+        "report_title": "Intelligence Diagnostic Report",
+        "report_name": "Public Intelligence Diagnostic Report",
+        "status": "available",
+        "expiration_status": "active",
         "overall_summary": run.get("executive_summary", "Diagnostic summary unavailable."),
+        "root_cause_analysis": deepcopy(run.get("root_cause_analysis", [])),
+        "recommended_admin_actions": list(run.get("recommended_next_actions", ADMIN_RECOMMENDED_ACTIONS)),
+        "diagnostic_history_summary": {
+            "stored_run_count": len(_DIAGNOSTIC_HISTORY),
+            "last_successful_diagnostic": run.get("last_successful_diagnostic"),
+        },
+        "previous_run_comparison": deepcopy(run.get("comparison_to_previous", compare_diagnostics(run, None))),
         "dependency_impact": deepcopy(run.get("dependency_impact", dependency_impact(run.get("layers", [])))),
         "overall_health": {"percent": run.get("overall_health_percent"), "trend": run.get("health_trend")},
+        "regression_count": run.get("regression_count", 0),
+        "warning_count": len(run.get("warnings", [])),
+        "critical_failure_count": len(run.get("critical_failures", [])),
         "layers": layers,
         "expected_vs_actual_summary": [
             {"layer": layer["layer"], "expected": layer["expected"], "actual": layer["actual"], "difference_summary": layer["difference_summary"]}
@@ -370,12 +386,83 @@ def generate_public_diagnostic_report(run: dict[str, Any]) -> dict[str, Any]:
     return report
 
 
+def public_diagnostic_error(message: str, code: str = "public_report_unavailable") -> dict[str, Any]:
+    return {"ok": False, "error": {"code": code, "message": message}}
+
+
+def validate_public_report_token(token: str | None) -> bool:
+    return bool(token and PUBLIC_REPORT_TOKEN_PATTERN.fullmatch(token))
+
+
 def get_public_diagnostic_report(token: str) -> dict[str, Any] | None:
+    if not validate_public_report_token(token):
+        return None
     report = _PUBLIC_DIAGNOSTIC_REPORTS.get(token)
     if not report:
         return None
     expires_at = datetime.fromisoformat(report["expires_at"])
     if expires_at < datetime.utcnow():
+        expired = deepcopy(report) | {"status": "expired", "expiration_status": "expired"}
         _PUBLIC_DIAGNOSTIC_REPORTS.pop(token, None)
-        return None
-    return deepcopy(report)
+        return expired
+    active = deepcopy(report)
+    active["expiration_status"] = "active"
+    return active
+
+
+def public_report_to_markdown(report: dict[str, Any]) -> str:
+    def text(value: Any, fallback: str = "Unavailable") -> str:
+        return str(value) if value not in (None, "") else fallback
+
+    health = report.get("overall_health", {}) if isinstance(report.get("overall_health"), dict) else {}
+    no_write = report.get("no_write_confirmation", {}) if isinstance(report.get("no_write_confirmation"), dict) else {}
+    performance = report.get("performance_timings", {}) if isinstance(report.get("performance_timings"), dict) else {}
+    lines = [
+        "# Intelligence Diagnostic Report",
+        "",
+        f"**Report:** {text(report.get('report_name') or report.get('report_title'))}",
+        f"**Public Report ID:** {text(report.get('token'))}",
+        f"**Generated At:** {text(report.get('generated_at'))}",
+        f"**Expires At:** {text(report.get('expires_at'))}",
+        f"**Expiration Status:** {text(report.get('expiration_status'))}",
+        f"**Fixture:** {text(report.get('fixture_name'))} {text(report.get('fixture_version'), '')}".strip(),
+        "",
+        "## Overall Health",
+        f"- Health: {text(health.get('percent'))}%",
+        f"- Status: {text(report.get('status'))}",
+        f"- Regressions: {text(report.get('regression_count', report.get('regression_summary', {}).get('count', 0)))}",
+        f"- Warnings: {text(report.get('warning_count', len(report.get('warnings', []))))}",
+        f"- Critical failures: {text(report.get('critical_failure_count', len(report.get('failed_layers', []))))}",
+        f"- Summary: {text(report.get('overall_summary'))}",
+        "",
+        "## Safety Confirmation",
+        f"- Read only: {text(report.get('read_only'))}",
+        f"- Production writes: {text(no_write.get('production_writes', 0))}",
+        f"- Workflow execution: {text(no_write.get('workflow_execution', False))}",
+        f"- Can rerun diagnostics: {text(no_write.get('can_rerun_diagnostics', False))}",
+        f"- Source note: {text(report.get('source_note'))}",
+        "",
+        "## Layer Results",
+    ]
+    for layer in report.get("layers", []):
+        expected = layer.get("expected", {}) if isinstance(layer.get("expected"), dict) else {}
+        actual = layer.get("actual", {}) if isinstance(layer.get("actual"), dict) else {}
+        lines += [
+            f"### {text(layer.get('layer'), 'Unknown Layer')}",
+            f"- Status: {text(layer.get('status'))}",
+            f"- Expected score: {text(expected.get('score'))}; Actual score: {text(actual.get('score'))}",
+            f"- Confidence before/after: {text(expected.get('confidence'))} → {text(actual.get('confidence'))}",
+            f"- Priority before/after: {text(expected.get('priority'))} → {text(actual.get('priority'))}",
+            f"- Missing evidence delta: {text(layer.get('missing_evidence_difference'))}",
+            f"- Regression level: {text(layer.get('regression_level') or layer.get('regression'), 'None')}",
+            f"- Execution time: {text(layer.get('execution_time_ms'))} ms",
+            f"- Explanation: {text(layer.get('why_this_changed') or layer.get('plain_language_reason') or layer.get('explanation'))}",
+            "",
+        ]
+    lines += ["## Regression Summary", f"- Count: {text(report.get('regression_summary', {}).get('count', 0))}", "", "## Root Cause Analysis"]
+    lines += [f"- {text(item)}" for item in report.get("root_cause_analysis", [])] or ["- No root cause analysis available."]
+    lines += ["", "## Performance Metrics"]
+    lines += [f"- {key}: {value}" for key, value in performance.items()] or ["- Performance metrics unavailable."]
+    lines += ["", "## Diagnostic History", f"- {text(report.get('diagnostic_history_summary'))}", f"- Previous-run comparison: {text(report.get('previous_run_comparison'))}", "", "## Recommended Admin Actions"]
+    lines += [f"- {text(item)}" for item in report.get("recommended_admin_actions", [])] or ["- No recommended admin actions."]
+    return "\n".join(lines) + "\n"
