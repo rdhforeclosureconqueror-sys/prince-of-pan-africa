@@ -184,8 +184,11 @@ def admin_holistic_overview_compat(_: None = Depends(require_permission("admin:r
 
 
 @legacy_router.post("/intelligence-health/run")
-def run_intelligence_health_diagnostic(_: None = Depends(require_permission("admin:read_dashboard"))):
-    return run_full_intelligence_diagnostic()
+def run_intelligence_health_diagnostic(
+    _: None = Depends(require_permission("admin:read_dashboard")),
+    db: Session = Depends(get_db),
+):
+    return run_full_intelligence_diagnostic(db)
 
 
 @legacy_router.get("/intelligence-health/history")
@@ -194,8 +197,11 @@ def get_intelligence_health_history(_: None = Depends(require_permission("admin:
 
 
 @legacy_router.post("/intelligence-health/public-report")
-def create_public_intelligence_health_report(_: None = Depends(require_permission("admin:read_dashboard"))):
-    run = run_full_intelligence_diagnostic()
+def create_public_intelligence_health_report(
+    _: None = Depends(require_permission("admin:read_dashboard")),
+    db: Session = Depends(get_db),
+):
+    run = run_full_intelligence_diagnostic(db)
     report = generate_public_diagnostic_report(run)
     return {"ok": True, "report": report}
 

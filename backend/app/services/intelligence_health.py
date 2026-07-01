@@ -18,10 +18,10 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.database import Base
 from app.models import (
-    LeadershipAssessment, MemberProfile, Society, SocietyBlueprintAudit, SocietyContainer,
+    ActivityLog, Audiobook, GarveySyncEvent, LeadershipAssessment, MemberProfile, Society, SocietyBlueprintAudit, SocietyContainer,
     SocietyContainerMilestone, SocietyCovenant, SocietyFirstTenMember, SocietyInstitutionalProfile,
     SocietyMembership, SocietyPurpose, SocietyRoleAppointmentHistory, SocietyRoleCandidateReview,
-    SocietyRoleOpening, SocietyTrustTask, User,
+    SocietyRoleOpening, SocietyTrustTask, StripeWebhookEvent, Subscription, User,
 )
 from app.services.member_intelligence import generate_member_intelligence
 from app.services.society_intelligence import generate_society_intelligence
@@ -160,6 +160,138 @@ def verification_source_of_truth(run: dict[str, Any], report: dict[str, Any] | N
     ai_ready = bool(run.get("executive_summary") and suite.get("system_readiness_report"))
     pipeline_ready = bool(run.get("ok") and run.get("production_writes") == 0 and not run.get("workflow_execution"))
     return {"source": "intelligence_layer_validation_suite", "public_verification": "PASS" if public_ready else "WARNING", "intelligence_pipeline": "PASS" if pipeline_ready else "FAIL", "ai_ready": "PASS" if ai_ready else "WARNING"}
+
+
+def _public_object_snapshot(row: Any, fields: list[str]) -> dict[str, Any]:
+    if not row:
+        return {}
+    snapshot: dict[str, Any] = {}
+    for field in fields:
+        value = getattr(row, field, None)
+        if isinstance(value, datetime):
+            value = value.isoformat()
+        snapshot[field] = value
+    return snapshot
+
+def _json_contains_identity(value: Any, identity_values: set[str]) -> bool:
+    if not identity_values:
+        return False
+    if isinstance(value, dict):
+        return any(_json_contains_identity(v, identity_values) for v in value.values())
+    if isinstance(value, (list, tuple, set)):
+        return any(_json_contains_identity(v, identity_values) for v in value)
+    return str(value) in identity_values
+
+def _field_delta(before: dict[str, Any], after: dict[str, Any]) -> dict[str, list[str]]:
+    before_keys = set(before.keys())
+    after_keys = set(after.keys())
+    return {"fields_added": sorted(after_keys - before_keys), "fields_removed": sorted(before_keys - after_keys)}
+
+def _object_timestamp(row: Any) -> str | None:
+    for field in ("updated_at", "created_at", "timestamp", "current_period_end"):
+        value = getattr(row, field, None)
+        if isinstance(value, datetime):
+            return value.isoformat()
+    return None
+
+def _latest_or_none(db: Session, model: Any, *order_fields: Any) -> Any | None:
+    try:
+        query = db.query(model)
+        if order_fields:
+            query = query.order_by(*order_fields)
+        return query.first()
+    except Exception:
+        return None
+
+def _runtime_objects(db: Session) -> list[dict[str, Any]]:
+    member = _latest_or_none(db, User, User.created_at.desc(), User.id.desc())
+    society = _latest_or_none(db, Society, Society.id.desc())
+    assessment = _latest_or_none(db, LeadershipAssessment, LeadershipAssessment.created_at.desc(), LeadershipAssessment.id.desc())
+    activity = _latest_or_none(db, ActivityLog, ActivityLog.timestamp.desc(), ActivityLog.id.desc())
+    audiobook = _latest_or_none(db, Audiobook, Audiobook.created_at.desc(), Audiobook.id.desc())
+    garvey = _latest_or_none(db, GarveySyncEvent, GarveySyncEvent.created_at.desc(), GarveySyncEvent.id.desc())
+    subscription = _latest_or_none(db, Subscription, Subscription.created_at.desc(), Subscription.id.desc())
+    payment_event = _latest_or_none(db, StripeWebhookEvent, StripeWebhookEvent.created_at.desc(), StripeWebhookEvent.id.desc())
+    opportunity = _latest_or_none(db, SocietyRoleOpening, SocietyRoleOpening.created_at.desc(), SocietyRoleOpening.id.desc())
+    return [
+        {"type": "Members", "row": member, "id": getattr(member, "id", None), "member_id": getattr(member, "id", None), "society_id": getattr(society, "id", None), "snapshot": _public_object_snapshot(member, ["id", "role", "created_at"])},
+        {"type": "Assessments", "row": assessment, "id": getattr(assessment, "id", None), "member_id": getattr(assessment, "user_id", None), "society_id": getattr(society, "id", None), "snapshot": _public_object_snapshot(assessment, ["id", "user_id", "submission_id", "version", "created_at"])},
+        {"type": "Activity Stream", "row": activity, "id": getattr(activity, "id", None), "member_id": getattr(activity, "user_id", None), "society_id": getattr(society, "id", None), "snapshot": _public_object_snapshot(activity, ["id", "user_id", "action", "timestamp"])},
+        {"type": "Audiobooks", "row": audiobook, "id": getattr(audiobook, "id", None), "member_id": getattr(audiobook, "user_id", None), "society_id": getattr(society, "id", None), "snapshot": _public_object_snapshot(audiobook, ["id", "user_id", "title", "status", "created_at"])},
+        {"type": "Garvey", "row": garvey, "id": getattr(garvey, "id", None), "member_id": None, "society_id": getattr(society, "id", None), "snapshot": _public_object_snapshot(garvey, ["id", "event_type", "external_user_id", "status", "created_at", "updated_at"])},
+        {"type": "Payments", "row": subscription or payment_event, "id": getattr(subscription or payment_event, "id", None), "member_id": getattr(subscription, "user_id", None) if subscription else None, "society_id": getattr(society, "id", None), "snapshot": _public_object_snapshot(subscription, ["id", "user_id", "tier", "status", "created_at", "updated_at"]) if subscription else _public_object_snapshot(payment_event, ["id", "event_type", "created_at"])},
+        {"type": "Opportunities", "row": opportunity, "id": getattr(opportunity, "id", None), "member_id": None, "society_id": getattr(opportunity, "society_id", getattr(society, "id", None)), "snapshot": _public_object_snapshot(opportunity, ["id", "society_id", "title", "status", "created_at"])},
+        {"type": "Society", "row": society, "id": getattr(society, "id", None), "member_id": getattr(society, "founder_user_id", None), "society_id": getattr(society, "id", None), "snapshot": _public_object_snapshot(society, ["id", "slug", "name", "lifecycle_stage"])},
+        {"type": "Discord", "row": None, "id": None, "member_id": None, "society_id": getattr(society, "id", None), "snapshot": {}, "runtime_status": "NO_RUNTIME_DATA", "note": "No persisted Discord object is available in the intelligence database; connection status must be checked through the Discord diagnostics bridge."},
+    ]
+
+def _run_live_layer(db: Session, layer: str, society_id: int | None, member_id: int | None, previous: dict[str, Any] | None) -> dict[str, Any]:
+    if not society_id and layer != "Member Intelligence":
+        return {"runtime_status": "NO_RUNTIME_DATA", "reason": "No live society_id is available for this object."}
+    if layer == "Member Intelligence":
+        if not member_id:
+            return {"runtime_status": "NO_RUNTIME_DATA", "reason": "No live member_id is available for this object."}
+        return generate_member_intelligence(db, society_id=society_id, member_id=member_id)
+    if layer == "Society Intelligence":
+        return generate_society_intelligence(db, society_id=society_id, include_debug=True)
+    if layer == "Institution Intelligence":
+        return generate_institution_intelligence(db, institution_id=society_id, include_debug=True)
+    if layer == "Opportunity Intelligence":
+        return generate_opportunity_intelligence(db, society_id=society_id, include_debug=True)
+    if layer == "Predictive Intelligence":
+        return _predictive(previous or {})
+    if layer == "Decision Support":
+        return generate_decision_support(db, society_id=society_id, include_debug=True)
+    if layer == "Execution Planning":
+        return generate_execution_plans(db, society_id=society_id, include_debug=True)
+    if layer == "Execution Intelligence":
+        return generate_execution_intelligence(db, society_id=society_id, include_debug=True)
+    if layer == "Institutional Memory":
+        return generate_institutional_memory(db, society_id=society_id, include_debug=True)
+    if layer == "Institutional Learning":
+        return generate_institutional_learning(db, society_id=society_id, include_debug=True)
+    return {"runtime_status": "NO_RUNTIME_DATA", "reason": f"Unknown layer {layer}."}
+
+def build_runtime_propagation_report(db: Session | None) -> dict[str, Any]:
+    if db is None:
+        return {"status": "NOT_VERIFIED", "production_ready": False, "source": "fixture_only", "message": "No live database session was provided; runtime propagation was not observed.", "objects": []}
+    objects = []
+    for obj in _runtime_objects(db):
+        row = obj.get("row")
+        if row is None:
+            objects.append({**{k: v for k, v in obj.items() if k != "row"}, "status": obj.get("runtime_status", "NO_RUNTIME_DATA"), "pipeline_trace": []})
+            continue
+        identity = {str(v) for v in [obj.get("id"), obj.get("member_id"), obj.get("society_id")] if v is not None}
+        previous_output: dict[str, Any] | None = None
+        previous_keys = set(obj.get("snapshot", {}).keys())
+        trace = []
+        for index, layer in enumerate(DIAGNOSTIC_LAYER_ORDER):
+            output = _run_live_layer(db, layer, obj.get("society_id"), obj.get("member_id"), previous_output)
+            if not isinstance(output, dict):
+                output = {"raw_output": output}
+            output_keys = set(output.keys())
+            next_layer = DIAGNOSTIC_LAYER_ORDER[index + 1] if index + 1 < len(DIAGNOSTIC_LAYER_ORDER) else None
+            next_output = _run_live_layer(db, next_layer, obj.get("society_id"), obj.get("member_id"), output) if next_layer else None
+            next_received = _json_contains_identity(next_output, identity) if isinstance(next_output, dict) else False
+            trace.append({
+                "layer": layer,
+                "object_id": obj.get("id"),
+                "timestamp": datetime.utcnow().isoformat(),
+                "input_received": {"object_type": obj.get("type"), "object_snapshot": obj.get("snapshot"), "previous_output_hash": _stable_fingerprint(previous_output) if previous_output else None},
+                "output_produced": {"output_hash": _stable_fingerprint(output), "top_level_fields": sorted(output_keys), "runtime_status": output.get("runtime_status", "OBSERVED")},
+                "fields_added": sorted(output_keys - previous_keys),
+                "fields_removed": sorted(previous_keys - output_keys),
+                "downstream_consumer": next_layer,
+                "evidence_next_layer_actually_received_it": {"status": "VERIFIED" if next_received else "NOT_VERIFIED", "method": "Searched next live layer output for the runtime object/member/society id values; no contract inference was accepted.", "identity_values": sorted(identity)},
+                "fixture_data_used": False,
+            })
+            previous_output = output
+            previous_keys = output_keys
+        verified = all(step["evidence_next_layer_actually_received_it"]["status"] == "VERIFIED" for step in trace if step["downstream_consumer"])
+        objects.append({"type": obj.get("type"), "object_id": obj.get("id"), "timestamp": _object_timestamp(row), "status": "RUNTIME_PROPAGATION_VERIFIED" if verified else "RUNTIME_PROPAGATION_NOT_VERIFIED", "pipeline_trace": trace})
+    verified_count = len([obj for obj in objects if obj.get("status") == "RUNTIME_PROPAGATION_VERIFIED"])
+    no_data = len([obj for obj in objects if obj.get("status") == "NO_RUNTIME_DATA"])
+    return {"status": "VERIFIED" if verified_count == len(objects) and objects else "NOT_VERIFIED", "production_ready": False, "source": "live_runtime_database", "fixture_data_used": False, "summary": {"objects_checked": len(objects), "runtime_verified": verified_count, "no_runtime_data": no_data, "not_verified": len(objects) - verified_count - no_data}, "objects": objects, "production_readiness_statement": "NOT_PRODUCTION_READY: live runtime propagation must be VERIFIED for every required object before production readiness can be reported."}
 
 
 def _history_storage_path() -> Path:
@@ -713,7 +845,7 @@ def executive_summary(layers: list[dict[str, Any]], run: dict[str, Any] | None =
 def recommended_next_actions(layers: list[dict[str, Any]]) -> list[str]:
     return list(ADMIN_RECOMMENDED_ACTIONS)
 
-def run_full_intelligence_diagnostic() -> dict[str, Any]:
+def run_full_intelligence_diagnostic(db: Session | None = None) -> dict[str, Any]:
     _load_diagnostic_history_from_disk()
     start = time.perf_counter(); db = _isolated_session(); ids = _seed_fixture(db); writes: list[str] = []
     def guard(conn, cursor, statement, parameters, context, executemany):
@@ -745,7 +877,11 @@ def run_full_intelligence_diagnostic() -> dict[str, Any]:
     health = max(0, round(100 - len(failures) * 18 - len(regressions) * 8 - len([l for l in layers if l["status"] == "WARNING"]) * 3))
     status_counts = _status_counts(layers)
     validation_suite = build_validation_suite(outputs, layers)
-    run = {"ok": True, "validation_suite": validation_suite, "system_readiness_report": validation_suite["system_readiness_report"], "verification_source_of_truth": {}, "diagnostic_id": f"intel-health-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}", "created_at": datetime.utcnow().isoformat(), "admin_only": True, "isolated_fixture": True, "fixture_name": FIXTURE_NAME, "fixture_version": FIXTURE_VERSION, "environment": _environment_name(), "build_commit": _build_commit(), "report_token": None, "production_writes": 0, "workflow_execution": False, "notification_count": 0, "assignment_count": 0, "persistence_of_intelligence_outputs": False, "execution_order": [l["layer"] for l in layers], "overall_health_percent": health, "overall_status": _overall_status(layers), "status_counts": status_counts, "pass_fail_summary": {"passed": status_counts["pass"], "warnings": status_counts["warning"], "failed": status_counts["fail"], "regressions": status_counts["regression"]}, "layers": layers, "regression_count": len(regressions), "warnings": [l for l in layers if l["status"] == "WARNING"], "critical_failures": failures, "last_successful_diagnostic": None, "performance": {"total_execution_time_ms": total, "memory_usage": "unavailable", "api_response_time_ms": total, "largest_payload_layer": max(layers, key=lambda l: len(str(l["debug_payload"]))) ["layer"], "slowest_layer": max(layers, key=lambda l: l["execution_time_ms"])["layer"], "fastest_layer": min(layers, key=lambda l: l["execution_time_ms"])["layer"]}, "root_cause_analysis": _root_cause(layers), "root_cause_classification": _classify_root_cause(" ".join(_root_cause(layers))), "dependency_impact": dependency_impact(layers), "executive_summary": executive_summary(layers), "recommended_next_actions": recommended_next_actions(layers), "health_trend": "stable"}
+    runtime_propagation = build_runtime_propagation_report(db)
+    if runtime_propagation.get("status") != "VERIFIED":
+        validation_suite["system_readiness_report"]["real_data_readiness"] = "NOT_VERIFIED: live runtime propagation did not verify every required object and layer."
+        validation_suite["system_readiness_report"]["overall_operational_readiness"] = "NOT_PRODUCTION_READY"
+    run = {"ok": True, "runtime_propagation": runtime_propagation, "validation_suite": validation_suite, "system_readiness_report": validation_suite["system_readiness_report"], "verification_source_of_truth": {}, "diagnostic_id": f"intel-health-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}", "created_at": datetime.utcnow().isoformat(), "admin_only": True, "isolated_fixture": True, "fixture_name": FIXTURE_NAME, "fixture_version": FIXTURE_VERSION, "environment": _environment_name(), "build_commit": _build_commit(), "report_token": None, "production_writes": 0, "workflow_execution": False, "notification_count": 0, "assignment_count": 0, "persistence_of_intelligence_outputs": False, "execution_order": [l["layer"] for l in layers], "overall_health_percent": health, "overall_status": _overall_status(layers), "status_counts": status_counts, "pass_fail_summary": {"passed": status_counts["pass"], "warnings": status_counts["warning"], "failed": status_counts["fail"], "regressions": status_counts["regression"]}, "layers": layers, "regression_count": len(regressions), "warnings": [l for l in layers if l["status"] == "WARNING"], "critical_failures": failures, "last_successful_diagnostic": None, "performance": {"total_execution_time_ms": total, "memory_usage": "unavailable", "api_response_time_ms": total, "largest_payload_layer": max(layers, key=lambda l: len(str(l["debug_payload"]))) ["layer"], "slowest_layer": max(layers, key=lambda l: l["execution_time_ms"])["layer"], "fastest_layer": min(layers, key=lambda l: l["execution_time_ms"])["layer"]}, "root_cause_analysis": _root_cause(layers), "root_cause_classification": _classify_root_cause(" ".join(_root_cause(layers))), "dependency_impact": dependency_impact(layers), "executive_summary": executive_summary(layers), "recommended_next_actions": recommended_next_actions(layers), "health_trend": "stable"}
     previous = _DIAGNOSTIC_HISTORY[-1] if _DIAGNOSTIC_HISTORY else None
     run["last_successful_diagnostic"] = previous["created_at"] if previous and previous["overall_health_percent"] >= 90 else None
     run["comparison_to_previous"] = compare_diagnostics(run, previous)
@@ -896,6 +1032,7 @@ def sanitize_diagnostic_for_public_report(run: dict[str, Any]) -> dict[str, Any]
         "validation_suite": deepcopy(run.get("validation_suite", {})),
         "system_readiness_report": deepcopy(run.get("system_readiness_report", {})),
         "verification_source_of_truth": deepcopy(run.get("verification_source_of_truth", {})),
+        "runtime_propagation": deepcopy(run.get("runtime_propagation", {})),
         "source_note": "Sanitized deterministic fixture diagnostics only. No member records, emails, private society records, tokens beyond this requested public report token, raw debug payloads, stack traces, secrets, user PII, auth data, payments, businesses, workflow records, private member data, or sensitive internal IDs are included.",
     }
 
