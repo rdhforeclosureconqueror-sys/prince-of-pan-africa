@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import secrets
 import time
-from datetime import date, datetime
+from copy import deepcopy
+from datetime import date, datetime, timedelta
 from statistics import mean
 from typing import Any, Callable
 
@@ -45,6 +47,10 @@ EXPECTED_BASELINE = {
 }
 
 _DIAGNOSTIC_HISTORY: list[dict[str, Any]] = []
+_PUBLIC_DIAGNOSTIC_REPORTS: dict[str, dict[str, Any]] = {}
+PUBLIC_REPORT_TTL_DAYS = 14
+FIXTURE_NAME = "intelligence-health-fixture"
+FIXTURE_VERSION = "v1"
 
 
 def _seed_fixture(db: Session) -> dict[str, int]:
@@ -162,7 +168,7 @@ def run_full_intelligence_diagnostic() -> dict[str, Any]:
     regressions = [l for l in layers if l["regression"]]
     failures = [l for l in layers if l["status"] == "FAIL"]
     health = max(0, round(100 - len(failures) * 18 - len(regressions) * 8 - len([l for l in layers if l["status"] == "WARNING"]) * 3))
-    run = {"ok": True, "diagnostic_id": f"intel-health-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}", "created_at": datetime.utcnow().isoformat(), "admin_only": True, "isolated_fixture": True, "production_writes": 0, "workflow_execution": False, "notification_count": 0, "assignment_count": 0, "persistence_of_intelligence_outputs": False, "execution_order": [l["layer"] for l in layers], "overall_health_percent": health, "layers": layers, "regression_count": len(regressions), "warnings": [l for l in layers if l["status"] == "WARNING"], "critical_failures": failures, "last_successful_diagnostic": None, "performance": {"total_execution_time_ms": total, "memory_usage": "unavailable", "api_response_time_ms": total, "largest_payload_layer": max(layers, key=lambda l: len(str(l["debug_payload"]))) ["layer"], "slowest_layer": max(layers, key=lambda l: l["execution_time_ms"])["layer"], "fastest_layer": min(layers, key=lambda l: l["execution_time_ms"])["layer"]}, "root_cause_analysis": _root_cause(layers), "health_trend": "stable"}
+    run = {"ok": True, "diagnostic_id": f"intel-health-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}", "created_at": datetime.utcnow().isoformat(), "admin_only": True, "isolated_fixture": True, "fixture_name": FIXTURE_NAME, "fixture_version": FIXTURE_VERSION, "production_writes": 0, "workflow_execution": False, "notification_count": 0, "assignment_count": 0, "persistence_of_intelligence_outputs": False, "execution_order": [l["layer"] for l in layers], "overall_health_percent": health, "layers": layers, "regression_count": len(regressions), "warnings": [l for l in layers if l["status"] == "WARNING"], "critical_failures": failures, "last_successful_diagnostic": None, "performance": {"total_execution_time_ms": total, "memory_usage": "unavailable", "api_response_time_ms": total, "largest_payload_layer": max(layers, key=lambda l: len(str(l["debug_payload"]))) ["layer"], "slowest_layer": max(layers, key=lambda l: l["execution_time_ms"])["layer"], "fastest_layer": min(layers, key=lambda l: l["execution_time_ms"])["layer"]}, "root_cause_analysis": _root_cause(layers), "health_trend": "stable"}
     previous = _DIAGNOSTIC_HISTORY[-1] if _DIAGNOSTIC_HISTORY else None
     run["last_successful_diagnostic"] = previous["created_at"] if previous and previous["overall_health_percent"] >= 90 else None
     run["comparison_to_previous"] = compare_diagnostics(run, previous)
@@ -184,3 +190,76 @@ def compare_diagnostics(current: dict[str, Any] | None = None, previous: dict[st
 
 def diagnostic_history() -> list[dict[str, Any]]:
     return list(reversed(_DIAGNOSTIC_HISTORY[-10:]))
+
+
+def _public_layer(layer: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "layer": layer.get("layer"),
+        "status": layer.get("status"),
+        "regression": layer.get("regression"),
+        "expected": deepcopy(layer.get("expected", {})),
+        "actual": deepcopy(layer.get("actual", {})),
+        "difference_summary": deepcopy(layer.get("difference_summary", {})),
+        "confidence_difference": deepcopy(layer.get("confidence_difference", {})),
+        "missing_evidence_difference": layer.get("missing_evidence_difference"),
+        "priority_difference": deepcopy(layer.get("priority_difference", {})),
+        "execution_time_ms": layer.get("execution_time_ms"),
+        "explanation": layer.get("explanation"),
+    }
+
+
+def sanitize_diagnostic_for_public_report(run: dict[str, Any]) -> dict[str, Any]:
+    layers = [_public_layer(layer) for layer in run.get("layers", [])]
+    generated_at = datetime.utcnow()
+    expires_at = generated_at + timedelta(days=PUBLIC_REPORT_TTL_DAYS)
+    return {
+        "ok": True,
+        "public_report": True,
+        "read_only": True,
+        "no_write_confirmation": {
+            "production_writes": 0,
+            "workflow_execution": False,
+            "notification_count": 0,
+            "assignment_count": 0,
+            "persistence_of_intelligence_outputs": False,
+            "can_rerun_diagnostics": False,
+            "admin_api_exposed": False,
+        },
+        "fixture_name": run.get("fixture_name", FIXTURE_NAME),
+        "fixture_version": run.get("fixture_version", FIXTURE_VERSION),
+        "generated_at": generated_at.isoformat(),
+        "expires_at": expires_at.isoformat(),
+        "overall_health": {"percent": run.get("overall_health_percent"), "trend": run.get("health_trend")},
+        "layers": layers,
+        "expected_vs_actual_summary": [
+            {"layer": layer["layer"], "expected": layer["expected"], "actual": layer["actual"], "difference_summary": layer["difference_summary"]}
+            for layer in layers
+        ],
+        "regression_summary": {
+            "count": run.get("regression_count", 0),
+            "layers": [{"layer": layer["layer"], "regression": layer["regression"], "difference_summary": layer["difference_summary"]} for layer in layers if layer.get("regression")],
+        },
+        "failed_layers": [{"layer": layer["layer"], "status": layer["status"], "explanation": layer["explanation"]} for layer in layers if layer.get("status") == "FAIL"],
+        "warnings": [{"layer": layer["layer"], "status": layer["status"], "explanation": layer["explanation"]} for layer in layers if layer.get("status") == "WARNING"],
+        "performance_timings": deepcopy(run.get("performance", {})),
+        "execution_order": list(run.get("execution_order", [])),
+        "source_note": "Sanitized deterministic fixture diagnostics only. No member records, emails, private society records, tokens, raw debug payloads, or sensitive internal IDs are included.",
+    }
+
+
+def generate_public_diagnostic_report(run: dict[str, Any]) -> dict[str, Any]:
+    token = secrets.token_urlsafe(32)
+    report = sanitize_diagnostic_for_public_report(run) | {"token": token}
+    _PUBLIC_DIAGNOSTIC_REPORTS[token] = report
+    return report
+
+
+def get_public_diagnostic_report(token: str) -> dict[str, Any] | None:
+    report = _PUBLIC_DIAGNOSTIC_REPORTS.get(token)
+    if not report:
+        return None
+    expires_at = datetime.fromisoformat(report["expires_at"])
+    if expires_at < datetime.utcnow():
+        _PUBLIC_DIAGNOSTIC_REPORTS.pop(token, None)
+        return None
+    return deepcopy(report)
