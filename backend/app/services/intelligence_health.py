@@ -457,9 +457,140 @@ def ecosystem_intelligence(layers: list[dict[str, Any]]) -> dict[str, Any]:
     return {"institutional_health_score": round(mean([item["health"] for item in engines])), "subsystems": engines}
 
 
+
+def _normalize_recommendation(text: str | None) -> str:
+    cleaned = re.sub(r"\s+", " ", str(text or "").strip().lower())
+    cleaned = cleaned.rstrip(".")
+    if "opportunity intelligence" in cleaned or "qualifying-opportunity" in cleaned or "qualifying opportunity" in cleaned:
+        return "opportunity-intelligence-stability"
+    return re.sub(r"[^a-z0-9]+", "-", cleaned).strip("-") or "monitoring"
+
+
+def _initiative_title(key: str, layers: list[str]) -> str:
+    if key == "opportunity-intelligence-stability":
+        return "Stabilize Opportunity Intelligence"
+    primary = layers[0].replace(" Intelligence", "") if layers else "Intelligence"
+    return f"Stabilize {primary} diagnostic drift"
+
+
+def _initiative_root_cause(key: str, layers: list[str]) -> str:
+    if key == "opportunity-intelligence-stability":
+        return "Opportunity scoring drift is affecting downstream decision and execution layers."
+    return f"Repeated diagnostic drift is appearing across {', '.join(layers[:3]) or 'the intelligence chain'}."
+
+
+def _initiative_owner(key: str, layers: list[str]) -> str:
+    if key == "opportunity-intelligence-stability":
+        return "Intelligence backend owner · scoring and qualifying-rule review"
+    if any("Execution" in layer for layer in layers):
+        return "Execution intelligence owner · planning and evidence review"
+    return "Platform intelligence owner · baseline and evidence review"
+
+
+def synthesize_ai_coo_initiatives(layers: list[dict[str, Any]], advisor: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
+    grouped: dict[str, dict[str, Any]] = {}
+    layer_by_name = {layer.get("layer"): layer for layer in layers}
+    for layer in layers:
+        action = layer.get("suggested_admin_action") or "Continue monitoring stable layers."
+        key = _normalize_recommendation(action)
+        if key == "no-baseline-update-needed-keep-monitoring-future-diagnostic-runs" and layer.get("status") == "PASS":
+            continue
+        group = grouped.setdefault(key, {"recommendations": set(), "layers": [], "score_deltas": [], "confidence_scores": []})
+        group["recommendations"].add(action)
+        group["layers"].append(layer.get("layer"))
+        group["score_deltas"].append(abs(int(layer.get("score_delta") or 0)))
+        group["confidence_scores"].append(layer.get("confidence_score") or _confidence_percent(layer))
+    for action in advisor or []:
+        fix = action.get("suggested_fix") or action.get("title")
+        key = _normalize_recommendation(fix)
+        if not key or key == "continue-monitoring-stable-layers":
+            continue
+        group = grouped.setdefault(key, {"recommendations": set(), "layers": [], "score_deltas": [], "confidence_scores": []})
+        group["recommendations"].add(fix)
+        title = action.get("title", "")
+        matched = next((name for name in layer_by_name if name and name in title), None)
+        if matched and matched not in group["layers"]:
+            group["layers"].append(matched)
+        if isinstance(action.get("confidence"), (int, float)):
+            group["confidence_scores"].append(action.get("confidence"))
+    initiatives = []
+    for index, (key, group) in enumerate(grouped.items(), start=1):
+        affected = [layer for layer in DIAGNOSTIC_LAYER_ORDER if layer in set(group["layers"])] or list(dict.fromkeys(group["layers"]))
+        total_delta = sum(group["score_deltas"]) or max(2, len(affected) * 3)
+        low = max(2, round(total_delta * 0.55))
+        high = max(low + 2, round(total_delta * 0.9))
+        confidence = round(mean(group["confidence_scores"])) if group["confidence_scores"] else 90
+        effort_minutes = min(180, max(45, len(affected) * 25))
+        initiatives.append({
+            "id": f"initiative-{index}-{key}",
+            "title": _initiative_title(key, affected),
+            "root_cause": _initiative_root_cause(key, affected),
+            "why_it_matters": "Consolidating repeated layer warnings prevents leadership from chasing duplicate recommendations and focuses work on the upstream cause.",
+            "affected_layers": affected,
+            "expected_health_improvement": f"+{low} to +{high} points",
+            "expected_health_improvement_low": low,
+            "expected_health_improvement_high": high,
+            "estimated_effort": f"{max(1, round(effort_minutes / 60))} hours",
+            "confidence": confidence,
+            "recommended_owner_type_of_work": _initiative_owner(key, affected),
+            "status": "recommended",
+            "source_recommendation_count": len(group["recommendations"]),
+            "rank_score": high * max(1, len(affected)) + confidence,
+        })
+    return sorted(initiatives, key=lambda item: item["rank_score"], reverse=True)
+
+
+def build_ai_coo_sprint_plan(run: dict[str, Any], initiatives: list[dict[str, Any]]) -> dict[str, Any]:
+    current = int(run.get("overall_health_percent") or 0)
+    top = initiatives[:3]
+    expected_gain = sum(item.get("expected_health_improvement_high", 0) for item in top)
+    expected_health = min(100, current + expected_gain)
+    tasks = []
+    for item in top:
+        tasks.append(f"{item['title']}: {item['recommended_owner_type_of_work']}")
+    deduped_tasks = list(dict.fromkeys(tasks))
+    confidence = round(mean([item.get("confidence", 90) for item in top])) if top else 94
+    return {
+        "sprint_goal": top[0]["title"] if top else "Keep intelligence diagnostics stable",
+        "highest_roi_tasks": deduped_tasks,
+        "recommended_implementation_order": deduped_tasks,
+        "risk_reduction_estimate": f"{min(75, 20 + len(top) * 15)}%",
+        "expected_health_after_sprint_completion": f"{expected_health}%",
+        "expected_health_after_completion": f"{expected_health}%",
+        "confidence": confidence,
+        "estimated_time_to_completion": f"{max(1, len(deduped_tasks) * 2)} hours",
+        "estimated_completion": f"{max(1, len(deduped_tasks) * 2)} hours",
+    }
+
+
+def build_ai_forecast_scenarios(run: dict[str, Any], sprint_plan: dict[str, Any]) -> list[dict[str, Any]]:
+    current = int(run.get("overall_health_percent") or 0)
+    regression_count = int(run.get("regression_count") or 0)
+    no_action_health = max(0, current - max(3, regression_count * 3))
+    sprint_health = int(re.sub(r"\D", "", sprint_plan.get("expected_health_after_sprint_completion", "")) or min(100, current + 8))
+    return [
+        {"scenario": "If no action is taken", "projected_health_score": f"{no_action_health}%", "regression_risk": "Elevated" if regression_count else "Low", "technical_debt_trend": "Increasing", "confidence": 88, "primary_reason": "Repeated layer recommendations remain unresolved and continue to compound downstream."},
+        {"scenario": "If recommended sprint is completed", "projected_health_score": f"{sprint_health}%", "regression_risk": "Reduced", "technical_debt_trend": "Stabilizing", "confidence": sprint_plan.get("confidence", 92), "primary_reason": "The sprint addresses duplicate recommendations as upstream initiatives instead of isolated layer tasks."},
+    ]
+
 def ai_chief_operating_officer(run: dict[str, Any], advisor: list[dict[str, Any]]) -> dict[str, Any]:
-    tasks = [action["suggested_fix"] for action in advisor[:4]] or ["Optimize report caching", "Archive old diagnostics", "Compress report payload", "Update trend indexes"]
-    return {"suggested_sprint": {"estimated_completion": "2 hours", "tasks": tasks[:4], "expected_result": {"health_score": f"{run.get('overall_health_percent', 0)} → {min(100, run.get('overall_health_percent', 0) + 2)}", "api_latency": "−11%", "storage_efficiency": "+18%"}, "estimated_confidence": 94}}
+    initiatives = synthesize_ai_coo_initiatives(run.get("layers", []), advisor)
+    sprint_plan = build_ai_coo_sprint_plan(run, initiatives)
+    top = initiatives[0] if initiatives else {}
+    why = {
+        "what_changed": run.get("executive_summary", "Diagnostic output changed against the deterministic intelligence baseline."),
+        "why_it_matters": top.get("why_it_matters", "Leadership needs one accountable initiative rather than repeated layer-level recommendations."),
+        "what_should_be_fixed_first": top.get("title", "Run a diagnostic and fix the highest-impact regression first."),
+        "what_can_wait": "Stable layer cards, raw evidence review, and public report polish can wait until the top initiative is re-run and verified.",
+    }
+    return {
+        "recommendation": f"Focus leadership on {top.get('title', 'the top intelligence initiative')} before changing baselines.",
+        "why_this_matters": why,
+        "initiatives": initiatives,
+        "sprint_planning": sprint_plan,
+        "suggested_sprint": {**sprint_plan, "tasks": sprint_plan.get("highest_roi_tasks", []), "expected_result": {"health_score": f"{run.get('overall_health_percent', 0)} → {sprint_plan.get('expected_health_after_sprint_completion')}", "risk_reduction": sprint_plan.get("risk_reduction_estimate")}, "estimated_confidence": sprint_plan.get("confidence")},
+        "forecast_scenarios": build_ai_forecast_scenarios(run, sprint_plan),
+    }
 
 def dependency_impact(layers: list[dict[str, Any]]) -> dict[str, Any]:
     changed = [layer for layer in layers if layer.get("status") != "PASS"]
