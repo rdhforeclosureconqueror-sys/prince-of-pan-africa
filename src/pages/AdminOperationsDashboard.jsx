@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { Component, useEffect, useMemo, useState } from "react";
 import { api } from "../api/api";
 import "../styles/dashboard.css";
 import IntelligenceHealthMonitor from "../components/IntelligenceHealthMonitor";
@@ -24,6 +24,34 @@ const DISCORD_ACTIONS = [
   { label: "Send Test Celebration", method: "POST", path: "/discord/test/celebration", body: {} },
   { label: "Send Test Bot Log Message", method: "POST", path: "/discord/test/bot-log", body: {} },
 ];
+
+class IntelligenceHealthMonitorErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error) {
+    if (import.meta.env?.DEV) {
+      console.error("Intelligence Health Monitor failed to render", error);
+    }
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <section className="cosmic-section admin-error" aria-live="polite">
+          <h2>Intelligence Health Monitor failed to render. Other admin tools are still available.</h2>
+        </section>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 function sanitizeDiscordResult(result) {
   return {
@@ -198,7 +226,9 @@ export default function AdminOperationsDashboard() {
       </div>
 
 
-      <IntelligenceHealthMonitor />
+      <IntelligenceHealthMonitorErrorBoundary>
+        <IntelligenceHealthMonitor />
+      </IntelligenceHealthMonitorErrorBoundary>
 
       <section className="cosmic-section">
         <h2>🧭 Garvey Assessment Sync Diagnostics</h2>
