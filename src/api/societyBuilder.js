@@ -36,3 +36,5 @@ export const getSocietyIntelligence = (id, debug = false) => get(`/society-build
 export const getInstitutionIntelligence = (id, debug = false) => get(`/society-builder/institutions/${id}/intelligence${debug ? "?debug=true" : ""}`);
 
 export const getOpportunityIntelligence = (id, debug = false) => get(`/society-builder/opportunities/intelligence${id ? `?society_id=${id}${debug ? "&debug=true" : ""}` : `${debug ? "?debug=true" : ""}`}`);
+
+export const getDecisionSupport = (id, debug = false) => get(`/society-builder/decision-support${id ? `?society_id=${id}${debug ? "&debug=true" : ""}` : `${debug ? "?debug=true" : ""}`}`);

@@ -15,6 +15,7 @@ from app.models import Society, SocietyBlueprintAudit, SocietyRoleOpening, Socie
 from app.services.society_intelligence import generate_society_intelligence
 from app.services.institution_intelligence import generate_institution_intelligence
 from app.services.opportunity_intelligence import generate_opportunity_intelligence
+from app.services.decision_support import generate_decision_support
 from app.services.society_builder import (
     DEFAULT_COVENANT,
     FIRST_CONTAINER_TYPE,
@@ -415,6 +416,15 @@ def opportunity_intelligence(society_id: int | None = None, debug: bool = False,
     include_debug = debug and user_has_permission(db, current_user, "society_builder:read_admin")
     try:
         return generate_opportunity_intelligence(db, society_id=society_id, include_debug=include_debug)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Society not found")
+
+@router.get("/decision-support")
+def decision_support(society_id: int | None = None, debug: bool = False, current_user: User = Depends(require_permission("society_builder:read_admin")), db: Session = Depends(get_db)):
+    require_society_builder_enabled(db, current_user)
+    include_debug = debug and user_has_permission(db, current_user, "society_builder:read_admin")
+    try:
+        return generate_decision_support(db, society_id=society_id, include_debug=include_debug)
     except ValueError:
         raise HTTPException(status_code=404, detail="Society not found")
 
