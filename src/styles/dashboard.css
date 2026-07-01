@@ -2040,3 +2040,90 @@ body {
   border-width: 2px;
   box-shadow: 0 0 22px rgba(255, 255, 255, 0.28);
 }
+
+.intelligence-health-monitor .readiness-grid {
+  margin: 1rem 0 1.5rem;
+}
+
+.intelligence-health-monitor .readiness-card h2 {
+  margin-bottom: 0.75rem;
+}
+
+.intelligence-health-monitor .mini-bar {
+  height: 0.55rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.2);
+}
+
+.intelligence-health-monitor .mini-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #38bdf8, #22c55e);
+}
+
+.intelligence-health-monitor .action-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.9rem;
+}
+
+.intelligence-health-monitor .action-strip.compact {
+  gap: 0.35rem;
+  margin-top: 0.6rem;
+}
+
+.intelligence-health-monitor .action-strip button,
+.intelligence-health-monitor .admin-table button {
+  border: 1px solid rgba(56, 189, 248, 0.42);
+  border-radius: 999px;
+  padding: 0.45rem 0.7rem;
+  color: #e0f2fe;
+  background: rgba(14, 116, 144, 0.18);
+  cursor: pointer;
+}
+
+.intelligence-health-monitor .action-strip button:hover,
+.intelligence-health-monitor .admin-table button:hover {
+  border-color: rgba(125, 211, 252, 0.9);
+  background: rgba(14, 116, 144, 0.32);
+}
+
+.intelligence-health-monitor .drilldown-card summary {
+  cursor: pointer;
+  color: #f8fafc;
+  list-style-position: outside;
+}
+
+.intelligence-health-monitor .drilldown-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+
+.intelligence-health-monitor .drilldown-grid span {
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 14px;
+  padding: 0.55rem;
+  background: rgba(15, 23, 42, 0.72);
+  color: #cbd5e1;
+}
+
+.intelligence-health-monitor .spark-bars {
+  min-height: 54px;
+  display: flex;
+  align-items: end;
+  gap: 3px;
+  margin: 0.75rem 0;
+}
+
+.intelligence-health-monitor .spark-bars span {
+  display: inline-block;
+  width: 10px;
+  min-height: 4px;
+  border-radius: 999px 999px 0 0;
+  background: #22c55e;
+}

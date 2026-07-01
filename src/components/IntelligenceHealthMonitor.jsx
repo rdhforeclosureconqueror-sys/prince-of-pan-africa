@@ -161,6 +161,23 @@ export const verifyPublicDiagnosticReportFromBrowser = async ({ htmlUrl, jsonUrl
 };
 
 const chainLabel = { first_changed: "First changed layer", downstream_affected: "Downstream affected", stable: "Stable layer" };
+const numberOrNull = (value) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+};
+const average = (values) => {
+  const numeric = values.map(numberOrNull).filter((value) => value !== null);
+  if (!numeric.length) return null;
+  return Math.round(numeric.reduce((sum, value) => sum + value, 0) / numeric.length);
+};
+const formatMetric = (value, unit = "") => value === null || value === undefined || value === "" ? "—" : `${value}${unit}`;
+const trendDirectionFrom = (current, previous, lowerIsBetter = false) => {
+  const currentNumber = numberOrNull(current);
+  const previousNumber = numberOrNull(previous);
+  if (currentNumber === null || previousNumber === null || currentNumber === previousNumber) return "stable";
+  const improved = lowerIsBetter ? currentNumber < previousNumber : currentNumber > previousNumber;
+  return improved ? "improved" : "worse";
+};
 
 const statusIcon = (layer) => {
   if (layer?.status === "FAIL") return "🔴 Failure";
@@ -350,6 +367,45 @@ export default function IntelligenceHealthMonitor() {
   ];
   const displayedPipelineSteps = browserVerificationStarted ? browserDrivenPipelineSteps : pipelineSteps;
   const displayedPipelineOverallStatus = displayedPipelineSteps.length ? (displayedPipelineSteps.some((step) => step.status === "FAIL") ? "Pipeline Failure" : displayedPipelineSteps.some((step) => step.status === "WARNING") ? "Pipeline Warning" : "Intelligence Pipeline Healthy") : (pipeline.overall_status || "Pipeline Warning");
+  const previousRun = history.find((run) => run !== result) || history[1] || null;
+  const getRunHealth = (run) => run?.overall_health_percent ?? run?.overall_health?.percent ?? null;
+  const getRunWarnings = (run) => asArray(run?.warnings).length || safeObject(run?.pass_fail_summary).warnings || safeObject(run?.status_counts).warning || 0;
+  const getRunRegressions = (run) => run?.regression_count ?? safeObject(run?.regression_summary).count ?? safeObject(run?.pass_fail_summary).regressions ?? 0;
+  const getRunLatency = (run) => safeObject(run?.performance_summary).average_api_latency_ms ?? safeObject(run?.performance).api_response_time_ms ?? null;
+  const getRunDuration = (run) => safeObject(run?.performance_summary).average_diagnostic_time_ms ?? safeObject(run?.performance).total_execution_time_ms ?? safeObject(run?.performance_timings).total_execution_time_ms ?? null;
+  const changeLogRows = [
+    ["Overall Health", getRunHealth(previousRun), getRunHealth(result), "%", false],
+    ["API latency", getRunLatency(previousRun), getRunLatency(result), "ms", true],
+    ["Warnings", getRunWarnings(previousRun), warningCount, "", true],
+    ["Regressions", getRunRegressions(previousRun), regressionCount, "", true],
+    ...layers.slice(0, 4).map((layer) => [layer.layer, safeObject(layer.expected).score, safeObject(layer.actual).score, "", false]),
+  ];
+  const historyStats = {
+    averageHealth: average(history.map(getRunHealth)),
+    averageDeploymentQuality: average(history.map((run) => run.deployment_quality_score ?? safeObject(run?.readiness_scores).deployment_readiness ?? getRunHealth(run))),
+    averageVerificationScore: average(history.map((run) => run.verification_score ?? safeObject(run?.readiness_scores).production_confidence ?? safeObject(run?.performance_summary).public_verification_score)),
+    averageDiagnosticDuration: average(history.map(getRunDuration)),
+    mostCommonFailures: layers.filter((layer) => layer.status === "FAIL" || layer.regression).map((layer) => layer.layer).slice(0, 3).join(", ") || "No recurring failures detected",
+    mostUnstableLayer: layers.find((layer) => layer.regression || layer.status === "FAIL" || layer.status === "WARNING")?.layer || "No unstable layer detected",
+    fastestImprovingLayer: layers.find((layer) => numberOrNull(safeObject(layer.actual).score) > numberOrNull(safeObject(layer.expected).score))?.layer || "Awaiting score movement",
+  };
+  const readinessScores = [
+    ["Deployment Readiness", commandCenter.deployment_readiness ?? historyStats.averageDeploymentQuality ?? healthScore],
+    ["Release Readiness", commandCenter.release_readiness ?? Math.max(0, Number(healthScore) - warningCount * 2 - regressionCount * 5 || 0)],
+    ["Operational Readiness", commandCenter.operational_readiness ?? Math.max(0, Number(healthScore) - failureCount * 10 || 0)],
+    ["Institutional Readiness", commandCenter.institutional_readiness ?? historyStats.averageHealth ?? healthScore],
+    ["Production Confidence", commandCenter.production_confidence ?? historyStats.averageVerificationScore ?? (browserVerified ? 100 : 70)],
+  ];
+  const actionButtons = ["Review", "Investigate", "View Evidence", "Open Layer", "Compare Previous Run", "Create Sprint Task", "Assign Owner", "Mark Resolved", "Run Diagnostic Again"];
+  const dailyBriefing = {
+    yesterday: previousRun ? `Health ${formatMetric(getRunHealth(previousRun), "%")}; ${getRunWarnings(previousRun)} warnings; ${getRunRegressions(previousRun)} regressions.` : "No previous diagnostic is available yet.",
+    today: `Health ${formatMetric(healthScore, "%")}; ${warningCount} warnings; ${regressionCount} regressions; ${missionStatus} posture.`,
+    highestRisk: failureCount ? "Critical failures remain unresolved." : regressionCount ? "Regression risk is the highest operating risk." : warningCount ? "Warnings may compound if not assigned." : "No immediate critical risk detected.",
+    highestOpportunity: highestPriority,
+    workOrder: priorityQueue.slice(0, 3).map((action) => action.title).join(" → ") || "Run diagnostic → review evidence → assign owner",
+    expectedOutcome: sprint.expected_health_after_sprint_completion || sprint.expected_health_after_completion || "Improved health, fewer warnings, and clearer production confidence.",
+    confidence: sprint.confidence || sprint.estimated_confidence || aiOperationsAdvisor[0]?.confidence || "—",
+  };
 
   return (
     <section className="cosmic-section intelligence-health-monitor" aria-labelledby="intelligence-health-title">
@@ -375,18 +431,20 @@ export default function IntelligenceHealthMonitor() {
           <article className="stat-card executive-priority"><h3>Today’s Highest Priority</h3><p>{highestPriority}</p></article>
           <article className="stat-card"><h3>Estimated time to resolution</h3><p>{timeToResolution}</p></article>
         </div>
-        <article className="stat-card ai-coo-recommendation"><h3>AI COO Recommendation</h3><p>{cooRecommendation}</p></article>
-        <article className="stat-card wide-card"><h3>Why This Matters</h3><p><strong>What changed:</strong> {whyThisMatters.what_changed || result?.executive_summary || "Diagnostic output changed against the intelligence baseline."}</p><p><strong>Why it matters:</strong> {whyThisMatters.why_it_matters || "Leadership needs consolidated initiatives instead of duplicate layer recommendations."}</p><p><strong>Fix first:</strong> {whyThisMatters.what_should_be_fixed_first || highestPriority}</p><p><strong>Can wait:</strong> {whyThisMatters.what_can_wait || "Stable layer evidence and lower-risk polish can wait until the top initiative is verified."}</p></article>
+        <div className="dashboard-grid readiness-grid">{readinessScores.map(([label, score]) => <article className="stat-card readiness-card" key={label}><h3>{label}</h3><h2>{formatMetric(score, "%")}</h2><div className="mini-bar" aria-label={`${label} score`}><span style={{ width: `${Math.min(100, Math.max(0, Number(score) || 0))}%` }} /></div></article>)}</div>
+        <article className="stat-card ai-coo-recommendation"><h3>AI COO Daily Briefing</h3><p><strong>Yesterday:</strong> {dailyBriefing.yesterday}</p><p><strong>Today:</strong> {dailyBriefing.today}</p><p><strong>Highest risk:</strong> {dailyBriefing.highestRisk}</p><p><strong>Highest opportunity:</strong> {dailyBriefing.highestOpportunity}</p><p><strong>Recommended work order:</strong> {dailyBriefing.workOrder}</p><p><strong>Expected outcome if completed:</strong> {dailyBriefing.expectedOutcome}</p><p><strong>Estimated confidence:</strong> {dailyBriefing.confidence}%</p><div className="action-strip">{["Create Sprint Task", "Assign Owner", "Run Diagnostic Again"].map((action) => <button key={action} type="button" onClick={action === "Run Diagnostic Again" ? run : undefined} disabled={actionDisabled && action === "Run Diagnostic Again"}>{action}</button>)}</div></article>
+        <article className="stat-card wide-card"><h3>Executive Change Log</h3><table className="admin-table"><thead><tr><th>Metric</th><th>Previous</th><th>Current</th><th>Direction</th><th>Action</th></tr></thead><tbody>{changeLogRows.map(([label, previous, current, unit, lowerIsBetter]) => { const direction = trendDirectionFrom(current, previous, lowerIsBetter); return <tr key={label}><td>{label}</td><td>{formatMetric(previous, unit)}</td><td>{formatMetric(current, unit)}</td><td>{direction === "improved" ? "🟢 Improved" : direction === "worse" ? "🔴 Worse" : "🟡 Stable / awaiting history"}</td><td><button type="button">Compare Previous Run</button></td></tr>; })}</tbody></table></article>
+        <article className="stat-card wide-card"><h3>Why This Matters</h3><p><strong>What changed:</strong> {whyThisMatters.what_changed || result?.executive_summary || "Diagnostic output changed against the intelligence baseline."}</p><p><strong>Why it matters:</strong> {whyThisMatters.why_it_matters || "Leadership needs consolidated initiatives instead of duplicate layer recommendations."}</p><p><strong>Fix first:</strong> {whyThisMatters.what_should_be_fixed_first || highestPriority}</p><p><strong>Can wait:</strong> {whyThisMatters.what_can_wait || "Stable layer evidence and lower-risk polish can wait until the top initiative is verified."}</p><div className="action-strip">{["Review", "View Evidence", "Open Layer", "Mark Resolved"].map((action) => <button key={action} type="button">{action}</button>)}</div></article>
       </section>
 
       <h3>AI COO Initiative Synthesis</h3>
       <div className="dashboard-grid" aria-label="AI COO Initiative Synthesis">
-        {initiatives.length ? initiatives.map((initiative, index) => <article className="stat-card" key={initiative.id || initiative.title}><h3>Initiative {index + 1}: {initiative.title}</h3><p><strong>Root cause:</strong> {initiative.root_cause}</p><p><strong>Why it matters:</strong> {initiative.why_it_matters}</p><p><strong>Affected layers:</strong> {asArray(initiative.affected_layers).join(", ") || "—"}</p><p><strong>Expected health improvement:</strong> {initiative.expected_health_improvement}</p><p><strong>Estimated effort:</strong> {initiative.estimated_effort}</p><p><strong>Confidence:</strong> {initiative.confidence}%</p><p><strong>Owner/type of work:</strong> {initiative.recommended_owner_type_of_work}</p><p><strong>Status:</strong> {initiative.status || "recommended"}</p></article>) : <article className="stat-card"><p>Run a diagnostic to synthesize repeated layer recommendations into executive initiatives.</p></article>}
+        {initiatives.length ? initiatives.map((initiative, index) => <details className="stat-card drilldown-card" key={initiative.id || initiative.title} open={index === 0}><summary><strong>Initiative {index + 1}: {initiative.title}</strong> · {initiative.status || "recommended"}</summary><p><strong>Root cause:</strong> {initiative.root_cause}</p><p><strong>Why it matters:</strong> {initiative.why_it_matters}</p><p><strong>Affected layers:</strong> {asArray(initiative.affected_layers).join(", ") || "—"}</p><p><strong>Expected health improvement:</strong> {initiative.expected_health_improvement}</p><p><strong>Estimated effort:</strong> {initiative.estimated_effort}</p><p><strong>Confidence:</strong> {initiative.confidence}%</p><p><strong>Owner/type of work:</strong> {initiative.recommended_owner_type_of_work}</p><div className="drilldown-grid"><span>Health Timeline</span><span>Historical Scores</span><span>Regression History</span><span>Evidence</span><span>Related Commits</span><span>Affected Systems</span><span>Recommended Fixes</span><span>Dependent Layers</span></div><div className="action-strip">{actionButtons.slice(0, 8).map((action) => <button key={action} type="button">{action}</button>)}</div></details>) : <article className="stat-card"><p>Run a diagnostic to synthesize repeated layer recommendations into executive initiatives.</p><div className="action-strip"><button type="button" onClick={run} disabled={actionDisabled}>Run Diagnostic Again</button></div></article>}
       </div>
 
       <h3>Priority Queue</h3>
       <article className="stat-card wide-card" aria-label="Priority Queue">
-        <table className="admin-table"><thead><tr><th>Priority</th><th>Action</th><th>Impact</th><th>Effort</th><th>Affected intelligence layers</th><th>Expected health improvement</th><th>Run Action</th></tr></thead><tbody>{priorityQueue.length ? priorityQueue.map((action) => <tr key={action.id}><td><strong>{action.priority}</strong></td><td>{action.title}</td><td>{action.impact}</td><td>{action.effort}</td><td>{action.layers}</td><td>{action.improvement}</td><td><button type="button" disabled title="Action execution is planned for a future release.">Future Run Action</button></td></tr>) : <tr><td colSpan={7}>Run a diagnostic to generate ranked recommended actions by impact.</td></tr>}</tbody></table>
+        <table className="admin-table"><thead><tr><th>Priority</th><th>Action</th><th>Impact</th><th>Effort</th><th>Affected intelligence layers</th><th>Expected health improvement</th><th>Run Action</th></tr></thead><tbody>{priorityQueue.length ? priorityQueue.map((action) => <tr key={action.id}><td><strong>{action.priority}</strong></td><td>{action.title}</td><td>{action.impact}</td><td>{action.effort}</td><td>{action.layers}</td><td>{action.improvement}</td><td><div className="action-strip compact"><button type="button">Create Sprint Task</button><button type="button">Assign Owner</button><button type="button" onClick={run} disabled={actionDisabled}>Run Diagnostic Again</button></div></td></tr>) : <tr><td colSpan={7}>Run a diagnostic to generate ranked recommended actions by impact.</td></tr>}</tbody></table>
       </article>
 
       <h3>Dependency Map</h3>
@@ -402,7 +460,7 @@ export default function IntelligenceHealthMonitor() {
       </article>
 
       <h3>Executive Trends</h3>
-      <article className="stat-card wide-card"><label htmlFor="trend-window"><strong>View window</strong></label> <select id="trend-window" value={trendWindow} onChange={(event) => setTrendWindow(event.target.value)}><option value="10">Last 10 runs</option><option value="30">Last 30 runs</option><option value="100">Last 100 runs</option><option value="all">All Time</option></select><div className="dashboard-grid">{trendMetrics.filter(([, key]) => ["overall_health_score", "regression_count", "api_latency_ms", "diagnostic_duration_ms", "public_verification"].includes(key)).map(([label, key, unit]) => { const points = asArray(trends[key]); const last = points[points.length - 1]; const max = Math.max(1, ...points.map((point) => Number(point.value) || 0)); return <section className="stat-card" key={key}><h4>{label === "Overall Health Score" ? "Health trend" : label === "Regression Count" ? "Regression trend" : label === "API Latency" ? "API latency" : label === "Diagnostic Duration" ? "Diagnostic duration" : "Public verification history"}</h4><p>{last?.value ?? "—"}{unit}</p><div aria-label={`${label} chart`}>{points.map((point, index) => <span key={`${key}-${index}`} title={`${point.timestamp}: ${point.value}${unit}`} style={{ display: "inline-block", width: 10, height: `${Math.max(4, ((Number(point.value) || 0) / max) * 48)}px`, marginRight: 3, background: "#22c55e", verticalAlign: "bottom" }} />)}</div></section>; })}<section className="stat-card"><h4>Deployment history</h4><p>{history.length || "—"} recorded runs</p><div aria-label="Deployment history chart">{history.slice(0, 12).reverse().map((run, index) => <span key={run.diagnostic_id || index} title={run.created_at} style={{ display: "inline-block", width: 10, height: `${Math.max(4, Number(run.overall_health_percent ?? run.overall_health?.percent ?? 0) / 2)}px`, marginRight: 3, background: "#38bdf8", verticalAlign: "bottom" }} />)}</div></section></div></article>
+      <article className="stat-card wide-card"><label htmlFor="trend-window"><strong>View window</strong></label> <select id="trend-window" value={trendWindow} onChange={(event) => setTrendWindow(event.target.value)}><option value="10">Last 10 runs</option><option value="30">Last 30 runs</option><option value="100">Last 100 runs</option><option value="all">All Time</option></select><div className="dashboard-grid">{trendMetrics.filter(([, key]) => ["overall_health_score", "regression_count", "api_latency_ms", "diagnostic_duration_ms", "public_verification"].includes(key)).map(([label, key, unit]) => { const points = asArray(trends[key]); const last = points[points.length - 1]; const max = Math.max(1, ...points.map((point) => Number(point.value) || 0)); return <section className="stat-card" key={key}><h4>{label === "Overall Health Score" ? "Health trend" : label === "Regression Count" ? "Regression trend" : label === "API Latency" ? "API latency" : label === "Diagnostic Duration" ? "Diagnostic duration" : "Public verification history"}</h4><p>{last?.value ?? "—"}{unit}</p><div className="spark-bars" aria-label={`${label} chart`}>{points.map((point, index) => <span key={`${key}-${index}`} title={`${point.timestamp}: ${point.value}${unit}`} style={{ height: `${Math.max(4, ((Number(point.value) || 0) / max) * 48)}px` }} />)}</div><div className="action-strip compact"><button type="button">View Evidence</button><button type="button">Investigate</button></div></section>; })}<section className="stat-card"><h4>Institutional Memory</h4><p>Average health {formatMetric(historyStats.averageHealth, "%")} · Average deployment quality {formatMetric(historyStats.averageDeploymentQuality, "%")}</p><p>Most common failures: {historyStats.mostCommonFailures}</p><p>Most unstable layer: {historyStats.mostUnstableLayer}</p><p>Fastest improving layer: {historyStats.fastestImprovingLayer}</p><p>Average verification score {formatMetric(historyStats.averageVerificationScore, "%")} · Average diagnostic duration {formatMetric(historyStats.averageDiagnosticDuration, "ms")}</p><div className="action-strip compact"><button type="button">Open Layer</button><button type="button">View Evidence</button></div></section><section className="stat-card"><h4>Deployment history</h4><p>{history.length || "—"} recorded runs</p><div className="spark-bars" aria-label="Deployment history chart">{history.slice(0, 12).reverse().map((run, index) => <span key={run.diagnostic_id || index} title={run.created_at} style={{ height: `${Math.max(4, Number(run.overall_health_percent ?? run.overall_health?.percent ?? 0) / 2)}px`, background: "#38bdf8" }} />)}</div></section></div></article>
 
       <h3>AI Forecast</h3>
       <div className="dashboard-grid" aria-label="AI Forecast">
@@ -477,22 +535,17 @@ export default function IntelligenceHealthMonitor() {
           const confidence = safeObject(layer.confidence_difference);
           const priority = safeObject(layer.priority_difference);
           return (
-            <article className="stat-card" key={layer.layer || `layer-${index}`}>
-              <h3>{layer.layer || "Unknown Layer"}</h3>
-              <p><strong>{statusIcon(layer)}</strong></p>
-              <p>Health: <strong>{statusIcon(layer)}</strong></p>
-              <p>Status: <strong>{layer.status || "UNKNOWN"}</strong></p>
-              <p>Execution Time: <strong>{layer.execution_time_ms ?? "—"}ms</strong></p>
-              <p>Version: <strong>v1</strong></p>
+            <details className="stat-card drilldown-card" key={layer.layer || `layer-${index}`}>
+              <summary><strong>{layer.layer || "Unknown Layer"}</strong> · {statusIcon(layer)} · Score {actual.score ?? expected.score ?? "—"}</summary>
+              <p>Status: <strong>{layer.status || "UNKNOWN"}</strong> · Execution Time: <strong>{layer.execution_time_ms ?? "—"}ms</strong> · Version: <strong>v1</strong></p>
               <p>Diagnostics: <strong>{layer.explanation || "Diagnostics unavailable"}</strong></p>
               <p>Regression Level: <strong>{layer.regression_level || layer.regression || "None"}</strong></p>
               <p>Expected Score: {expected.score ?? "—"} · Actual Score: {actual.score ?? "—"} · Score Delta: {layer.score_delta ?? safeObject(layer.difference_summary).score ?? "—"}</p>
-              <p>Confidence Before/After: {confidence.expected ?? "—"} → {confidence.actual ?? "—"}</p>
-              <p>Missing Evidence Δ: {layer.missing_evidence_difference ?? "—"}</p>
-              <p>Priority Before/After: {priority.expected ?? "—"} → {priority.actual ?? "—"}</p>
-              <p><strong>Confidence:</strong> {layer.confidence_score ?? "—"}%</p><p><strong>Supporting Evidence</strong></p><ul>{asArray(layer.supporting_evidence).map((evidence) => <li key={evidence}>{evidence}</li>)}</ul><p><strong>Why this changed:</strong> {layer.why_this_changed || layer.plain_language_reason || layer.explanation || "Diagnostics unavailable"}</p>
-              <p><strong>Suggested admin action:</strong> {layer.suggested_admin_action || "Review scoring logic and re-run diagnostics before updating baselines."}</p>
-            </article>
+              <p>Confidence Before/After: {confidence.expected ?? "—"} → {confidence.actual ?? "—"} · Priority Before/After: {priority.expected ?? "—"} → {priority.actual ?? "—"}</p>
+              <p><strong>Supporting Evidence</strong></p><ul>{asArray(layer.supporting_evidence).length ? asArray(layer.supporting_evidence).map((evidence) => <li key={evidence}>{evidence}</li>) : <li>No evidence attached yet.</li>}</ul><p><strong>Recommended fix:</strong> {layer.suggested_admin_action || "Review scoring logic and re-run diagnostics before updating baselines."}</p>
+              <div className="drilldown-grid"><span>Health Timeline</span><span>Historical Scores</span><span>Regression History</span><span>Evidence</span><span>Related Commits</span><span>Affected Systems</span><span>Recommended Fixes</span><span>Dependent Layers</span></div>
+              <div className="action-strip">{actionButtons.map((action) => <button key={action} type="button" onClick={action === "Run Diagnostic Again" ? run : undefined} disabled={actionDisabled && action === "Run Diagnostic Again"}>{action}</button>)}</div>
+            </details>
           );
         }) : <article className="stat-card"><h3>Diagnostics unavailable</h3><p>Layer data is missing or could not be loaded.</p></article>}
       </div>
@@ -507,7 +560,7 @@ export default function IntelligenceHealthMonitor() {
       </div>
 
       <h3>Diagnostic History</h3>
-      <div>{history.length ? history.map((run, index) => { const summary = safeObject(run.pass_fail_summary); return <details className="stat-card" key={run.diagnostic_id || index}><summary><strong>{run.created_at || "Timestamp unavailable"}</strong> · Health {run.overall_health_percent ?? run.overall_health?.percent ?? "—"}% · {run.overall_status || "UNKNOWN"} · Duration {run.performance?.total_execution_time_ms ?? run.performance_timings?.total_execution_time_ms ?? "—"}ms · {run.environment || "environment unknown"}</summary><p><strong>Report token:</strong> {run.report_token || run.public_report_token || "—"}</p><p><strong>Version/commit:</strong> {run.build_commit || run.version || run.fixture_version || "—"}</p><p><strong>Pass/fail summary:</strong> {summary.passed ?? run.status_counts?.pass ?? 0} pass · {summary.warnings ?? run.status_counts?.warning ?? 0} warnings · {summary.failed ?? run.status_counts?.fail ?? 0} failures · {summary.regressions ?? run.regression_count ?? 0} regressions</p><pre className="data-note">{JSON.stringify(run, null, 2)}</pre></details>; }) : <article className="stat-card"><p>No diagnostic history yet.</p></article>}</div>
+      <div>{history.length ? history.map((run, index) => { const summary = safeObject(run.pass_fail_summary); return <details className="stat-card" key={run.diagnostic_id || index}><summary><strong>{run.created_at || "Timestamp unavailable"}</strong> · Health {run.overall_health_percent ?? run.overall_health?.percent ?? "—"}% · {run.overall_status || "UNKNOWN"} · Duration {run.performance?.total_execution_time_ms ?? run.performance_timings?.total_execution_time_ms ?? "—"}ms · {run.environment || "environment unknown"}</summary><p><strong>Report token:</strong> {run.report_token || run.public_report_token || "—"}</p><p><strong>Version/commit:</strong> {run.build_commit || run.version || run.fixture_version || "—"}</p><p><strong>Pass/fail summary:</strong> {summary.passed ?? run.status_counts?.pass ?? 0} pass · {summary.warnings ?? run.status_counts?.warning ?? 0} warnings · {summary.failed ?? run.status_counts?.fail ?? 0} failures · {summary.regressions ?? run.regression_count ?? 0} regressions</p><div className="drilldown-grid"><span>What changed: {run.executive_summary || "Diagnostic baseline recorded"}</span><span>Health improved: {trendDirectionFrom(getRunHealth(run), getRunHealth(history[index + 1]), false) === "improved" ? "Yes" : "Not yet / unknown"}</span><span>Regressions disappeared: {getRunRegressions(run) === 0 ? "Yes" : "No"}</span><span>Prediction accurate: {run.prediction_accuracy || "Awaiting next run"}</span><span>Recommendations worked: {run.recommendations_effective || "Awaiting verification"}</span></div><div className="action-strip compact"><button type="button">View Evidence</button><button type="button">Mark Resolved</button><button type="button">Create Sprint Task</button></div><pre className="data-note">{JSON.stringify(run, null, 2)}</pre></details>; }) : <article className="stat-card"><p>No diagnostic history yet.</p><div className="action-strip"><button type="button" onClick={run} disabled={actionDisabled}>Run Diagnostic Again</button></div></article>}</div>
 
       <h3>Compare Previous Run</h3>
       <pre className="data-note">{JSON.stringify(healthTrend, null, 2)}</pre>
