@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { api } from "../api/api";
 import "../styles/dashboard.css";
+import IntelligenceHealthMonitor from "../components/IntelligenceHealthMonitor";
 
 const EMPTY_ARRAY = [];
 
@@ -196,6 +197,8 @@ export default function AdminOperationsDashboard() {
         ))}
       </div>
 
+
+      <IntelligenceHealthMonitor />
 
       <section className="cosmic-section">
         <h2>🧭 Garvey Assessment Sync Diagnostics</h2>
