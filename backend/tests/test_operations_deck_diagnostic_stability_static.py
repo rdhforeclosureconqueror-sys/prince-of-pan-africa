@@ -175,11 +175,46 @@ def test_public_generation_keeps_full_diagnostic_state_separate():
     assert "setPublicReportUrl" not in run_body
 
 
+def test_public_report_browser_verification_state_and_checks_are_rendered():
+    assert "publicReportVerification" in MONITOR
+    assert "setPublicReportVerification" in MONITOR
+    assert "PUBLIC_REPORT_VERIFICATION_CHECKS" in MONITOR
+    assert "HTML report URL" in MONITOR
+    assert "Embedded diagnostic JSON" in MONITOR
+    assert "JSON report URL" in MONITOR
+    assert "Markdown report URL" in MONITOR
+    assert 'aria-label="Production Verification"' in MONITOR
+    assert "Public diagnostic report verified from browser." in MONITOR
+    assert "Public diagnostic report generated, but verification failed." in MONITOR
+
+
+def test_public_report_browser_verification_validates_html_json_and_markdown():
+    assert "verifyPublicDiagnosticReportFromBrowser" in MONITOR
+    assert 'fetch(url, { method: "GET", credentials: "omit", cache: "no-store" })' in MONITOR
+    assert 'doc.getElementById("diagnostic-data")' in MONITOR
+    assert 'node.getAttribute("type") !== "application/json"' in MONITOR
+    assert "JSON.parse(node.textContent" in MONITOR
+    assert "await response.json()" in MONITOR
+    assert "markdown.trim().startsWith(\"# Public Diagnostic Report\")" in MONITOR
+    assert "Markdown did not begin with an AI-readable public diagnostic heading." in MONITOR
+
+
+def test_public_report_browser_verification_failures_do_not_crash_operations_deck():
+    assert "PUBLIC_REPORT_VERIFICATION_FAIL" in MONITOR
+    assert "try {" in MONITOR
+    assert "catch (err)" in MONITOR
+    assert "Skipped because HTML report did not load successfully." in MONITOR
+    assert "result.error" in MONITOR
+    assert "result.httpStatus" in MONITOR
+    assert "result.responseTimeMs" in MONITOR
+
+
 def test_clear_public_report_link_resets_only_public_report_state():
     clear_body = MONITOR.split("const clearPublicReport = () =>", 1)[1].split("const loadHistory", 1)[0]
     assert "setPublicReportState(null)" in clear_body
     assert "setPublicReportUrl(\"\")" in clear_body
     assert "setPublicReportError(\"\")" in clear_body
+    assert "setPublicReportVerification(null)" in clear_body
     assert "setDiagnosticRunState" not in clear_body
     assert "setHistory" not in clear_body
 
@@ -187,4 +222,4 @@ def test_clear_public_report_link_resets_only_public_report_state():
 def test_admin_public_debug_output_is_debug_gated():
     assert "DEBUG_ERRORS &&" in MONITOR
     assert "Public Report Debug Output" in MONITOR
-    assert "JSON.stringify({ publicReportState, publicReportError }" in MONITOR
+    assert "JSON.stringify({ publicReportState, publicReportError, publicReportVerification }" in MONITOR

@@ -21,6 +21,15 @@ const normalizeReport = (payload) => safeObject(payload?.report || payload?.publ
 const isNonEmptyString = (value) => typeof value === "string" && value.trim().length > 0;
 const PUBLIC_DIAGNOSTIC_ORIGIN = "https://simbawaujamaa.com";
 const publicReportPathFromToken = (token) => `/public/intelligence-diagnostics/${encodeURIComponent(token.trim())}`;
+const PUBLIC_REPORT_VERIFICATION_PENDING = "pending";
+const PUBLIC_REPORT_VERIFICATION_PASS = "pass";
+const PUBLIC_REPORT_VERIFICATION_FAIL = "fail";
+const PUBLIC_REPORT_VERIFICATION_CHECKS = [
+  { key: "html", label: "HTML report URL" },
+  { key: "htmlEmbeddedData", label: "Embedded diagnostic JSON" },
+  { key: "json", label: "JSON report URL" },
+  { key: "markdown", label: "Markdown report URL" },
+];
 const isSafePublicReportHref = (href) => {
   if (!isNonEmptyString(href)) return false;
   try {
@@ -55,6 +64,91 @@ export const normalizePublicReportResponse = (payload, origin = window.location.
   return { publicReportState, publicReportUrl: "", error: PUBLIC_REPORT_MISSING_URL_MESSAGE };
 };
 
+const pendingPublicReportVerification = () => PUBLIC_REPORT_VERIFICATION_CHECKS.reduce((acc, check) => ({ ...acc, [check.key]: { status: PUBLIC_REPORT_VERIFICATION_PENDING, httpStatus: null, responseTimeMs: null, error: "" } }), {});
+
+const publicReportVerificationFailed = (checks) => Object.values(safeObject(checks)).some((check) => check?.status === PUBLIC_REPORT_VERIFICATION_FAIL);
+const publicReportVerificationPassed = (checks) => PUBLIC_REPORT_VERIFICATION_CHECKS.every((check) => checks?.[check.key]?.status === PUBLIC_REPORT_VERIFICATION_PASS);
+const publicReportVerificationStatusText = (checks) => {
+  if (publicReportVerificationPassed(checks)) return "Public diagnostic report verified from browser.";
+  if (publicReportVerificationFailed(checks)) return "Public diagnostic report generated, but verification failed.";
+  return "Verifying generated public diagnostic report from browser…";
+};
+
+const timedFetch = async (url) => {
+  const started = performance.now();
+  const response = await fetch(url, { method: "GET", credentials: "omit", cache: "no-store" });
+  const responseTimeMs = Math.round(performance.now() - started);
+  return { response, responseTimeMs };
+};
+
+const parseEmbeddedDiagnosticReport = (html) => {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const node = doc.getElementById("diagnostic-data");
+  if (!node || node.getAttribute("type") !== "application/json") throw new Error("Missing embedded diagnostic-data JSON script.");
+  try {
+    const parsed = JSON.parse(node.textContent || "{}");
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("Embedded diagnostic-data JSON is not an object.");
+    return parsed;
+  } catch (err) {
+    throw new Error(`Embedded diagnostic-data JSON did not parse: ${err.message}`);
+  }
+};
+
+export const verifyPublicDiagnosticReportFromBrowser = async ({ htmlUrl, jsonUrl, markdownUrl }, onProgress = () => {}) => {
+  const update = (key, result) => onProgress(key, result);
+  const htmlResult = { status: PUBLIC_REPORT_VERIFICATION_FAIL, httpStatus: null, responseTimeMs: null, error: "" };
+  let html = "";
+  try {
+    const { response, responseTimeMs } = await timedFetch(htmlUrl);
+    htmlResult.httpStatus = response.status;
+    htmlResult.responseTimeMs = responseTimeMs;
+    if (!response.ok) throw new Error(`HTML request returned HTTP ${response.status}.`);
+    html = await response.text();
+    htmlResult.status = PUBLIC_REPORT_VERIFICATION_PASS;
+  } catch (err) {
+    htmlResult.error = err?.message || "HTML report request failed.";
+  }
+  update("html", htmlResult);
+
+  const embeddedResult = { status: PUBLIC_REPORT_VERIFICATION_FAIL, httpStatus: htmlResult.httpStatus, responseTimeMs: htmlResult.responseTimeMs, error: "" };
+  try {
+    if (htmlResult.status !== PUBLIC_REPORT_VERIFICATION_PASS) throw new Error("Skipped because HTML report did not load successfully.");
+    parseEmbeddedDiagnosticReport(html);
+    embeddedResult.status = PUBLIC_REPORT_VERIFICATION_PASS;
+  } catch (err) {
+    embeddedResult.error = err?.message || "Embedded diagnostic-data JSON validation failed.";
+  }
+  update("htmlEmbeddedData", embeddedResult);
+
+  const jsonResult = { status: PUBLIC_REPORT_VERIFICATION_FAIL, httpStatus: null, responseTimeMs: null, error: "" };
+  try {
+    const { response, responseTimeMs } = await timedFetch(jsonUrl);
+    jsonResult.httpStatus = response.status;
+    jsonResult.responseTimeMs = responseTimeMs;
+    if (!response.ok) throw new Error(`JSON request returned HTTP ${response.status}.`);
+    const parsed = await response.json();
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("JSON report response was not an object.");
+    jsonResult.status = PUBLIC_REPORT_VERIFICATION_PASS;
+  } catch (err) {
+    jsonResult.error = err?.message || "JSON report validation failed.";
+  }
+  update("json", jsonResult);
+
+  const markdownResult = { status: PUBLIC_REPORT_VERIFICATION_FAIL, httpStatus: null, responseTimeMs: null, error: "" };
+  try {
+    const { response, responseTimeMs } = await timedFetch(markdownUrl);
+    markdownResult.httpStatus = response.status;
+    markdownResult.responseTimeMs = responseTimeMs;
+    if (!response.ok) throw new Error(`Markdown request returned HTTP ${response.status}.`);
+    const markdown = await response.text();
+    if (!markdown.trim().startsWith("# Public Diagnostic Report") && !markdown.trim().startsWith("# Intelligence Diagnostic Report")) throw new Error("Markdown did not begin with an AI-readable public diagnostic heading.");
+    markdownResult.status = PUBLIC_REPORT_VERIFICATION_PASS;
+  } catch (err) {
+    markdownResult.error = err?.message || "Markdown report validation failed.";
+  }
+  update("markdown", markdownResult);
+};
+
 const chainLabel = { first_changed: "First changed layer", downstream_affected: "Downstream affected", stable: "Stable layer" };
 
 const statusIcon = (layer) => {
@@ -75,6 +169,7 @@ export default function IntelligenceHealthMonitor() {
   const [publicReportState, setPublicReportState] = useState(null);
   const [publicReportUrl, setPublicReportUrl] = useState("");
   const [publicReportCopyMessage, setPublicReportCopyMessage] = useState("");
+  const [publicReportVerification, setPublicReportVerification] = useState(null);
   const [generatingReport, setGeneratingReport] = useState(false);
 
   const clearPublicReport = () => {
@@ -82,6 +177,7 @@ export default function IntelligenceHealthMonitor() {
     setPublicReportUrl("");
     setPublicReportError("");
     setPublicReportCopyMessage("");
+    setPublicReportVerification(null);
   };
 
   const loadHistory = useCallback(async () => {
@@ -123,7 +219,7 @@ export default function IntelligenceHealthMonitor() {
 
   const generateReport = async () => {
     if (running || generatingReport) return;
-    setGeneratingReport(true); setError(""); setPublicReportError(""); setPublicReportCopyMessage("");
+    setGeneratingReport(true); setError(""); setPublicReportError(""); setPublicReportCopyMessage(""); setPublicReportVerification(null);
     try {
       const res = await withTimeout(generatePublicIntelligenceDiagnosticReport(), "Public report generation timed out.");
       if (!mountedRef.current) return;
@@ -131,6 +227,15 @@ export default function IntelligenceHealthMonitor() {
       setPublicReportState(normalized.publicReportState);
       setPublicReportUrl(normalized.publicReportUrl);
       if (normalized.error) setPublicReportError(normalized.error);
+      if (normalized.publicReportUrl) {
+        const jsonUrl = `${normalized.publicReportUrl}.json`;
+        const markdownUrl = `${normalized.publicReportUrl}.md`;
+        setPublicReportVerification(pendingPublicReportVerification());
+        await verifyPublicDiagnosticReportFromBrowser({ htmlUrl: normalized.publicReportUrl, jsonUrl, markdownUrl }, (key, result) => {
+          if (!mountedRef.current) return;
+          setPublicReportVerification((previous) => ({ ...(previous || pendingPublicReportVerification()), [key]: result }));
+        });
+      }
       await loadHistory();
     } catch (err) {
       if (mountedRef.current) setPublicReportError(adminErrorMessage("Public report could not be generated", err));
@@ -162,6 +267,7 @@ export default function IntelligenceHealthMonitor() {
   const safePublicReportUrl = isSafePublicReportHref(publicReportUrl) ? publicReportUrl : "";
   const safePublicReportJsonUrl = safePublicReportUrl ? `${safePublicReportUrl}.json` : "";
   const safePublicReportMarkdownUrl = safePublicReportUrl ? `${safePublicReportUrl}.md` : "";
+  const publicReportVerificationMessage = publicReportVerificationStatusText(publicReportVerification);
 
   return (
     <section className="cosmic-section intelligence-health-monitor" aria-labelledby="intelligence-health-title">
@@ -172,7 +278,7 @@ export default function IntelligenceHealthMonitor() {
         <button className="hero-btn" type="button" onClick={run} disabled={actionDisabled}>{running ? "Running Full Intelligence Diagnostic..." : "Run Full Intelligence Diagnostic"}</button>
         <button className="hero-btn secondary" type="button" onClick={generateReport} disabled={actionDisabled}>{generatingReport ? "Generating Public Report..." : "Generate Public Diagnostic Report"}</button>
       </div>
-      {(publicReportState || safePublicReportUrl) && <article className="stat-card"><h3>Public Diagnostic Report</h3><p>This URL is public, read-only, sanitized, fixture-only, and expires at {publicReportState?.expires_at || "the configured expiration time"}.</p>{safePublicReportUrl && <><label htmlFor="public-diagnostic-report-url"><strong>Public diagnostic URL</strong></label><div className="hero-actions"><input id="public-diagnostic-report-url" readOnly value={safePublicReportUrl} onFocus={(event) => event.target.select()} aria-label="Public diagnostic report URL" /><button type="button" onClick={copyPublicReportUrl}>Copy URL</button></div><p><a href={safePublicReportUrl} target="_blank" rel="noopener noreferrer">Open public diagnostic report</a></p><p><strong>Public JSON URL</strong>: <a href={safePublicReportJsonUrl} target="_blank" rel="noopener noreferrer">{safePublicReportJsonUrl}</a></p><p><strong>Public Markdown URL</strong>: <a href={safePublicReportMarkdownUrl} target="_blank" rel="noopener noreferrer">{safePublicReportMarkdownUrl}</a></p></>}{publicReportCopyMessage && <p role="status">{publicReportCopyMessage}</p>}<button type="button" onClick={clearPublicReport}>Clear Public Report Link</button></article>}
+      {(publicReportState || safePublicReportUrl) && <article className="stat-card"><h3>Public Diagnostic Report</h3><p>This URL is public, read-only, sanitized, fixture-only, and expires at {publicReportState?.expires_at || "the configured expiration time"}.</p>{safePublicReportUrl && <><label htmlFor="public-diagnostic-report-url"><strong>Public diagnostic URL</strong></label><div className="hero-actions"><input id="public-diagnostic-report-url" readOnly value={safePublicReportUrl} onFocus={(event) => event.target.select()} aria-label="Public diagnostic report URL" /><button type="button" onClick={copyPublicReportUrl}>Copy URL</button></div><p><a href={safePublicReportUrl} target="_blank" rel="noopener noreferrer">Open public diagnostic report</a></p><p><strong>Public JSON URL</strong>: <a href={safePublicReportJsonUrl} target="_blank" rel="noopener noreferrer">{safePublicReportJsonUrl}</a></p><p><strong>Public Markdown URL</strong>: <a href={safePublicReportMarkdownUrl} target="_blank" rel="noopener noreferrer">{safePublicReportMarkdownUrl}</a></p><section aria-label="Production Verification"><h4>Production Verification</h4><p role="status">{publicReportVerificationMessage}</p><ul>{PUBLIC_REPORT_VERIFICATION_CHECKS.map((check) => { const result = publicReportVerification?.[check.key] || { status: PUBLIC_REPORT_VERIFICATION_PENDING }; return <li key={check.key}><strong>{check.label}</strong>: {result.status}{result.httpStatus ? ` · HTTP ${result.httpStatus}` : ""}{result.responseTimeMs != null ? ` · ${result.responseTimeMs}ms` : ""}{result.error ? ` · ${result.error}` : ""}</li>; })}</ul></section></>}{publicReportCopyMessage && <p role="status">{publicReportCopyMessage}</p>}<button type="button" onClick={clearPublicReport}>Clear Public Report Link</button></article>}
       {error && <article className="stat-card admin-error"><h3>Diagnostics unavailable</h3><p>⚠️ {error}</p></article>}
       {publicReportError && <article className="stat-card admin-error"><h3>Public report could not be generated</h3><p>⚠️ {publicReportError}</p><button type="button" onClick={clearPublicReport}>Clear Public Report Link</button></article>}
       {historyError && !layers.length && <article className="stat-card"><h3>Last run could not be loaded</h3><p>Diagnostics unavailable</p></article>}
@@ -230,7 +336,7 @@ export default function IntelligenceHealthMonitor() {
 
       <h3>Compare Previous Run</h3>
       <pre className="data-note">{JSON.stringify(healthTrend, null, 2)}</pre>
-      {DEBUG_ERRORS && <><h3>Debug Output</h3><pre className="data-note">{JSON.stringify(layers.map(({ layer, debug_payload }) => ({ layer, debug_payload })), null, 2)}</pre><h3>Public Report Debug Output</h3><pre className="data-note">{JSON.stringify({ publicReportState, publicReportError }, null, 2)}</pre></>}
+      {DEBUG_ERRORS && <><h3>Debug Output</h3><pre className="data-note">{JSON.stringify(layers.map(({ layer, debug_payload }) => ({ layer, debug_payload })), null, 2)}</pre><h3>Public Report Debug Output</h3><pre className="data-note">{JSON.stringify({ publicReportState, publicReportError, publicReportVerification }, null, 2)}</pre></>}
     </section>
   );
 }
