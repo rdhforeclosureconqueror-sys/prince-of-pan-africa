@@ -68,6 +68,18 @@ const pendingPublicReportVerification = () => PUBLIC_REPORT_VERIFICATION_CHECKS.
 
 const publicReportVerificationFailed = (checks) => Object.values(safeObject(checks)).some((check) => check?.status === PUBLIC_REPORT_VERIFICATION_FAIL);
 const publicReportVerificationPassed = (checks) => PUBLIC_REPORT_VERIFICATION_CHECKS.every((check) => checks?.[check.key]?.status === PUBLIC_REPORT_VERIFICATION_PASS);
+const PUBLIC_REPORT_REQUIRED_JSON_KEYS = ["public_report", "read_only", "no_write_confirmation", "overall_summary", "layers"];
+const validatePublicDiagnosticJson = (parsed, label = "JSON report") => {
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error(`${label} response was not an object.`);
+  const missingKeys = PUBLIC_REPORT_REQUIRED_JSON_KEYS.filter((key) => !(key in parsed));
+  if (missingKeys.length) throw new Error(`${label} missing required diagnostic keys: ${missingKeys.join(", ")}.`);
+  if (parsed.public_report !== true) throw new Error(`${label} was not marked as a public diagnostic report.`);
+  if (parsed.read_only !== true) throw new Error(`${label} was not marked read-only.`);
+  if (!parsed.no_write_confirmation || typeof parsed.no_write_confirmation !== "object" || Array.isArray(parsed.no_write_confirmation)) throw new Error(`${label} missing no-write confirmation.`);
+  if (!Array.isArray(parsed.layers)) throw new Error(`${label} layers were not an array.`);
+  return parsed;
+};
+const isAiReadableDiagnosticMarkdown = (markdown) => /^#\s+(Public Diagnostic Report|Intelligence Diagnostic Report|Public Intelligence Diagnostic Report)\s*$/im.test(markdown.trim());
 const publicReportVerificationStatusText = (checks) => {
   if (publicReportVerificationPassed(checks)) return "Public diagnostic report verified from browser.";
   if (publicReportVerificationFailed(checks)) return "Public diagnostic report generated, but verification failed.";
@@ -87,8 +99,7 @@ const parseEmbeddedDiagnosticReport = (html) => {
   if (!node || node.getAttribute("type") !== "application/json") throw new Error("Missing embedded diagnostic-data JSON script.");
   try {
     const parsed = JSON.parse(node.textContent || "{}");
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("Embedded diagnostic-data JSON is not an object.");
-    return parsed;
+    return validatePublicDiagnosticJson(parsed, "Embedded diagnostic-data JSON");
   } catch (err) {
     throw new Error(`Embedded diagnostic-data JSON did not parse: ${err.message}`);
   }
@@ -127,7 +138,7 @@ export const verifyPublicDiagnosticReportFromBrowser = async ({ htmlUrl, jsonUrl
     jsonResult.responseTimeMs = responseTimeMs;
     if (!response.ok) throw new Error(`JSON request returned HTTP ${response.status}.`);
     const parsed = await response.json();
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("JSON report response was not an object.");
+    validatePublicDiagnosticJson(parsed, "JSON report");
     jsonResult.status = PUBLIC_REPORT_VERIFICATION_PASS;
   } catch (err) {
     jsonResult.error = err?.message || "JSON report validation failed.";
@@ -141,7 +152,7 @@ export const verifyPublicDiagnosticReportFromBrowser = async ({ htmlUrl, jsonUrl
     markdownResult.responseTimeMs = responseTimeMs;
     if (!response.ok) throw new Error(`Markdown request returned HTTP ${response.status}.`);
     const markdown = await response.text();
-    if (!markdown.trim().startsWith("# Public Diagnostic Report") && !markdown.trim().startsWith("# Intelligence Diagnostic Report")) throw new Error("Markdown did not begin with an AI-readable public diagnostic heading.");
+    if (!isAiReadableDiagnosticMarkdown(markdown)) throw new Error("Markdown did not begin with an AI-readable public diagnostic heading.");
     markdownResult.status = PUBLIC_REPORT_VERIFICATION_PASS;
   } catch (err) {
     markdownResult.error = err?.message || "Markdown report validation failed.";
@@ -298,6 +309,23 @@ export default function IntelligenceHealthMonitor() {
   const directionIcon = (direction) => direction === "improvement" ? "🟢" : direction === "regression" ? "🔴" : "🟡";
   const pipelineIcon = (status) => status === "PASS" ? "🟢" : status === "FAIL" ? "🔴" : "🟡";
 
+  const browserVerified = publicReportVerificationPassed(publicReportVerification);
+  const browserVerificationStarted = Boolean(publicReportVerification);
+  const browserDrivenPipelineSteps = [
+    { key: "diagnostic_generated", label: "Diagnostic Generated", status: result?.ok ? "PASS" : "WARNING" },
+    { key: "report_stored", label: "Report Stored", status: publicReportState ? "PASS" : "WARNING" },
+    { key: "html_available", label: "HTML Available", status: publicReportVerification?.html?.status === PUBLIC_REPORT_VERIFICATION_PASS ? "PASS" : "WARNING" },
+    { key: "embedded_json_valid", label: "Embedded JSON Valid", status: publicReportVerification?.htmlEmbeddedData?.status === PUBLIC_REPORT_VERIFICATION_PASS ? "PASS" : "WARNING" },
+    { key: "json_endpoint_reachable", label: "JSON Endpoint Reachable", status: publicReportVerification?.json?.status === PUBLIC_REPORT_VERIFICATION_PASS ? "PASS" : "WARNING" },
+    { key: "markdown_endpoint_reachable", label: "Markdown Endpoint Reachable", status: publicReportVerification?.markdown?.status === PUBLIC_REPORT_VERIFICATION_PASS ? "PASS" : "WARNING" },
+    { key: "public_report_sanitized", label: "Public Report Sanitized", status: publicReportState?.read_only ? "PASS" : "WARNING" },
+    { key: "read_only_confirmed", label: "Read Only Confirmed", status: result?.production_writes === 0 && !result?.workflow_execution ? "PASS" : "FAIL" },
+    { key: "browser_verification_passed", label: "Browser Verification Passed", status: browserVerified ? "PASS" : "WARNING" },
+    { key: "ai_ready", label: "AI Ready", status: browserVerified && (result?.ai_summary || result?.executive_summary) ? "PASS" : "WARNING" },
+  ];
+  const displayedPipelineSteps = browserVerificationStarted ? browserDrivenPipelineSteps : pipelineSteps;
+  const displayedPipelineOverallStatus = displayedPipelineSteps.length ? (displayedPipelineSteps.some((step) => step.status === "FAIL") ? "Pipeline Failure" : displayedPipelineSteps.some((step) => step.status === "WARNING") ? "Pipeline Warning" : "Intelligence Pipeline Healthy") : (pipeline.overall_status || "Pipeline Warning");
+
   return (
     <section className="cosmic-section intelligence-health-monitor" aria-labelledby="intelligence-health-title">
       <p className="section-kicker">Admin Only · Read-Only Diagnostic</p>
@@ -345,20 +373,9 @@ export default function IntelligenceHealthMonitor() {
       <h3>Intelligence Pipeline</h3>
       <article className="stat-card" aria-label="Intelligence Pipeline">
         <div className="dashboard-grid">
-          {(pipelineSteps.length ? pipelineSteps : [
-            { key: "diagnostic_generated", label: "Diagnostic Generated", status: result?.ok ? "PASS" : "WARNING" },
-            { key: "report_stored", label: "Report Stored", status: publicReportState ? "PASS" : "WARNING" },
-            { key: "html_available", label: "HTML Available", status: publicReportVerification?.html?.status === "pass" ? "PASS" : "WARNING" },
-            { key: "embedded_json_valid", label: "Embedded JSON Valid", status: publicReportVerification?.htmlEmbeddedData?.status === "pass" ? "PASS" : "WARNING" },
-            { key: "json_endpoint_reachable", label: "JSON Endpoint Reachable", status: publicReportVerification?.json?.status === "pass" ? "PASS" : "WARNING" },
-            { key: "markdown_endpoint_reachable", label: "Markdown Endpoint Reachable", status: publicReportVerification?.markdown?.status === "pass" ? "PASS" : "WARNING" },
-            { key: "public_report_sanitized", label: "Public Report Sanitized", status: publicReportState?.read_only ? "PASS" : "WARNING" },
-            { key: "read_only_confirmed", label: "Read Only Confirmed", status: result?.production_writes === 0 && !result?.workflow_execution ? "PASS" : "FAIL" },
-            { key: "browser_verification_passed", label: "Browser Verification Passed", status: publicReportVerificationPassed(publicReportVerification) ? "PASS" : "WARNING" },
-            { key: "ai_ready", label: "AI Ready", status: result?.ai_summary || result?.executive_summary ? "PASS" : "WARNING" },
-          ]).map((step) => <p key={step.key || step.label}><strong>{pipelineIcon(step.status)} {step.label}</strong>: {step.status}</p>)}
+          {(displayedPipelineSteps.length ? displayedPipelineSteps : browserDrivenPipelineSteps).map((step) => <p key={step.key || step.label}><strong>{pipelineIcon(step.status)} {step.label}</strong>: {step.status}</p>)}
         </div>
-        <h2>{pipelineIcon((pipeline.overall_status || "").includes("Failure") ? "FAIL" : (pipeline.overall_status || "").includes("Warning") ? "WARNING" : "PASS")} {pipeline.overall_status || "Pipeline Warning"}</h2>
+        <h2>{pipelineIcon(displayedPipelineOverallStatus.includes("Failure") ? "FAIL" : displayedPipelineOverallStatus.includes("Warning") ? "WARNING" : "PASS")} {displayedPipelineOverallStatus}</h2>
       </article>
 
       <h3>Deployment Comparison</h3>
