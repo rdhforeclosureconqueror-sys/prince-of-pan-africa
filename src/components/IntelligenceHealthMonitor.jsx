@@ -40,7 +40,7 @@ export default function IntelligenceHealthMonitor() {
     <section className="cosmic-section intelligence-health-monitor" aria-labelledby="intelligence-health-title">
       <p className="section-kicker">Admin Only · Read-Only Diagnostic</p>
       <h2 id="intelligence-health-title">🧠 Intelligence Health Monitor</h2>
-      <p className="admin-subtext">Runs deterministic isolated fixtures through Member, Society, Institution, Opportunity, Predictive, Decision Support, and Execution Planning layers without touching production records, workflow tasks, assignments, notifications, calendars, payments, businesses, or persisted intelligence outputs.</p>
+      <p className="admin-subtext">Runs deterministic isolated fixtures through Member, Society, Institution, Opportunity, Predictive, Decision Support, Execution Planning, Execution Intelligence, Institutional Memory, and Institutional Learning layers without touching production records, workflow tasks, assignments, notifications, calendars, payments, businesses, or persisted intelligence outputs.</p>
       <button className="hero-btn" type="button" onClick={run} disabled={running}>{running ? "Running Full Intelligence Diagnostic..." : "Run Full Intelligence Diagnostic"}</button>
       {error && <p className="admin-error">⚠️ {error}</p>}
 
@@ -59,7 +59,11 @@ export default function IntelligenceHealthMonitor() {
           <article className="stat-card" key={layer.layer}>
             <h3>{layer.layer}</h3>
             <p><strong>{statusIcon(layer)}</strong></p>
+            <p>Health: <strong>{statusIcon(layer)}</strong></p>
+            <p>Status: <strong>{layer.status}</strong></p>
             <p>Execution Time: <strong>{layer.execution_time_ms}ms</strong></p>
+            <p>Version: <strong>v1</strong></p>
+            <p>Diagnostics: <strong>{layer.explanation}</strong></p>
             <p>Regression: <strong>{layer.regression || "None"}</strong></p>
             <p>Expected: {layer.expected.score} · Actual: {layer.actual.score}</p>
             <p>Confidence: {layer.confidence_difference.expected} → {layer.confidence_difference.actual}</p>

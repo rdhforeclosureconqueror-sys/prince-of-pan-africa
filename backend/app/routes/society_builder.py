@@ -17,6 +17,9 @@ from app.services.institution_intelligence import generate_institution_intellige
 from app.services.opportunity_intelligence import generate_opportunity_intelligence
 from app.services.decision_support import generate_decision_support
 from app.services.execution_planning import generate_execution_plans
+from app.services.execution_intelligence import generate_execution_intelligence
+from app.services.institutional_memory import generate_institutional_memory
+from app.services.institutional_learning import generate_institutional_learning
 from app.services.society_builder import (
     DEFAULT_COVENANT,
     FIRST_CONTAINER_TYPE,
@@ -435,6 +438,34 @@ def execution_plans(society_id: int | None = None, debug: bool = False, current_
     include_debug = debug and user_has_permission(db, current_user, "society_builder:read_admin")
     try:
         return generate_execution_plans(db, society_id=society_id, include_debug=include_debug)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Society not found")
+
+
+@router.get("/execution-intelligence")
+def execution_intelligence(society_id: int | None = None, debug: bool = False, current_user: User = Depends(require_permission("society_builder:read_admin")), db: Session = Depends(get_db)):
+    require_society_builder_enabled(db, current_user)
+    include_debug = debug and user_has_permission(db, current_user, "society_builder:read_admin")
+    try:
+        return generate_execution_intelligence(db, society_id=society_id, include_debug=include_debug)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Society not found")
+
+@router.get("/institutional-memory")
+def institutional_memory(society_id: int | None = None, debug: bool = False, search: str | None = None, current_user: User = Depends(require_permission("society_builder:read_admin")), db: Session = Depends(get_db)):
+    require_society_builder_enabled(db, current_user)
+    include_debug = debug and user_has_permission(db, current_user, "society_builder:read_admin")
+    try:
+        return generate_institutional_memory(db, society_id=society_id, include_debug=include_debug, search=search)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Society not found")
+
+@router.get("/institutional-learning")
+def institutional_learning(society_id: int | None = None, debug: bool = False, current_user: User = Depends(require_permission("society_builder:read_admin")), db: Session = Depends(get_db)):
+    require_society_builder_enabled(db, current_user)
+    include_debug = debug and user_has_permission(db, current_user, "society_builder:read_admin")
+    try:
+        return generate_institutional_learning(db, society_id=society_id, include_debug=include_debug)
     except ValueError:
         raise HTTPException(status_code=404, detail="Society not found")
 

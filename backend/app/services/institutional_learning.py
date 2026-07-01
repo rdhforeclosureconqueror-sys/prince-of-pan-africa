@@ -1,0 +1,22 @@
+from __future__ import annotations
+from collections import Counter
+from typing import Any
+from sqlalchemy.orm import Session
+from app.services.execution_intelligence import generate_execution_intelligence
+from app.services.institutional_memory import generate_institutional_memory
+
+READ_ONLY_WARNING = "Read-only Institutional Learning: learns from historical records only; no autonomous decisions, workflow execution, or data mutations occur."
+
+
+def generate_institutional_learning(db: Session, *, society_id: int | None = None, include_debug: bool = False) -> dict[str, Any]:
+    memory = generate_institutional_memory(db, society_id=society_id, include_debug=include_debug)
+    execution = generate_execution_intelligence(db, society_id=society_id, include_debug=include_debug)
+    memories = memory.get("memories", [])
+    types = Counter(m.get("type") for m in memories)
+    successes = [m for m in memories if str(m.get("actual_outcome", "")).lower() in {"completed", "active", "complete"} or "complete" in str(m.get("actual_outcome", "")).lower()]
+    failures = [m for m in memories if any(word in str(m).lower() for word in ["blocked", "delayed", "weakest", "missing"])]
+    bottlenecks = execution.get("bottlenecks", []) + execution.get("delays", [])
+    themes = [f"{name}: {count} historical records" for name, count in types.most_common()]
+    evidence = memory.get("evidence", []) + execution.get("evidence", [])
+    missing = list(dict.fromkeys(memory.get("missing_evidence", []) + execution.get("missing_evidence", [])))
+    return {"ok": True, "layer": "Institutional Learning", "version": "v1", "read_only": True, "warnings": [READ_ONLY_WARNING], "lessons_learned": ["Completed Trust Board tasks are the strongest execution evidence." if successes else "Completion evidence is too thin for strong learning.", "Leadership appointments with supporting evidence improve institutional recall." if types.get("leadership appointment") else "Leadership appointment history should be documented for stronger learning.", "Delayed or blocked tasks should be reviewed before expanding scope." if bottlenecks else "No recurring execution bottleneck is visible in current history."], "improvement_recommendations": ["Capture expected outcomes at approval time and actual outcomes at closeout.", "Run trust audits before and after major execution plans.", "Keep role appointment reasons and supporting evidence attached to governance decisions."], "recurring_themes": themes, "recurring_successes": [m["decision_summary"] for m in successes[:8]], "recurring_failures": [m["decision_summary"] for m in failures[:8]], "common_bottlenecks": bottlenecks[:8], "successful_leadership_patterns": [m["decision_summary"] for m in memories if m.get("type") == "leadership appointment"][:8], "successful_participation_patterns": ["Owned and completed execution tasks" if execution.get("completion_percentage", 0) > 0 else "Participation evidence incomplete"], "effective_governance_structures": [m["decision_summary"] for m in memories if m.get("type") == "governance change"][:8], "ineffective_governance_structures": ["Unfilled or stale role openings require human review"] if types.get("governance change") and not types.get("leadership appointment") else [], "trust_building_patterns": ["Trust audits provide measurable before/after learning" if "Before/after trust audit evidence" not in missing else "Trust-building pattern needs more audit evidence"], "business_growth_patterns": ["Business development evidence is present in execution history" if not execution.get("variance_analysis", {}).get("expected_business_outcomes_vs_actual_outcomes") else "Business outcomes need stronger closeout evidence"], "execution_velocity_trends": [f"Observed completion is {execution.get('completion_percentage', 0)}% with execution score {execution.get('execution_score', 0)}"], "confidence": "substantial" if len(evidence) >= 5 and len(missing) <= 2 else "developing", "evidence": evidence, "missing_evidence": missing, "assumptions": ["Patterns are derived only from historical memory and execution records.", "Recommendations remain advisory and require human leadership."], "recommended_best_practices": ["Document decision reason, expected outcome, evidence, owner, and closeout result.", "Review bottlenecks in every leadership meeting.", "Separate advisory intelligence from human execution authority."], "debug": {"memory": memory, "execution_intelligence": execution} if include_debug else None}

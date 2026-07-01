@@ -21,10 +21,14 @@ from app.services.institution_intelligence import generate_institution_intellige
 from app.services.opportunity_intelligence import generate_opportunity_intelligence
 from app.services.decision_support import generate_decision_support
 from app.services.execution_planning import generate_execution_plans
+from app.services.execution_intelligence import generate_execution_intelligence
+from app.services.institutional_memory import generate_institutional_memory
+from app.services.institutional_learning import generate_institutional_learning
 
 DIAGNOSTIC_LAYER_ORDER = [
     "Member Intelligence", "Society Intelligence", "Institution Intelligence", "Opportunity Intelligence",
     "Predictive Intelligence", "Decision Support", "Execution Planning",
+    "Execution Intelligence", "Institutional Memory", "Institutional Learning",
 ]
 
 EXPECTED_BASELINE = {
@@ -35,6 +39,9 @@ EXPECTED_BASELINE = {
     "Predictive Intelligence": {"score": 79, "confidence": "substantial", "missing_count": 4, "priority": "medium", "recommendations": 3},
     "Decision Support": {"score": 74, "confidence": "substantial", "missing_count": 4, "priority": "medium", "recommendations": 12},
     "Execution Planning": {"score": 74, "confidence": "substantial", "missing_count": 4, "priority": "medium", "recommendations": 12},
+    "Execution Intelligence": {"score": 76, "confidence": "substantial", "missing_count": 2, "priority": "high", "recommendations": 3},
+    "Institutional Memory": {"score": 100, "confidence": "substantial", "missing_count": 0, "priority": "high", "recommendations": 11},
+    "Institutional Learning": {"score": 76, "confidence": "substantial", "missing_count": 2, "priority": "high", "recommendations": 3},
 }
 
 _DIAGNOSTIC_HISTORY: list[dict[str, Any]] = []
@@ -96,8 +103,14 @@ def _extract(layer: str, output: dict[str, Any]) -> dict[str, Any]:
         score = output["readiness_score"]; missing = 4; recs = len(output.get("predictions", []))
     elif layer == "Decision Support":
         recs = len(output.get("recommendations", [])); score = round(mean([r["scores"]["overall_priority"]["score"] for r in output.get("recommendations", [])])) if recs else 0; missing = len({m for r in output.get("recommendations", []) for m in r.get("missing_evidence", [])})
-    else:
+    elif layer == "Execution Planning":
         plans = output.get("execution_plans", []); recs = len(plans); score = round(mean([p.get("readiness_score", 0) for p in plans])) if plans else 0; missing = len({m for p in plans for m in p.get("missing_evidence", [])})
+    elif layer == "Execution Intelligence":
+        score = output.get("execution_score", 0); missing = len(output.get("missing_evidence", [])); recs = len(output.get("recommended_lessons_learned", []))
+    elif layer == "Institutional Memory":
+        score = 100 if output.get("memory_count", 0) else 0; missing = len(output.get("missing_evidence", [])); recs = output.get("memory_count", 0)
+    else:
+        score = 76 if output.get("lessons_learned") else 0; missing = len(output.get("missing_evidence", [])); recs = len(output.get("improvement_recommendations", []))
     confidence = output.get("confidence") or output.get("confidence_level") or ("substantial" if score >= 75 else "developing")
     priority = output.get("overall_priority", {}).get("label") or ("high" if score >= 75 else "medium" if score >= 50 else "low")
     return {"score": score, "confidence": confidence, "missing_count": missing, "priority": priority, "recommendations": recs, "opportunity_count": len(output.get("opportunities", []))}
@@ -135,6 +148,9 @@ def run_full_intelligence_diagnostic() -> dict[str, Any]:
             ("Predictive Intelligence", lambda: _predictive(outputs["Opportunity Intelligence"])),
             ("Decision Support", lambda: generate_decision_support(db, society_id=ids["society_id"], include_debug=True)),
             ("Execution Planning", lambda: generate_execution_plans(db, society_id=ids["society_id"], include_debug=True)),
+            ("Execution Intelligence", lambda: generate_execution_intelligence(db, society_id=ids["society_id"], include_debug=True)),
+            ("Institutional Memory", lambda: generate_institutional_memory(db, society_id=ids["society_id"], include_debug=True)),
+            ("Institutional Learning", lambda: generate_institutional_learning(db, society_id=ids["society_id"], include_debug=True)),
         ]
         layers = []
         for name, fn in calls:
@@ -158,12 +174,12 @@ def _root_cause(layers: list[dict[str, Any]]) -> list[str]:
     changed = [l for l in layers if l["status"] != "PASS"]
     if not changed: return ["All layers matched the deterministic baseline; no root cause chain needed."]
     first = changed[0]
-    return [f"{first['layer']} changed first in the ordered stack.", f"{first['layer']} changed because: {first['likely_cause']}", "Downstream changes should be reviewed in dependency order: Member → Society → Institution → Opportunity → Predictive → Decision → Execution."]
+    return [f"{first['layer']} changed first in the ordered stack.", f"{first['layer']} changed because: {first['likely_cause']}", "Downstream changes should be reviewed in dependency order: Member → Society → Institution → Opportunity → Predictive → Decision → Execution Planning → Execution Intelligence → Institutional Memory → Institutional Learning."]
 
 
 def compare_diagnostics(current: dict[str, Any] | None = None, previous: dict[str, Any] | None = None) -> dict[str, Any]:
     if previous is None: return {"available": False, "explanation": "No previous diagnostic is available yet."}
-    return {"available": True, "health_trend": (current or {}).get("overall_health_percent", 0) - previous.get("overall_health_percent", 0), "performance_trend_ms": (current or {}).get("performance", {}).get("total_execution_time_ms", 0) - previous.get("performance", {}).get("total_execution_time_ms", 0), "regression_trend": (current or {}).get("regression_count", 0) - previous.get("regression_count", 0), "execution_time_trend": "tracked", "confidence_trend": "tracked per layer", "number_of_recommendations": sum(l["actual"].get("recommendations", 0) for l in (current or {}).get("layers", [])), "prediction_changes": "compare Predictive Intelligence layer debug payload", "decision_changes": "compare Decision Support recommendations", "execution_plan_changes": "compare Execution Planning plan summaries"}
+    return {"available": True, "health_trend": (current or {}).get("overall_health_percent", 0) - previous.get("overall_health_percent", 0), "performance_trend_ms": (current or {}).get("performance", {}).get("total_execution_time_ms", 0) - previous.get("performance", {}).get("total_execution_time_ms", 0), "regression_trend": (current or {}).get("regression_count", 0) - previous.get("regression_count", 0), "execution_time_trend": "tracked", "confidence_trend": "tracked per layer", "number_of_recommendations": sum(l["actual"].get("recommendations", 0) for l in (current or {}).get("layers", [])), "prediction_changes": "compare Predictive Intelligence layer debug payload", "decision_changes": "compare Decision Support recommendations", "execution_plan_changes": "compare Execution Planning plan summaries", "execution_intelligence_changes": "compare planned-vs-actual analytics", "institutional_memory_changes": "compare historical records", "institutional_learning_changes": "compare learned themes and best practices"}
 
 
 def diagnostic_history() -> list[dict[str, Any]]:

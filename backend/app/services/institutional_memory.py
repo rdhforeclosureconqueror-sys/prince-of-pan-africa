@@ -1,0 +1,28 @@
+from __future__ import annotations
+from typing import Any
+from sqlalchemy.orm import Session
+from app.models import Society, SocietyBlueprintAudit, SocietyContainer, SocietyRoleAppointmentHistory, SocietyRoleOpening, SocietyTrustTask
+
+READ_ONLY_WARNING = "Read-only Institutional Memory: exposes historical records only and never creates memory records automatically."
+
+
+def generate_institutional_memory(db: Session, *, society_id: int | None = None, include_debug: bool = False, search: str | None = None) -> dict[str, Any]:
+    societies = db.query(Society).filter(Society.id == society_id).all() if society_id else db.query(Society).order_by(Society.id).all()
+    if society_id is not None and not societies: raise ValueError("Society not found")
+    ids = [s.id for s in societies]
+    memories: list[dict[str, Any]] = []
+    for s in societies:
+        memories.append({"id": f"institution-creation-{s.id}", "type": "institution creation", "timestamp": s.created_at.isoformat(), "reason": s.first_focus or s.description or "Society formation record", "decision_summary": f"Created {s.name} as {s.type}.", "supporting_evidence": [s.community_served or s.description or "Society record"], "expected_outcome": s.first_focus or "Build institutional capacity", "actual_outcome": s.lifecycle_stage, "linked_institutions": [s.id], "linked_opportunities": [], "linked_execution_plans": [], "linked_members": [s.founder_user_id] if s.founder_user_id else [], "related_memories": []})
+    for c in db.query(SocietyContainer).filter(SocietyContainer.society_id.in_(ids)).all() if ids else []:
+        memories.append({"id": f"milestone-container-{c.id}", "type": "major milestone", "timestamp": c.created_at.isoformat(), "reason": c.description or c.source_guide, "decision_summary": f"Launched or tracked {c.title}.", "supporting_evidence": [f"Status {c.status}", f"Percent complete {c.percent_complete}"], "expected_outcome": c.title, "actual_outcome": f"{c.percent_complete}% complete", "linked_institutions": [c.society_id], "linked_opportunities": [], "linked_execution_plans": [c.id], "linked_members": [c.created_by] if c.created_by else [], "related_memories": []})
+    for a in db.query(SocietyRoleAppointmentHistory).filter(SocietyRoleAppointmentHistory.society_id.in_(ids)).all() if ids else []:
+        memories.append({"id": f"leadership-appointment-{a.id}", "type": "leadership appointment", "timestamp": a.created_at.isoformat(), "reason": a.reason, "decision_summary": f"Appointed candidate {a.candidate_member_id} to {a.role_title}.", "supporting_evidence": a.supporting_evidence or [], "expected_outcome": a.training_status, "actual_outcome": a.training_status, "linked_institutions": [a.society_id], "linked_opportunities": [a.role_opening_id], "linked_execution_plans": [], "linked_members": [a.candidate_member_id], "related_memories": []})
+    for o in db.query(SocietyRoleOpening).filter(SocietyRoleOpening.society_id.in_(ids)).all() if ids else []:
+        memories.append({"id": f"governance-change-{o.id}", "type": "governance change", "timestamp": o.created_at.isoformat(), "reason": o.purpose, "decision_summary": f"Opened governance role: {o.title}.", "supporting_evidence": o.responsibilities or o.required_behaviors or [], "expected_outcome": "Fill role through human review", "actual_outcome": o.status, "linked_institutions": [o.society_id], "linked_opportunities": [o.id], "linked_execution_plans": [], "linked_members": [o.created_by] if o.created_by else [], "related_memories": []})
+    for audit in db.query(SocietyBlueprintAudit).filter(SocietyBlueprintAudit.society_id.in_(ids)).all() if ids else []:
+        memories.append({"id": f"policy-change-{audit.id}", "type": "policy change", "timestamp": audit.created_at.isoformat(), "reason": audit.notes or audit.recommended_next_step, "decision_summary": "Recorded society blueprint audit.", "supporting_evidence": [f"Strongest {audit.strongest_area}", f"Weakest {audit.weakest_area}"], "expected_outcome": audit.recommended_next_step, "actual_outcome": f"Trust {audit.trust_score}/5", "linked_institutions": [audit.society_id], "linked_opportunities": [], "linked_execution_plans": [], "linked_members": [], "related_memories": []})
+    for task in db.query(SocietyTrustTask).filter(SocietyTrustTask.society_id.in_(ids), SocietyTrustTask.status == "completed").limit(20).all() if ids else []:
+        memories.append({"id": f"historical-execution-outcome-{task.id}", "type": "historical execution outcome", "timestamp": (task.completed_at or task.updated_at).isoformat(), "reason": task.description or task.linked_handbook_chapter, "decision_summary": f"Completed execution task: {task.title}.", "supporting_evidence": [task.completion_notes or task.source_reader_path or "Completed Trust Board task"], "expected_outcome": task.linked_container_step or task.title, "actual_outcome": task.status, "linked_institutions": [task.society_id], "linked_opportunities": [], "linked_execution_plans": [task.container_id], "linked_members": [task.owner_member_id] if task.owner_member_id else [], "related_memories": []})
+    if search:
+        q = search.lower(); memories = [m for m in memories if q in str(m).lower()]
+    return {"ok": True, "layer": "Institutional Memory", "version": "v1", "read_only": True, "warnings": [READ_ONLY_WARNING], "memories": memories, "memory_count": len(memories), "search": search or "", "confidence": "substantial" if memories else "limited", "evidence": [f"{len(memories)} historical records surfaced"], "missing_evidence": [] if memories else ["Historical society records"], "assumptions": ["Existing operational records are treated as institutional memory sources."], "debug": {"society_ids": ids} if include_debug else None}
