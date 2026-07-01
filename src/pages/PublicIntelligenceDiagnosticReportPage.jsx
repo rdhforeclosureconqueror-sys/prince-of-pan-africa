@@ -69,28 +69,29 @@ export default function PublicIntelligenceDiagnosticReportPage() {
   const health = safeObject(report.overall_health);
   const regressionSummary = safeObject(report.regression_summary);
   const noWriteConfirmation = safeObject(report.no_write_confirmation);
-  const performanceTimings = safeObject(report.performance_timings);
+  const dependencyImpact = safeObject(report.dependency_impact);
+  const dependencyChain = asArray(dependencyImpact.chain);
 
   return (
     <main className="cosmic-section intelligence-health-monitor" aria-labelledby="public-intel-report-title">
       <p className="section-kicker">Public · Read-Only · Sanitized Fixture Diagnostics</p>
       <h1 id="public-intel-report-title">Intelligence Diagnostic Report</h1>
-      <p>{safeText(report.source_note, "This public report is sanitized and read-only.")}</p>
+      <p>{safeText(report.overall_summary, "Overall summary unavailable.")}</p><p>{safeText(report.source_note, "This public report is sanitized and read-only.")}</p>
       <div className="dashboard-grid">
         <article className="stat-card"><h2>{health.percent ?? "—"}%</h2><p>Overall health</p></article>
         <article className="stat-card"><h2>{regressionSummary.count ?? 0}</h2><p>Regressions</p></article>
         <article className="stat-card"><h2>{asArray(report.failed_layers).length}</h2><p>Failed layers</p></article>
         <article className="stat-card"><h2>{asArray(report.warnings).length}</h2><p>Warnings</p></article>
       </div>
-      <section className="stat-card"><h2>Read-only boundary</h2><pre className="data-note">{JSON.stringify(noWriteConfirmation, null, 2)}</pre></section>
+      <section className="stat-card"><h2>Read-only/no-write confirmation</h2><p>Production writes: {noWriteConfirmation.production_writes ?? 0}</p><p>Workflow execution: {noWriteConfirmation.workflow_execution ? "Yes" : "No"}</p><p>Notifications: {noWriteConfirmation.notification_count ?? 0}</p><p>Assignments: {noWriteConfirmation.assignment_count ?? 0}</p><p>Persisted intelligence outputs: {noWriteConfirmation.persistence_of_intelligence_outputs ? "Yes" : "No"}</p></section>
       <section><h2>Layer-by-layer status</h2><div className="dashboard-grid">{layers.length ? layers.map((layer, index) => {
         const expected = safeObject(layer.expected);
         const actual = safeObject(layer.actual);
-        return <article className="stat-card" key={layer.layer || `public-layer-${index}`}><h3>{safeText(layer.layer, "Unknown Layer")}</h3><p>Status: <strong>{safeText(layer.status, "UNKNOWN")}</strong></p><p>Expected score: {expected.score ?? "—"} · Actual score: {actual.score ?? "—"}</p><p>Regression: {layer.regression || "None"}</p><p>Execution time: {layer.execution_time_ms ?? "—"}ms</p><p>{safeText(layer.explanation, "Layer details are unavailable in this public report.")}</p></article>;
+        return <article className="stat-card" key={layer.layer || `public-layer-${index}`}><h3>{safeText(layer.layer, "Unknown Layer")}</h3><p>Status: <strong>{safeText(layer.status, "UNKNOWN")}</strong></p><p>Expected score: {expected.score ?? "—"} · Actual score: {actual.score ?? "—"}</p><p>Regression: {layer.regression_level || layer.regression || "None"}</p><p>Explanation: {safeText(layer.why_this_changed || layer.plain_language_reason || layer.explanation, "Layer details are unavailable in this public report.")}</p></article>;
       }) : <article className="stat-card"><h3>Layer data unavailable</h3><p>This public report did not include layer-by-layer details.</p></article>}</div></section>
       <section className="dashboard-grid">
-        <article className="stat-card"><h2>Regression Summary</h2><pre className="data-note">{JSON.stringify(regressionSummary, null, 2)}</pre></article>
-        <article className="stat-card"><h2>Performance Timings</h2><pre className="data-note">{JSON.stringify(performanceTimings, null, 2)}</pre></article>
+        <article className="stat-card"><h2>Dependency Impact</h2>{dependencyChain.length ? dependencyChain.map((item) => <p key={item.layer}><strong>{safeText(item.layer, "Unknown Layer")}</strong>: {safeText(item.state, "stable")}</p>) : <p>Dependency impact unavailable.</p>}</article>
+        <article className="stat-card"><h2>Regression Summary</h2><p>Regression count: {regressionSummary.count ?? 0}</p>{asArray(regressionSummary.layers).map((item) => <p key={item.layer}>{safeText(item.layer)}: {safeText(item.regression, "None")}</p>)}</article>
         <article className="stat-card"><h2>Fixture</h2><p>{safeText(report.fixture_name)} · {safeText(report.fixture_version)}</p><p>Generated: {safeText(report.generated_at)}</p><p>Expires: {safeText(report.expires_at)}</p></article>
       </section>
     </main>

@@ -54,6 +54,8 @@ export const normalizePublicReportResponse = (payload, origin = window.location.
   return { publicReportState, publicReportUrl: "", error: PUBLIC_REPORT_MISSING_URL_MESSAGE };
 };
 
+const chainLabel = { first_changed: "First changed layer", downstream_affected: "Downstream affected", stable: "Stable layer" };
+
 const statusIcon = (layer) => {
   if (layer?.status === "FAIL") return "🔴 Failure";
   if (layer?.regression) return "🟠 Regression";
@@ -152,6 +154,9 @@ export default function IntelligenceHealthMonitor() {
   const result = safeObject(diagnosticRunState || history[0]);
   const layers = asArray(result?.layers).filter((layer) => layer && typeof layer === "object");
   const healthTrend = useMemo(() => safeObject(result?.comparison_to_previous || result?.health_trend), [result]);
+  const dependencyImpact = safeObject(result?.dependency_impact);
+  const dependencyChain = asArray(dependencyImpact.chain);
+  const recommendedNextActions = asArray(result?.recommended_next_actions);
   const actionDisabled = running || generatingReport;
   const safePublicReportUrl = isSafePublicReportHref(publicReportUrl) ? publicReportUrl : "";
 
@@ -168,6 +173,8 @@ export default function IntelligenceHealthMonitor() {
       {error && <article className="stat-card admin-error"><h3>Diagnostics unavailable</h3><p>⚠️ {error}</p></article>}
       {publicReportError && <article className="stat-card admin-error"><h3>Public report could not be generated</h3><p>⚠️ {publicReportError}</p><button type="button" onClick={clearPublicReport}>Clear Public Report Link</button></article>}
       {historyError && !layers.length && <article className="stat-card"><h3>Last run could not be loaded</h3><p>Diagnostics unavailable</p></article>}
+
+      <article className="stat-card"><h3>Executive Summary</h3><p>{result?.executive_summary || result?.overall_summary || "Run a diagnostic to generate an admin-readable AI Systems Dashboard summary."}</p></article>
 
       <div className="dashboard-grid">
         <div className="stat-card"><h3>Overall Health</h3><h2>{(result?.overall_health_percent ?? result?.overall_health?.percent) ?? "—"}%</h2></div>
@@ -194,18 +201,21 @@ export default function IntelligenceHealthMonitor() {
               <p>Execution Time: <strong>{layer.execution_time_ms ?? "—"}ms</strong></p>
               <p>Version: <strong>v1</strong></p>
               <p>Diagnostics: <strong>{layer.explanation || "Diagnostics unavailable"}</strong></p>
-              <p>Regression: <strong>{layer.regression || "None"}</strong></p>
-              <p>Expected: {expected.score ?? "—"} · Actual: {actual.score ?? "—"}</p>
-              <p>Confidence: {confidence.expected ?? "—"} → {confidence.actual ?? "—"}</p>
+              <p>Regression Level: <strong>{layer.regression_level || layer.regression || "None"}</strong></p>
+              <p>Expected Score: {expected.score ?? "—"} · Actual Score: {actual.score ?? "—"} · Score Delta: {layer.score_delta ?? safeObject(layer.difference_summary).score ?? "—"}</p>
+              <p>Confidence Before/After: {confidence.expected ?? "—"} → {confidence.actual ?? "—"}</p>
               <p>Missing Evidence Δ: {layer.missing_evidence_difference ?? "—"}</p>
-              <p>Priority: {priority.expected ?? "—"} → {priority.actual ?? "—"}</p>
-              <p>{layer.explanation || "Diagnostics unavailable"}</p>
+              <p>Priority Before/After: {priority.expected ?? "—"} → {priority.actual ?? "—"}</p>
+              <p><strong>Why this changed:</strong> {layer.why_this_changed || layer.plain_language_reason || layer.explanation || "Diagnostics unavailable"}</p>
+              <p><strong>Suggested admin action:</strong> {layer.suggested_admin_action || "Review scoring logic and re-run diagnostics before updating baselines."}</p>
             </article>
           );
         }) : <article className="stat-card"><h3>Diagnostics unavailable</h3><p>Layer data is missing or could not be loaded.</p></article>}
       </div>
 
       <div className="dashboard-grid">
+        <article className="stat-card"><h3>Dependency Impact View</h3><p>Member → Society → Institution → Opportunity → Predictive → Decision Support → Execution Planning → Execution Intelligence → Institutional Memory → Institutional Learning</p>{dependencyChain.length ? dependencyChain.map((item) => <p key={item.layer}><strong>{item.layer}</strong>: {chainLabel[item.state] || item.state || "Stable layer"}</p>) : <p>Dependency impact unavailable until a diagnostic runs.</p>}</article>
+        <article className="stat-card"><h3>Recommended Next Actions</h3>{recommendedNextActions.length ? <ul>{recommendedNextActions.map((action) => <li key={action}>{action}</li>)}</ul> : <ul><li>Review scoring logic</li><li>Review expected baselines</li><li>Do not update baselines until drift is explained</li><li>Re-run diagnostic after changes</li><li>Generate public report only after the monitor is stable</li></ul>}</article>
         <article className="stat-card"><h3>Regression Summary</h3>{layers.filter((l) => l.regression).length ? layers.filter((l) => l.regression).map((l) => <p key={l.layer}>{l.layer}: {l.regression} ({safeObject(l.difference_summary).score ?? "—"})</p>) : <p>None</p>}</article>
         <article className="stat-card"><h3>Critical Failures</h3>{asArray(result?.critical_failures).length ? asArray(result.critical_failures).map((l, i) => <p key={l.layer || i}>{l.layer || "Unknown Layer"}: {l.explanation || "Diagnostics unavailable"}</p>) : <p>None</p>}</article>
         <article className="stat-card"><h3>Performance Metrics</h3><pre className="data-note">{JSON.stringify(result?.performance || result?.performance_timings || {}, null, 2)}</pre></article>
