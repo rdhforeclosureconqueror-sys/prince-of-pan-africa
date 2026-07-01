@@ -40,3 +40,6 @@ export const getOpportunityIntelligence = (id, debug = false) => get(`/society-b
 export const getDecisionSupport = (id, debug = false) => get(`/society-builder/decision-support${id ? `?society_id=${id}${debug ? "&debug=true" : ""}` : `${debug ? "?debug=true" : ""}`}`);
 
 export const getExecutionPlans = (id, debug = false) => get(`/society-builder/execution-plans${id ? `?society_id=${id}${debug ? "&debug=true" : ""}` : `${debug ? "?debug=true" : ""}`}`);
+
+export const runIntelligenceHealthDiagnostic = () => post("/admin/intelligence-health/run", {});
+export const getIntelligenceHealthHistory = () => get("/admin/intelligence-health/history");

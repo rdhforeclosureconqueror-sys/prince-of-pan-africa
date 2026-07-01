@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies.auth import require_permission
+from app.services.intelligence_health import diagnostic_history, run_full_intelligence_diagnostic
 from app.models import (
     ActivityLog,
     Audiobook,
@@ -178,3 +179,13 @@ def admin_activity_stream_compat(
 @legacy_router.get("/holistic/overview")
 def admin_holistic_overview_compat(_: None = Depends(require_permission("admin:read_dashboard"))):
     return {"ok": True, "holistic": []}
+
+
+@legacy_router.post("/intelligence-health/run")
+def run_intelligence_health_diagnostic(_: None = Depends(require_permission("admin:read_dashboard"))):
+    return run_full_intelligence_diagnostic()
+
+
+@legacy_router.get("/intelligence-health/history")
+def get_intelligence_health_history(_: None = Depends(require_permission("admin:read_dashboard"))):
+    return {"ok": True, "history": diagnostic_history()}
