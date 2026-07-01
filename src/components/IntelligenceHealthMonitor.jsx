@@ -3,6 +3,7 @@ import { generatePublicIntelligenceDiagnosticReport, getIntelligenceHealthHistor
 
 const DIAGNOSTIC_TIMEOUT_MS = 30000;
 const DEBUG_ERRORS = import.meta.env?.DEV || import.meta.env?.VITE_ADMIN_DEBUG === "true";
+const PUBLIC_REPORT_MISSING_URL_MESSAGE = "Public report was generated but no valid public URL was returned.";
 
 const withTimeout = (promise, message = "Diagnostic request timed out. Please try again.") => {
   let timer;
@@ -13,10 +14,32 @@ const withTimeout = (promise, message = "Diagnostic request timed out. Please tr
 };
 
 const asArray = (value) => (Array.isArray(value) ? value : []);
-const safeObject = (value) => (value && typeof value === "object" ? value : {});
+const safeObject = (value) => (value && typeof value === "object" && !Array.isArray(value) ? value : {});
 const adminErrorMessage = (fallback, err) => `${fallback}${DEBUG_ERRORS && err?.message ? ` (${err.message})` : ""}`;
 const normalizeHistory = (payload) => asArray(payload?.history).filter((run) => run && typeof run === "object");
 const normalizeReport = (payload) => safeObject(payload?.report || payload?.public_report || payload);
+const isNonEmptyString = (value) => typeof value === "string" && value.trim().length > 0;
+const publicReportPathFromToken = (token) => `/public/intelligence-diagnostics/${encodeURIComponent(token.trim())}`;
+
+export const normalizePublicReportResponse = (payload, origin = window.location.origin) => {
+  const publicReportState = normalizeReport(payload);
+  const publicUrl = publicReportState.public_url;
+  const token = publicReportState.token;
+
+  if (isNonEmptyString(publicUrl)) {
+    try {
+      return { publicReportState, publicReportUrl: new URL(publicUrl.trim(), origin).href, error: "" };
+    } catch (_err) {
+      return { publicReportState, publicReportUrl: "", error: PUBLIC_REPORT_MISSING_URL_MESSAGE };
+    }
+  }
+
+  if (isNonEmptyString(token)) {
+    return { publicReportState, publicReportUrl: new URL(publicReportPathFromToken(token), origin).href, error: "" };
+  }
+
+  return { publicReportState, publicReportUrl: "", error: PUBLIC_REPORT_MISSING_URL_MESSAGE };
+};
 
 const statusIcon = (layer) => {
   if (layer?.status === "FAIL") return "🔴 Failure";
@@ -28,13 +51,20 @@ const statusIcon = (layer) => {
 export default function IntelligenceHealthMonitor() {
   const mountedRef = useRef(true);
   const [running, setRunning] = useState(false);
-  const [diagnostic, setDiagnostic] = useState(null);
+  const [diagnosticRunState, setDiagnosticRunState] = useState(null);
   const [history, setHistory] = useState([]);
   const [error, setError] = useState("");
   const [historyError, setHistoryError] = useState("");
-  const [reportError, setReportError] = useState("");
-  const [publicReport, setPublicReport] = useState(null);
+  const [publicReportError, setPublicReportError] = useState("");
+  const [publicReportState, setPublicReportState] = useState(null);
+  const [publicReportUrl, setPublicReportUrl] = useState("");
   const [generatingReport, setGeneratingReport] = useState(false);
+
+  const clearPublicReport = () => {
+    setPublicReportState(null);
+    setPublicReportUrl("");
+    setPublicReportError("");
+  };
 
   const loadHistory = useCallback(async () => {
     try {
@@ -60,11 +90,11 @@ export default function IntelligenceHealthMonitor() {
 
   const run = async () => {
     if (running || generatingReport) return;
-    setRunning(true); setError(""); setReportError("");
+    setRunning(true); setError(""); setPublicReportError("");
     try {
       const res = await withTimeout(runIntelligenceHealthDiagnostic());
       if (!mountedRef.current) return;
-      setDiagnostic(safeObject(res));
+      setDiagnosticRunState(safeObject(res));
       await loadHistory();
     } catch (err) {
       if (mountedRef.current) setError(adminErrorMessage("Diagnostics unavailable", err));
@@ -75,24 +105,24 @@ export default function IntelligenceHealthMonitor() {
 
   const generateReport = async () => {
     if (running || generatingReport) return;
-    setGeneratingReport(true); setError(""); setReportError("");
+    setGeneratingReport(true); setError(""); setPublicReportError("");
     try {
       const res = await withTimeout(generatePublicIntelligenceDiagnosticReport(), "Public report generation timed out.");
       if (!mountedRef.current) return;
-      const report = normalizeReport(res);
-      if (!report?.token) throw new Error("Public report response did not include a token.");
-      setPublicReport(report);
+      const normalized = normalizePublicReportResponse(res);
+      setPublicReportState(normalized.publicReportState);
+      setPublicReportUrl(normalized.publicReportUrl);
+      if (normalized.error) setPublicReportError(normalized.error);
       await loadHistory();
     } catch (err) {
-      if (mountedRef.current) setReportError(adminErrorMessage("Public report could not be generated", err));
+      if (mountedRef.current) setPublicReportError(adminErrorMessage("Public report could not be generated", err));
     } finally {
       if (mountedRef.current) setGeneratingReport(false);
     }
   };
 
-  const result = safeObject(diagnostic || history[0]);
+  const result = safeObject(diagnosticRunState || history[0]);
   const layers = asArray(result?.layers).filter((layer) => layer && typeof layer === "object");
-  const publicUrl = publicReport?.token ? `${window.location.origin}/public/intelligence-diagnostics/${publicReport.token}` : "";
   const healthTrend = useMemo(() => safeObject(result?.comparison_to_previous || result?.health_trend), [result]);
   const actionDisabled = running || generatingReport;
 
@@ -105,9 +135,9 @@ export default function IntelligenceHealthMonitor() {
         <button className="hero-btn" type="button" onClick={run} disabled={actionDisabled}>{running ? "Running Full Intelligence Diagnostic..." : "Run Full Intelligence Diagnostic"}</button>
         <button className="hero-btn secondary" type="button" onClick={generateReport} disabled={actionDisabled}>{generatingReport ? "Generating Public Report..." : "Generate Public Diagnostic Report"}</button>
       </div>
-      {publicUrl && <article className="stat-card"><h3>Public Diagnostic Report</h3><p>This URL is public, read-only, sanitized, fixture-only, and expires at {publicReport?.expires_at || "the configured expiration time"}.</p><input readOnly value={publicUrl} onFocus={(event) => event.target.select()} aria-label="Public diagnostic report URL" /><button type="button" onClick={() => navigator.clipboard?.writeText(publicUrl)}>Copy public URL</button></article>}
+      {publicReportUrl && <article className="stat-card"><h3>Public Diagnostic Report</h3><p>This URL is public, read-only, sanitized, fixture-only, and expires at {publicReportState?.expires_at || "the configured expiration time"}.</p><input readOnly value={publicReportUrl} onFocus={(event) => event.target.select()} aria-label="Public diagnostic report URL" /><p><a href={publicReportUrl} target="_blank" rel="noopener noreferrer">Open public diagnostic report</a></p><button type="button" onClick={() => navigator.clipboard?.writeText(publicReportUrl)}>Copy public URL</button><button type="button" onClick={clearPublicReport}>Clear Public Report Link</button></article>}
       {error && <article className="stat-card admin-error"><h3>Diagnostics unavailable</h3><p>⚠️ {error}</p></article>}
-      {reportError && <article className="stat-card admin-error"><h3>Public report could not be generated</h3><p>⚠️ {reportError}</p></article>}
+      {publicReportError && <article className="stat-card admin-error"><h3>Public report could not be generated</h3><p>⚠️ {publicReportError}</p><button type="button" onClick={clearPublicReport}>Clear Public Report Link</button></article>}
       {historyError && !layers.length && <article className="stat-card"><h3>Last run could not be loaded</h3><p>Diagnostics unavailable</p></article>}
 
       <div className="dashboard-grid">
@@ -158,8 +188,7 @@ export default function IntelligenceHealthMonitor() {
 
       <h3>Compare Previous Run</h3>
       <pre className="data-note">{JSON.stringify(healthTrend, null, 2)}</pre>
-      <h3>Debug Output</h3>
-      <pre className="data-note">{JSON.stringify(layers.map(({ layer, debug_payload }) => ({ layer, debug_payload })), null, 2)}</pre>
+      {DEBUG_ERRORS && <><h3>Debug Output</h3><pre className="data-note">{JSON.stringify(layers.map(({ layer, debug_payload }) => ({ layer, debug_payload })), null, 2)}</pre><h3>Public Report Debug Output</h3><pre className="data-note">{JSON.stringify({ publicReportState, publicReportError }, null, 2)}</pre></>}
     </section>
   );
 }
