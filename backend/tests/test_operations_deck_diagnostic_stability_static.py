@@ -150,10 +150,12 @@ def test_public_route_registered_without_admin_wrapper():
 
 def test_public_page_handles_invalid_expired_missing_and_malformed_reports_safely():
     assert "PUBLIC_REPORT_TIMEOUT_MS" in PUBLIC_PAGE
-    assert "withTimeout(getPublicIntelligenceDiagnosticReport(token))" in PUBLIC_PAGE
+    assert "withTimeout(Promise.all" in PUBLIC_PAGE
+    assert "getPublicIntelligenceDiagnosticReport(token).catch" in PUBLIC_PAGE
+    assert "fetchMarkdown(reportUrls.markdown).catch" in PUBLIC_PAGE
     assert "missing a token" in PUBLIC_PAGE
-    assert "has expired" in PUBLIC_PAGE
-    assert "invalid or no longer available" in PUBLIC_PAGE
+    assert "Report expired" in PUBLIC_PAGE
+    assert "Invalid token" in PUBLIC_PAGE
     assert "malformed or empty" in PUBLIC_PAGE
     assert "Layer data unavailable" in PUBLIC_PAGE
     assert "safeObject(layer.expected)" in PUBLIC_PAGE

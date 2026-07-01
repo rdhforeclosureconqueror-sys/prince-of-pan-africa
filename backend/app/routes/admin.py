@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies.auth import require_permission
-from app.services.intelligence_health import diagnostic_history, generate_public_diagnostic_report, get_public_diagnostic_report, public_diagnostic_error, public_report_to_markdown, run_full_intelligence_diagnostic, validate_public_report_token
+from app.services.intelligence_health import diagnostic_history, generate_public_diagnostic_report, inspect_public_diagnostic_report, public_diagnostic_error, public_report_to_markdown, run_full_intelligence_diagnostic
 from app.models import (
     ActivityLog,
     Audiobook,
@@ -202,15 +202,44 @@ def create_public_intelligence_health_report(_: None = Depends(require_permissio
 
 
 def _safe_public_report_or_error(token: str):
-    if not validate_public_report_token(token):
-        raise HTTPException(status_code=400, detail=public_diagnostic_error("Public diagnostic report token is malformed or missing.", "malformed_public_report_token"))
-    report = get_public_diagnostic_report(token)
-    if not report:
-        raise HTTPException(status_code=404, detail=public_diagnostic_error("Public diagnostic report not found.", "public_report_not_found"))
-    if report.get("expiration_status") == "expired":
-        raise HTTPException(status_code=410, detail=public_diagnostic_error("Public diagnostic report has expired.", "public_report_expired"))
-    return report
+    result = inspect_public_diagnostic_report(token)
+    status = result.get("status")
+    if status == "invalid_token":
+        raise HTTPException(status_code=400, detail=public_diagnostic_error("Invalid token", "invalid_token"))
+    if status == "not_found":
+        raise HTTPException(status_code=404, detail=public_diagnostic_error("Report not found", "report_not_found"))
+    if status == "expired":
+        raise HTTPException(status_code=410, detail=public_diagnostic_error("Report expired", "report_expired"))
+    if status == "sanitization_failed":
+        raise HTTPException(status_code=500, detail=public_diagnostic_error("Sanitization failed", "sanitization_failed"))
+    if not result.get("ok") or not result.get("report"):
+        raise HTTPException(status_code=500, detail=public_diagnostic_error("Unexpected server error", "unexpected_server_error"))
+    return result["report"]
 
+
+
+
+@legacy_router.get("/intelligence-health/public-report/health")
+def public_intelligence_health_report_health(_: None = Depends(require_permission("admin:read_dashboard"))):
+    checks = {}
+    try:
+        run = run_full_intelligence_diagnostic()
+        report = generate_public_diagnostic_report(run)
+        token = report.get("token", "")
+        checks["public_diagnostics_enabled"] = {"status": "PASS", "detail": "Public diagnostics routes are registered."}
+        checks["storage_working"] = {"status": "PASS" if report.get("storage_persisted") else "FAIL", "detail": "Report persisted to public diagnostic storage." if report.get("storage_persisted") else "Report was not persisted to public diagnostic storage."}
+        checks["token_generation_working"] = {"status": "PASS" if token else "FAIL", "detail": "Token generated." if token else "Token missing."}
+        json_result = inspect_public_diagnostic_report(token)
+        checks["json_route_working"] = {"status": "PASS" if json_result.get("ok") else "FAIL", "detail": json_result.get("status")}
+        try:
+            markdown = public_report_to_markdown(json_result.get("report") or {})
+            checks["markdown_route_working"] = {"status": "PASS" if "# Intelligence Diagnostic Report" in markdown else "FAIL", "detail": "Markdown rendered."}
+        except Exception as exc:
+            checks["markdown_route_working"] = {"status": "FAIL", "detail": str(exc)}
+        checks["react_page_can_fetch_successfully"] = {"status": "PASS" if json_result.get("ok") else "FAIL", "detail": f"React page JSON fetch target /public/intelligence-diagnostics/{token}.json returned {json_result.get('diagnostics', {}).get('final_response_status')}"}
+    except Exception as exc:
+        checks.setdefault("unexpected_server_error", {"status": "FAIL", "detail": str(exc)})
+    return {"ok": all(item["status"] == "PASS" for item in checks.values()), "checks": checks}
 
 @public_router.get("/public/intelligence-diagnostics/{token}.json")
 def get_public_intelligence_health_report_json(token: str):

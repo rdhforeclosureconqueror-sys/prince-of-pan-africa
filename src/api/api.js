@@ -41,7 +41,7 @@ export async function api(path, options = {}) {
       let msg =
         typeof data === "string"
           ? data
-          : data?.detail || data?.error || "Unknown server error";
+          : data?.detail?.error?.message || data?.detail?.message || data?.error?.message || data?.detail || data?.error || "Unknown server error";
 
       if (res.status === 422) {
         msg = "Upload failed. Check file type or missing fields.";
