@@ -20,6 +20,15 @@ const normalizeHistory = (payload) => asArray(payload?.history).filter((run) => 
 const normalizeReport = (payload) => safeObject(payload?.report || payload?.public_report || payload);
 const isNonEmptyString = (value) => typeof value === "string" && value.trim().length > 0;
 const publicReportPathFromToken = (token) => `/public/intelligence-diagnostics/${encodeURIComponent(token.trim())}`;
+const isSafePublicReportHref = (href) => {
+  if (!isNonEmptyString(href)) return false;
+  try {
+    const url = new URL(href, window.location.origin);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch (_err) {
+    return false;
+  }
+};
 
 export const normalizePublicReportResponse = (payload, origin = window.location.origin) => {
   const publicReportState = normalizeReport(payload);
@@ -28,14 +37,18 @@ export const normalizePublicReportResponse = (payload, origin = window.location.
 
   if (isNonEmptyString(publicUrl)) {
     try {
-      return { publicReportState, publicReportUrl: new URL(publicUrl.trim(), origin).href, error: "" };
+      const validatedUrl = new URL(publicUrl.trim(), origin).href;
+      if (!isSafePublicReportHref(validatedUrl)) return { publicReportState, publicReportUrl: "", error: PUBLIC_REPORT_MISSING_URL_MESSAGE };
+      return { publicReportState, publicReportUrl: validatedUrl, error: "" };
     } catch (_err) {
       return { publicReportState, publicReportUrl: "", error: PUBLIC_REPORT_MISSING_URL_MESSAGE };
     }
   }
 
   if (isNonEmptyString(token)) {
-    return { publicReportState, publicReportUrl: new URL(publicReportPathFromToken(token), origin).href, error: "" };
+    const tokenUrl = new URL(publicReportPathFromToken(token), origin).href;
+    if (!isSafePublicReportHref(tokenUrl)) return { publicReportState, publicReportUrl: "", error: PUBLIC_REPORT_MISSING_URL_MESSAGE };
+    return { publicReportState, publicReportUrl: tokenUrl, error: "" };
   }
 
   return { publicReportState, publicReportUrl: "", error: PUBLIC_REPORT_MISSING_URL_MESSAGE };
@@ -125,6 +138,7 @@ export default function IntelligenceHealthMonitor() {
   const layers = asArray(result?.layers).filter((layer) => layer && typeof layer === "object");
   const healthTrend = useMemo(() => safeObject(result?.comparison_to_previous || result?.health_trend), [result]);
   const actionDisabled = running || generatingReport;
+  const safePublicReportUrl = isSafePublicReportHref(publicReportUrl) ? publicReportUrl : "";
 
   return (
     <section className="cosmic-section intelligence-health-monitor" aria-labelledby="intelligence-health-title">
@@ -135,7 +149,7 @@ export default function IntelligenceHealthMonitor() {
         <button className="hero-btn" type="button" onClick={run} disabled={actionDisabled}>{running ? "Running Full Intelligence Diagnostic..." : "Run Full Intelligence Diagnostic"}</button>
         <button className="hero-btn secondary" type="button" onClick={generateReport} disabled={actionDisabled}>{generatingReport ? "Generating Public Report..." : "Generate Public Diagnostic Report"}</button>
       </div>
-      {publicReportUrl && <article className="stat-card"><h3>Public Diagnostic Report</h3><p>This URL is public, read-only, sanitized, fixture-only, and expires at {publicReportState?.expires_at || "the configured expiration time"}.</p><input readOnly value={publicReportUrl} onFocus={(event) => event.target.select()} aria-label="Public diagnostic report URL" /><p><a href={publicReportUrl} target="_blank" rel="noopener noreferrer">Open public diagnostic report</a></p><button type="button" onClick={() => navigator.clipboard?.writeText(publicReportUrl)}>Copy public URL</button><button type="button" onClick={clearPublicReport}>Clear Public Report Link</button></article>}
+      {safePublicReportUrl && <article className="stat-card"><h3>Public Diagnostic Report</h3><p>This URL is public, read-only, sanitized, fixture-only, and expires at {publicReportState?.expires_at || "the configured expiration time"}.</p><input readOnly value={safePublicReportUrl} onFocus={(event) => event.target.select()} aria-label="Public diagnostic report URL" /><p><a href={safePublicReportUrl} target="_blank" rel="noopener noreferrer">Open public diagnostic report</a></p><button type="button" onClick={() => navigator.clipboard?.writeText(safePublicReportUrl)}>Copy public URL</button><button type="button" onClick={clearPublicReport}>Clear Public Report Link</button></article>}
       {error && <article className="stat-card admin-error"><h3>Diagnostics unavailable</h3><p>⚠️ {error}</p></article>}
       {publicReportError && <article className="stat-card admin-error"><h3>Public report could not be generated</h3><p>⚠️ {publicReportError}</p><button type="button" onClick={clearPublicReport}>Clear Public Report Link</button></article>}
       {historyError && !layers.length && <article className="stat-card"><h3>Last run could not be loaded</h3><p>Diagnostics unavailable</p></article>}
