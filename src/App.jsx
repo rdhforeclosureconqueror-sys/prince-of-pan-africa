@@ -39,6 +39,7 @@ import SocietyIntelligenceDashboardPage from "./pages/SocietyIntelligenceDashboa
 import OpportunityIntelligencePage from "./pages/OpportunityIntelligencePage";
 import DecisionSupportPage from "./pages/DecisionSupportPage";
 import ExecutionPlanningPage from "./pages/ExecutionPlanningPage";
+import IntelligenceLoopPage from "./pages/IntelligenceLoopPage";
 import First100DaysChapterReaderPage from "./pages/First100DaysChapterReaderPage";
 import MutualAidAdminPlanningPage from "./pages/MutualAidAdminPlanningPage";
 import MutualAidPilotReadinessPage from "./pages/MutualAidPilotReadinessPage";
@@ -472,6 +473,9 @@ function AppRoutes({ user, rbac, isAdmin, canAccessOrganizer, authChecked, refre
         <Route path="/societies/:societyId/opportunities" element={<SocietyBuilderRoute authChecked={authChecked} user={user} rbac={rbac}><OpportunityIntelligencePage user={user} rbac={rbac} /></SocietyBuilderRoute>} />
         <Route path="/societies/:societyId/decision-support" element={<SocietyBuilderRoute authChecked={authChecked} user={user} rbac={rbac}><DecisionSupportPage user={user} rbac={rbac} /></SocietyBuilderRoute>} />
         <Route path="/societies/:societyId/execution-plans" element={<SocietyBuilderRoute authChecked={authChecked} user={user} rbac={rbac}><ExecutionPlanningPage user={user} rbac={rbac} /></SocietyBuilderRoute>} />
+        <Route path="/societies/:societyId/execution-intelligence" element={<SocietyBuilderRoute authChecked={authChecked} user={user} rbac={rbac}><IntelligenceLoopPage user={user} rbac={rbac} layer="execution" /></SocietyBuilderRoute>} />
+        <Route path="/societies/:societyId/institutional-memory" element={<SocietyBuilderRoute authChecked={authChecked} user={user} rbac={rbac}><IntelligenceLoopPage user={user} rbac={rbac} layer="memory" /></SocietyBuilderRoute>} />
+        <Route path="/societies/:societyId/institutional-learning" element={<SocietyBuilderRoute authChecked={authChecked} user={user} rbac={rbac}><IntelligenceLoopPage user={user} rbac={rbac} layer="learning" /></SocietyBuilderRoute>} />
         <Route path="/societies/:societyId/containers/first-100-days/chapter/:chapterId" element={<SocietyBuilderRoute authChecked={authChecked} user={user} rbac={rbac}><First100DaysChapterReaderPage /></SocietyBuilderRoute>} />
         <Route path="/societies/:societyId" element={<SocietyBuilderRoute authChecked={authChecked} user={user} rbac={rbac}><SocietyHomePage /></SocietyBuilderRoute>} />
         <Route path="/admin/societies/chapters" element={<AdminSocietyBuilderRoute authChecked={authChecked} user={user} rbac={rbac} isAdmin={isAdmin}><SocietyChapterAdminPage /></AdminSocietyBuilderRoute>} />
