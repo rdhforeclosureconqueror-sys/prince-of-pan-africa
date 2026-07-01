@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import json
+import logging
+import os
+from pathlib import Path
 import re
 import secrets
 import time
@@ -50,6 +54,8 @@ EXPECTED_BASELINE = {
 _DIAGNOSTIC_HISTORY: list[dict[str, Any]] = []
 _PUBLIC_DIAGNOSTIC_REPORTS: dict[str, dict[str, Any]] = {}
 PUBLIC_REPORT_TTL_DAYS = 14
+PUBLIC_REPORT_STORAGE_DIR = Path(os.getenv("PUBLIC_DIAGNOSTIC_REPORT_STORAGE_DIR", os.getenv("PUBLIC_REPORT_STORAGE_DIR", "/var/data/public-intelligence-diagnostics")))
+logger = logging.getLogger("mufasa-public-diagnostics")
 PUBLIC_REPORT_TOKEN_PATTERN = re.compile(r"^[A-Za-z0-9_-]{32,128}$")
 FIXTURE_NAME = "intelligence-health-fixture"
 FIXTURE_VERSION = "v1"
@@ -379,10 +385,48 @@ def sanitize_diagnostic_for_public_report(run: dict[str, Any]) -> dict[str, Any]
     }
 
 
+def _is_development_environment() -> bool:
+    return os.getenv("ENVIRONMENT", "development").strip().lower() in {"", "dev", "development", "local", "test"}
+
+
+def _public_report_path(token: str) -> Path:
+    return PUBLIC_REPORT_STORAGE_DIR / f"{token}.json"
+
+
+def _persist_public_diagnostic_report(report: dict[str, Any]) -> bool:
+    try:
+        PUBLIC_REPORT_STORAGE_DIR.mkdir(parents=True, exist_ok=True)
+        _public_report_path(report["token"]).write_text(json.dumps(report, indent=2, sort_keys=True), encoding="utf-8")
+        return True
+    except Exception as exc:
+        logger.exception("Failed to persist public diagnostic report token=%s", report.get("token"))
+        report["storage_error"] = str(exc)
+        return False
+
+
+def _load_public_diagnostic_report(token: str) -> tuple[dict[str, Any] | None, str]:
+    memory_report = _PUBLIC_DIAGNOSTIC_REPORTS.get(token)
+    if memory_report:
+        return deepcopy(memory_report), "memory"
+    try:
+        path = _public_report_path(token)
+        if not path.exists():
+            return None, "missing"
+        loaded = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(loaded, dict):
+            _PUBLIC_DIAGNOSTIC_REPORTS[token] = loaded
+            return deepcopy(loaded), "disk"
+        return None, "malformed"
+    except Exception:
+        logger.exception("Failed to load public diagnostic report token=%s", token)
+        return None, "storage_error"
+
+
 def generate_public_diagnostic_report(run: dict[str, Any]) -> dict[str, Any]:
     token = secrets.token_urlsafe(32)
     report = sanitize_diagnostic_for_public_report(run) | {"token": token}
     _PUBLIC_DIAGNOSTIC_REPORTS[token] = report
+    report["storage_persisted"] = _persist_public_diagnostic_report(report)
     return report
 
 
@@ -395,19 +439,47 @@ def validate_public_report_token(token: str | None) -> bool:
 
 
 def get_public_diagnostic_report(token: str) -> dict[str, Any] | None:
-    if not validate_public_report_token(token):
-        return None
-    report = _PUBLIC_DIAGNOSTIC_REPORTS.get(token)
+    result = inspect_public_diagnostic_report(token)
+    return result.get("report") if result.get("ok") or result.get("status") == "expired" else None
+
+
+def inspect_public_diagnostic_report(token: str) -> dict[str, Any]:
+    diagnostics = {"requested_token": token, "token_valid": validate_public_report_token(token), "report_lookup_result": "not_started", "storage_lookup_result": "not_started", "expiration_check": "not_started", "sanitization_result": "not_started", "final_response_status": 500}
+    if not diagnostics["token_valid"]:
+        diagnostics.update({"report_lookup_result": "invalid_token", "final_response_status": 400})
+        _log_public_diagnostic_lookup(diagnostics)
+        return {"ok": False, "status": "invalid_token", "diagnostics": diagnostics}
+    report, source = _load_public_diagnostic_report(token)
+    diagnostics.update({"report_lookup_result": "found" if report else "missing", "storage_lookup_result": source})
     if not report:
-        return None
-    expires_at = datetime.fromisoformat(report["expires_at"])
+        diagnostics.update({"expiration_check": "skipped", "sanitization_result": "skipped", "final_response_status": 404})
+        _log_public_diagnostic_lookup(diagnostics)
+        return {"ok": False, "status": "not_found", "diagnostics": diagnostics}
+    try:
+        expires_at = datetime.fromisoformat(report["expires_at"])
+    except Exception:
+        diagnostics.update({"expiration_check": "invalid_expiration", "final_response_status": 500})
+        _log_public_diagnostic_lookup(diagnostics)
+        return {"ok": False, "status": "server_error", "diagnostics": diagnostics}
     if expires_at < datetime.utcnow():
         expired = deepcopy(report) | {"status": "expired", "expiration_status": "expired"}
         _PUBLIC_DIAGNOSTIC_REPORTS.pop(token, None)
-        return expired
+        try: _public_report_path(token).unlink(missing_ok=True)
+        except Exception: pass
+        diagnostics.update({"expiration_check": "expired", "sanitization_result": "skipped", "final_response_status": 410})
+        _log_public_diagnostic_lookup(diagnostics)
+        return {"ok": False, "status": "expired", "report": expired, "diagnostics": diagnostics}
     active = deepcopy(report)
     active["expiration_status"] = "active"
-    return active
+    forbidden = any(key in str(active).lower() for key in ("password_hash", "debug_payload", "diagnostic-admin@example.test"))
+    diagnostics.update({"expiration_check": "active", "sanitization_result": "failed" if forbidden else "passed", "final_response_status": 500 if forbidden else 200})
+    _log_public_diagnostic_lookup(diagnostics)
+    return {"ok": not forbidden, "status": "sanitization_failed" if forbidden else "available", "report": None if forbidden else active, "diagnostics": diagnostics}
+
+
+def _log_public_diagnostic_lookup(diagnostics: dict[str, Any]) -> None:
+    if _is_development_environment():
+        logger.info("public diagnostic lookup %s", diagnostics)
 
 
 def public_report_to_markdown(report: dict[str, Any]) -> str:

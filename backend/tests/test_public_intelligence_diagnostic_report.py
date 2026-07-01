@@ -166,3 +166,41 @@ def test_public_reads_do_not_execute_diagnostics_or_mutate_history():
 def test_admin_diagnostic_history_remains_protected():
     client, _ = build_client()
     assert client.get("/admin/intelligence-health/history").status_code == 401
+
+
+def test_public_diagnostic_complete_production_flow_json_markdown_react_and_health():
+    client, admin_id = build_client()
+
+    created = client.post("/admin/intelligence-health/public-report", cookies=session_cookie(admin_id))
+    assert created.status_code == 200
+    report = created.json()["report"]
+    token = report["token"]
+    assert report["storage_persisted"] is True
+
+    json_response = client.get(f"/public/intelligence-diagnostics/{token}.json")
+    assert json_response.status_code == 200
+    json_body = json_response.json()
+    assert json_body["token"] == token
+    assert json_body["public_report"] is True
+    assert json_body["layers"]
+
+    markdown_response = client.get(f"/public/intelligence-diagnostics/{token}.md")
+    assert markdown_response.status_code == 200
+    assert "# Intelligence Diagnostic Report" in markdown_response.text
+    assert json_body["fixture_name"] in markdown_response.text
+
+    react_page_response = client.get(f"/public/intelligence-diagnostics/{token}")
+    assert react_page_response.status_code == 200
+    react_payload = react_page_response.json()
+    assert react_payload["overall_summary"] == json_body["overall_summary"]
+    assert react_payload["layers"][0]["layer"] == json_body["layers"][0]["layer"]
+
+    health = client.get("/admin/intelligence-health/public-report/health", cookies=session_cookie(admin_id))
+    assert health.status_code == 200
+    checks = health.json()["checks"]
+    assert checks["public_diagnostics_enabled"]["status"] == "PASS"
+    assert checks["storage_working"]["status"] == "PASS"
+    assert checks["token_generation_working"]["status"] == "PASS"
+    assert checks["json_route_working"]["status"] == "PASS"
+    assert checks["markdown_route_working"]["status"] == "PASS"
+    assert checks["react_page_can_fetch_successfully"]["status"] == "PASS"

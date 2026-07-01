@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { getPublicIntelligenceDiagnosticReport } from "../api/societyBuilder";
+import { API_BASE_URL } from "../config";
 
 const PUBLIC_REPORT_TIMEOUT_MS = 30000;
 const asArray = (value) => (Array.isArray(value) ? value : []);
@@ -15,12 +16,32 @@ const withTimeout = (promise) => {
   return Promise.race([promise, timeout]).finally(() => window.clearTimeout(timer));
 };
 
-const publicErrorMessage = (err) => {
-  const message = err?.message || "Report unavailable";
-  if (/expired/i.test(message)) return "This public diagnostic report has expired.";
-  if (/404|not found|invalid/i.test(message)) return "This public diagnostic report link is invalid or no longer available.";
-  if (/timed out/i.test(message)) return "The public diagnostic report took too long to load. Please try again later.";
-  return "This public diagnostic report could not be loaded safely.";
+const PUBLIC_ERROR_MESSAGES = {
+  report_not_found: "Report not found",
+  report_expired: "Report expired",
+  invalid_token: "Invalid token",
+  backend_unavailable: "Backend unavailable",
+  json_fetch_failed: "JSON fetch failed",
+  markdown_fetch_failed: "Markdown fetch failed",
+  sanitization_failed: "Sanitization failed",
+  unexpected_server_error: "Unexpected server error",
+};
+
+const publicErrorMessage = (err, fallbackCode = "unexpected_server_error") => {
+  const message = String(err?.message || "");
+  const code = err?.payload?.detail?.error?.code || err?.payload?.error?.code || fallbackCode;
+  if (/Report expired|expired/i.test(message) || code === "report_expired") return PUBLIC_ERROR_MESSAGES.report_expired;
+  if (/Invalid token|malformed/i.test(message) || code === "invalid_token") return PUBLIC_ERROR_MESSAGES.invalid_token;
+  if (/Report not found|not found|404/i.test(message) || code === "report_not_found") return PUBLIC_ERROR_MESSAGES.report_not_found;
+  if (/Sanitization failed/i.test(message) || code === "sanitization_failed") return PUBLIC_ERROR_MESSAGES.sanitization_failed;
+  if (/Failed to fetch|NetworkError|timed out/i.test(message)) return PUBLIC_ERROR_MESSAGES.backend_unavailable;
+  return PUBLIC_ERROR_MESSAGES[code] || PUBLIC_ERROR_MESSAGES.unexpected_server_error;
+};
+
+const fetchMarkdown = async (url) => {
+  const res = await fetch(url, { credentials: "include" });
+  if (!res.ok) throw new Error(`Markdown fetch failed: ${res.status}`);
+  return res.text();
 };
 
 const normalizePublicReport = (payload) => {
@@ -38,11 +59,12 @@ export default function PublicIntelligenceDiagnosticReportPage() {
   const [state, setState] = useState({ loading: true, error: "", report: null });
   const reportUrls = useMemo(() => {
     const encoded = encodeURIComponent((token || "").trim());
-    return { json: `/public/intelligence-diagnostics/${encoded}.json`, markdown: `/public/intelligence-diagnostics/${encoded}.md` };
+    const path = `/public/intelligence-diagnostics/${encoded}`;
+    return { json: `${API_BASE_URL}${path}.json`, markdown: `${API_BASE_URL}${path}.md` };
   }, [token]);
 
   const copyReportUrl = (url) => {
-    if (navigator?.clipboard?.writeText) navigator.clipboard.writeText(`${window.location.origin}${url}`);
+    if (navigator?.clipboard?.writeText) navigator.clipboard.writeText(url);
   };
 
   useEffect(() => {
@@ -53,10 +75,14 @@ export default function PublicIntelligenceDiagnosticReportPage() {
     }
 
     setState({ loading: true, error: "", report: null });
-    withTimeout(getPublicIntelligenceDiagnosticReport(token))
-      .then((payload) => {
+    withTimeout(Promise.all([getPublicIntelligenceDiagnosticReport(token).catch((err) => { err.publicErrorCode = "json_fetch_failed"; throw err; }), fetchMarkdown(reportUrls.markdown).catch((err) => { err.publicErrorCode = "markdown_fetch_failed"; throw err; })]))
+      .then(([payload, markdown]) => {
         if (!active) return;
         const report = normalizePublicReport(payload);
+        if (!markdown || !markdown.includes("Intelligence Diagnostic Report")) {
+          setState({ loading: false, error: PUBLIC_ERROR_MESSAGES.markdown_fetch_failed, report: null });
+          return;
+        }
         if (!Object.keys(report).length) {
           setState({ loading: false, error: "This public diagnostic report is malformed or empty.", report: null });
           return;
@@ -64,10 +90,10 @@ export default function PublicIntelligenceDiagnosticReportPage() {
         setState({ loading: false, error: "", report });
       })
       .catch((err) => {
-        if (active) setState({ loading: false, error: publicErrorMessage(err), report: null });
+        if (active) setState({ loading: false, error: publicErrorMessage(err, err?.publicErrorCode), report: null });
       });
     return () => { active = false; };
-  }, [token]);
+  }, [token, reportUrls.markdown]);
 
   if (state.loading) return <main className="cosmic-section"><h1>Loading public diagnostic report…</h1></main>;
   if (state.error) return <PublicReportError message={state.error} />;
