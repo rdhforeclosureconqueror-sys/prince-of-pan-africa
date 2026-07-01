@@ -172,6 +172,7 @@ export default function IntelligenceHealthMonitor() {
   const [publicReportVerification, setPublicReportVerification] = useState(null);
   const [generatingReport, setGeneratingReport] = useState(false);
   const [trendWindow, setTrendWindow] = useState("10");
+  const [expandedActionId, setExpandedActionId] = useState("");
 
   const clearPublicReport = () => {
     setPublicReportState(null);
@@ -264,12 +265,17 @@ export default function IntelligenceHealthMonitor() {
   const dependencyImpact = safeObject(result?.dependency_impact);
   const dependencyChain = asArray(dependencyImpact.chain);
   const recommendedNextActions = asArray(result?.recommended_next_actions);
+  const commandCenter = safeObject(result?.command_center);
+  const aiOperationsAdvisor = asArray(result?.ai_operations_advisor || result?.recommended_actions_ranked);
+  const predictiveIntelligence = safeObject(result?.predictive_intelligence);
+  const ecosystemIntelligence = safeObject(result?.ecosystem_intelligence);
+  const aiChiefOperatingOfficer = safeObject(result?.ai_chief_operating_officer);
   const actionDisabled = running || generatingReport;
   const safePublicReportUrl = isSafePublicReportHref(publicReportUrl) ? publicReportUrl : "";
   const safePublicReportJsonUrl = safePublicReportUrl ? `${safePublicReportUrl}.json` : "";
   const safePublicReportMarkdownUrl = safePublicReportUrl ? `${safePublicReportUrl}.md` : "";
   const publicReportVerificationMessage = publicReportVerificationStatusText(publicReportVerification);
-  const trends = safeObject(safeObject(result?.trends)[trendWindow] || safeObject(history[0]?.trends)[trendWindow]);
+  const trends = safeObject(trendWindow === "all" ? safeObject(result?.trends)?.["100"] || safeObject(history[0]?.trends)?.["100"] : safeObject(result?.trends)[trendWindow] || safeObject(history[0]?.trends)[trendWindow]);
   const comparisonRows = asArray(healthTrend.rows);
   const pipeline = safeObject(result?.pipeline);
   const pipelineSteps = asArray(pipeline.steps);
@@ -284,6 +290,10 @@ export default function IntelligenceHealthMonitor() {
     ["Diagnostic Duration", "diagnostic_duration_ms", "ms"],
     ["Failure Count", "failure_count", ""],
     ["Regression Count", "regression_count", ""],
+    ["Storage", "storage_usage_percent", "%"],
+    ["Memory", "memory_usage_percent", "%"],
+    ["Deployment Duration", "diagnostic_duration_ms", "ms"],
+    ["Public Verification", "public_verification", "%"],
   ];
   const directionIcon = (direction) => direction === "improvement" ? "🟢" : direction === "regression" ? "🔴" : "🟡";
   const pipelineIcon = (status) => status === "PASS" ? "🟢" : status === "FAIL" ? "🔴" : "🟡";
@@ -303,6 +313,25 @@ export default function IntelligenceHealthMonitor() {
       {historyError && !layers.length && <article className="stat-card"><h3>Last run could not be loaded</h3><p>Diagnostics unavailable</p></article>}
 
       <article className="stat-card"><h3>Executive Summary</h3><p>{result?.executive_summary || result?.overall_summary || "Run a diagnostic to generate an admin-readable AI Systems Dashboard summary."}</p></article>
+
+
+      <h3>Command Center</h3>
+      <div className="dashboard-grid" aria-label="Executive Command Center">
+        <article className="stat-card"><h3>Mission Status</h3><p>{commandCenter.mission_status || (result?.overall_status === "FAIL" ? "Needs intervention" : "Operational")}</p></article>
+        <article className="stat-card"><h3>Deployment Status</h3><p>{commandCenter.deployment_status || pipeline.overall_status || "Pending diagnostic"}</p></article>
+        <article className="stat-card"><h3>Risk Level</h3><p>{commandCenter.risk_level || aiOperationsAdvisor[0]?.priority || "LOW"}</p></article>
+        <article className="stat-card"><h3>Today’s Recommendation</h3><p>{commandCenter.todays_recommendation || aiOperationsAdvisor[0]?.suggested_fix || "Run a diagnostic to generate today’s recommendation."}</p></article>
+      </div>
+
+      <h3>Recommended Actions</h3>
+      <article className="stat-card" aria-label="AI Operations Advisor">
+        <p><strong>AI Operations Advisor</strong> ranks every diagnostic by Priority, Estimated Impact, Estimated Difficulty, Estimated Time, Suggested Fix, and Confidence.</p>
+        {aiOperationsAdvisor.length ? aiOperationsAdvisor.map((action, index) => {
+          const actionId = action.id || `${action.priority}-${index}`;
+          const open = expandedActionId === actionId;
+          return <section className="stat-card" key={actionId}><button type="button" onClick={() => setExpandedActionId(open ? "" : actionId)} aria-expanded={open}><strong>{action.priority}</strong> · {action.title} · Confidence {action.confidence}%</button>{open && <div><p><strong>Impact:</strong> {action.estimated_impact}</p><p><strong>Difficulty:</strong> {action.estimated_difficulty}</p><p><strong>Estimated Time:</strong> {action.estimated_time}</p><p><strong>Suggested Fix:</strong> {action.suggested_fix}</p><p><strong>Supporting Evidence</strong></p><ul>{asArray(action.supporting_evidence).map((evidence) => <li key={evidence}>{evidence}</li>)}</ul></div>}</section>;
+        }) : <p>Run a diagnostic to generate ranked Critical, High, Medium, and Low actions.</p>}
+      </article>
 
       <div className="dashboard-grid">
         <div className="stat-card"><h3>Overall Health</h3><h2>{(result?.overall_health_percent ?? result?.overall_health?.percent) ?? "—"}%</h2></div>
@@ -336,7 +365,21 @@ export default function IntelligenceHealthMonitor() {
       <table className="admin-table"><thead><tr><th>Metric</th><th>Previous Run</th><th>Current Run</th><th>Difference</th></tr></thead><tbody>{comparisonRows.length ? comparisonRows.map((row) => <tr key={row.metric}><td>{directionIcon(row.direction)} {row.metric}</td><td>{row.previous}{row.unit}</td><td>{row.current}{row.unit}</td><td>{row.difference > 0 ? "+" : ""}{row.difference}{row.unit} · {row.direction}</td></tr>) : <tr><td colSpan={4}>No previous run is available yet.</td></tr>}</tbody></table>
 
       <h3>Trend Analysis</h3>
-      <article className="stat-card"><label htmlFor="trend-window"><strong>View window</strong></label> <select id="trend-window" value={trendWindow} onChange={(event) => setTrendWindow(event.target.value)}><option value="10">Last 10 runs</option><option value="30">Last 30 runs</option><option value="100">Last 100 runs</option></select><div className="dashboard-grid">{trendMetrics.map(([label, key, unit]) => { const points = asArray(trends[key]); const last = points[points.length - 1]; const max = Math.max(1, ...points.map((point) => Number(point.value) || 0)); return <section className="stat-card" key={key}><h4>{label}</h4><p>{last?.value ?? "—"}{unit}</p><div aria-label={`${label} trend`}>{points.map((point, index) => <span key={`${key}-${index}`} title={`${point.timestamp}: ${point.value}${unit}`} style={{ display: "inline-block", width: 10, height: `${Math.max(4, ((Number(point.value) || 0) / max) * 48)}px`, marginRight: 3, background: "#22c55e", verticalAlign: "bottom" }} />)}</div></section>; })}</div></article>
+      <article className="stat-card"><label htmlFor="trend-window"><strong>View window</strong></label> <select id="trend-window" value={trendWindow} onChange={(event) => setTrendWindow(event.target.value)}><option value="10">Last 10 runs</option><option value="30">Last 30 runs</option><option value="100">Last 100 runs</option><option value="all">All Time</option></select><div className="dashboard-grid">{trendMetrics.map(([label, key, unit]) => { const points = asArray(trends[key]); const last = points[points.length - 1]; const max = Math.max(1, ...points.map((point) => Number(point.value) || 0)); return <section className="stat-card" key={key}><h4>{label}</h4><p>{last?.value ?? "—"}{unit}</p><div aria-label={`${label} trend`}>{points.map((point, index) => <span key={`${key}-${index}`} title={`${point.timestamp}: ${point.value}${unit}`} style={{ display: "inline-block", width: 10, height: `${Math.max(4, ((Number(point.value) || 0) / max) * 48)}px`, marginRight: 3, background: "#22c55e", verticalAlign: "bottom" }} />)}</div></section>; })}</div></article>
+
+
+      <h3>Predictive Intelligence</h3>
+      <div className="dashboard-grid" aria-label="Predictive Intelligence">
+        <article className="stat-card"><h3>Health Score Prediction</h3><p>Current {predictiveIntelligence.health_score_prediction?.current ?? "—"}</p><p>Projected: {asArray(predictiveIntelligence.health_score_prediction?.projected_next_five_deployments).join(" → ") || "—"}</p></article>
+        <article className="stat-card"><h3>Storage Forecast</h3><p>Current Usage {predictiveIntelligence.storage_forecast?.current_usage_percent ?? "—"}%</p><p>Projected {predictiveIntelligence.storage_forecast?.projected_usage_percent ?? "—"}% within {predictiveIntelligence.storage_forecast?.within_days ?? "—"} days.</p></article>
+        <article className="stat-card"><h3>API Latency Trend</h3><p>Average {predictiveIntelligence.api_latency_trend?.average_ms ?? "—"}ms</p><p>Expected {predictiveIntelligence.api_latency_trend?.expected_ms ?? "—"}ms {predictiveIntelligence.api_latency_trend?.condition || "if current trend continues"}.</p></article>
+      </div>
+
+      <h3>Ecosystem Intelligence</h3>
+      <article className="stat-card"><h2>Institutional Health Score {ecosystemIntelligence.institutional_health_score ?? "—"}%</h2><div className="dashboard-grid">{asArray(ecosystemIntelligence.subsystems).map((subsystem) => <section className="stat-card" key={subsystem.subsystem}><h4>{subsystem.subsystem}</h4><p>Health {subsystem.health}% · Performance {subsystem.performance}</p><p>Warnings: {asArray(subsystem.warnings).join(", ") || "None"}</p><p>Recommendations: {asArray(subsystem.recommendations).join("; ") || "Continue monitoring"}</p></section>)}</div></article>
+
+      <h3>AI Chief Operating Officer</h3>
+      <article className="stat-card"><h4>Suggested Sprint</h4><p>Estimated completion {aiChiefOperatingOfficer.suggested_sprint?.estimated_completion || "2 hours"}</p><ul>{asArray(aiChiefOperatingOfficer.suggested_sprint?.tasks).map((task) => <li key={task}>{task}</li>)}</ul><pre className="data-note">{JSON.stringify(aiChiefOperatingOfficer.suggested_sprint?.expected_result || {}, null, 2)}</pre><p>Estimated confidence {aiChiefOperatingOfficer.suggested_sprint?.estimated_confidence ?? "—"}%</p></article>
 
       <h3>Executive Performance Summary</h3>
       <div className="dashboard-grid">
@@ -350,11 +393,11 @@ export default function IntelligenceHealthMonitor() {
         <article className="stat-card"><h3>Passed / Warnings / Failures</h3><p>{performanceSummary.total_passed ?? passFailSummary.passed ?? 0} / {performanceSummary.total_warnings ?? passFailSummary.warnings ?? 0} / {performanceSummary.total_failures ?? passFailSummary.failed ?? 0}</p></article>
       </div>
 
-      <h3>Intelligence Timeline</h3>
+      <h3>System Timeline</h3>{/* Backward-compatible labels: Intelligence Timeline · AI Summary */}
       <article className="stat-card"><ol>{timeline.length ? timeline.map((event, index) => <li key={`${event.time}-${index}`}><strong>{event.time}</strong> {event.event}</li>) : <li>Run a diagnostic to replay timeline events.</li>}</ol></article>
 
-      <h3>AI Summary</h3>
-      <article className="stat-card"><p>{result?.ai_summary || result?.executive_summary || "Run a diagnostic to generate an AI-readable operational summary."}</p></article>
+      <h3>AI Insights</h3>{/* AI Summary */}
+      <article className="stat-card"><p>{result?.ai_summary || result?.executive_summary || "Run a diagnostic to generate an natural-language AI Insights summary."}</p></article>
 
       <h3>Layer Status</h3>
       <div className="dashboard-grid">
@@ -377,7 +420,7 @@ export default function IntelligenceHealthMonitor() {
               <p>Confidence Before/After: {confidence.expected ?? "—"} → {confidence.actual ?? "—"}</p>
               <p>Missing Evidence Δ: {layer.missing_evidence_difference ?? "—"}</p>
               <p>Priority Before/After: {priority.expected ?? "—"} → {priority.actual ?? "—"}</p>
-              <p><strong>Why this changed:</strong> {layer.why_this_changed || layer.plain_language_reason || layer.explanation || "Diagnostics unavailable"}</p>
+              <p><strong>Confidence:</strong> {layer.confidence_score ?? "—"}%</p><p><strong>Supporting Evidence</strong></p><ul>{asArray(layer.supporting_evidence).map((evidence) => <li key={evidence}>{evidence}</li>)}</ul><p><strong>Why this changed:</strong> {layer.why_this_changed || layer.plain_language_reason || layer.explanation || "Diagnostics unavailable"}</p>
               <p><strong>Suggested admin action:</strong> {layer.suggested_admin_action || "Review scoring logic and re-run diagnostics before updating baselines."}</p>
             </article>
           );
