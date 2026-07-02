@@ -182,6 +182,7 @@ const trendDirectionFrom = (current, previous, lowerIsBetter = false) => {
 
 const statusIcon = (layer) => {
   if (layer?.status === "FAIL") return "🔴 Failure";
+  if (layer?.display_status) return layer.regression ? `🟠 ${layer.display_status}` : `🟡 ${layer.display_status}`;
   if (layer?.regression) return "🟠 Regression";
   if (layer?.status === "WARNING") return "🟡 Warning";
   return "🟢 Healthy";
@@ -191,12 +192,13 @@ const isRuntimeVerified = (evidence) => Boolean(evidence && (evidence.runtime_st
 const operationalLayerName = (name = "Intelligence") => `${String(name).replace(/ Intelligence$/i, "")} Intelligence`;
 const executiveConnectionPhrase = (layer, nextLayer) => nextLayer ? `${operationalLayerName(layer)} is successfully feeding ${operationalLayerName(nextLayer)}.` : `${operationalLayerName(layer)} is reaching its final operating destination.`;
 const executiveStatusFor = (layer, evidence) => {
-  if (!isRuntimeVerified(evidence)) return layer?.status === "FAIL" ? "Disconnected" : layer?.regression ? "Regression" : "Warning";
+  if (!isRuntimeVerified(evidence)) return layer?.status === "FAIL" ? "Disconnected" : layer?.display_status || (layer?.regression ? "Regression" : "Warning");
+  if (layer?.display_status) return layer.display_status;
   if (layer?.regression) return "Regression";
   if (layer?.status === "WARNING") return "Warning";
   return "Connected";
 };
-const executiveStatusIcon = (status) => status === "Connected" ? "🟢" : status === "Disconnected" ? "🔴" : status === "Regression" ? "🟠" : "🟡";
+const executiveStatusIcon = (status) => status === "Connected" ? "🟢" : status === "Disconnected" ? "🔴" : String(status).includes("drift") || status === "Regression" ? "🟠" : "🟡";
 const trendCopy = (direction, improved = "Improving", worse = "Needs attention", stable = "Stable") => direction === "improved" ? `▲ ${improved}` : direction === "worse" ? `▼ ${worse}` : stable;
 const trendTone = (direction) => direction === "improved" ? "positive" : direction === "worse" ? "negative" : "neutral";
 
@@ -327,6 +329,7 @@ export default function IntelligenceHealthMonitor() {
   const runtimeEvidenceByLayer = new Map(runtimeEvidence.map((evidence) => [String(evidence.layer || "").replace(/ Intelligence$/i, ""), evidence]));
   const timeline = asArray(result?.timeline);
   const rootCauseClassification = safeObject(result?.root_cause_classification);
+  const stabilizationReport = safeObject(result?.stabilization_report);
   const passFailSummary = safeObject(result?.pass_fail_summary);
   const dependencyLayers = ["Member", "Society", "Institution", "Opportunity", "Predictive", "Decision Support", "Execution Planning", "Execution Intelligence", "Institutional Memory", "Institutional Learning"];
   const selectedLayerIndex = Math.max(0, dependencyLayers.indexOf(selectedLayer));
@@ -711,7 +714,8 @@ export default function IntelligenceHealthMonitor() {
       <div className="dashboard-grid">
         <article className="stat-card"><h3>Dependency Impact View</h3><p>Member → Society → Institution → Opportunity → Predictive → Decision Support → Execution Planning → Execution Intelligence → Institutional Memory → Institutional Learning</p>{dependencyChain.length ? dependencyChain.map((item) => <p key={item.layer}><strong>{item.layer}</strong>: {chainLabel[item.state] || item.state || "Stable layer"}</p>) : <p>Dependency impact unavailable until a diagnostic runs.</p>}</article>
         <article className="stat-card"><h3>Recommended Next Actions</h3>{recommendedNextActions.length ? <ul>{recommendedNextActions.map((action) => <li key={action}>{action}</li>)}</ul> : <ul><li>Review scoring logic</li><li>Review expected baselines</li><li>Do not update baselines until drift is explained</li><li>Re-run diagnostic after changes</li><li>Generate public report only after the monitor is stable</li></ul>}</article>
-        <article className="stat-card"><h3>Regression Summary</h3>{layers.filter((l) => l.regression).length ? layers.filter((l) => l.regression).map((l) => <p key={l.layer}>{l.layer}: {l.regression} ({safeObject(l.difference_summary).score ?? "—"})</p>) : <p>None</p>}</article>
+        <article className="stat-card"><h3>Regression Summary</h3>{layers.filter((l) => l.regression).length ? layers.filter((l) => l.regression).map((l) => <p key={l.layer}>{l.layer}: {l.regression} ({safeObject(l.difference_summary).score ?? "—"}) · {l.diagnostic_category || "scoring_regression"}</p>) : <p>None</p>}</article>
+        <article className="stat-card wide-card"><h3>Stabilization Report</h3><p><strong>Root cause:</strong> {stabilizationReport.root_cause || "Run a diagnostic to identify stabilization root cause."}</p><p><strong>Responsible files/functions:</strong> {formatList(stabilizationReport.files_functions_responsible)}</p><p><strong>Fix requires:</strong> {stabilizationReport.fix_requires || "—"}</p><p><strong>Warnings expected to disappear:</strong> {formatList(stabilizationReport.warnings_should_disappear_after_fix)}</p><p><strong>Warnings still legitimate:</strong> {formatList(stabilizationReport.warnings_still_legitimate)}</p></article>
         <article className="stat-card"><h3>Critical Failures</h3>{asArray(result?.critical_failures).length ? asArray(result.critical_failures).map((l, i) => <p key={l.layer || i}>{l.layer || "Unknown Layer"}: {l.explanation || "Diagnostics unavailable"}</p>) : <p>None</p>}</article>
         <article className="stat-card"><h3>Performance Metrics</h3><pre className="data-note">{JSON.stringify(result?.performance || result?.performance_timings || {}, null, 2)}</pre></article>
         <article className="stat-card"><h3>Root Cause Analysis</h3>{rootCauseClassification.category && <p><strong>Classification:</strong> {rootCauseClassification.category} · Confidence {Math.round((rootCauseClassification.confidence || 0) * 100)}%{rootCauseClassification.heuristic ? " · heuristic" : ""}</p>}{asArray(result?.root_cause_analysis).length ? asArray(result.root_cause_analysis).map((line) => <p key={line}>{line}</p>) : <p>Run a diagnostic to view root-cause tracing.</p>}</article>
