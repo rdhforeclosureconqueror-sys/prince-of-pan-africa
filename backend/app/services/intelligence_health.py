@@ -461,6 +461,16 @@ def performance_summary(run: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def discord_configuration_warnings(diagnostics: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    diagnostics = diagnostics or {}
+    recent = diagnostics.get("recent_actions") or diagnostics.get("action_log") or []
+    warnings = []
+    for action in recent:
+        if action.get("action") == "bot_log_post" and (action.get("status") == 403 or "403" in str(action.get("error", "")) or "Forbidden" in str(action.get("error", ""))):
+            warnings.append({"system": "Discord", "warning": "bot_log_post returned 403 Forbidden", "recommended_fix": "Verify bot permissions for bot_log channel and webhook configuration.", "separate_from": "SimbaBrain intelligence health"})
+    return warnings
+
+
 def trend_analysis(history: list[dict[str, Any]], limit: int = 10) -> dict[str, Any]:
     runs = list(reversed(history[-limit:]))
     def point(run, value):
@@ -476,7 +486,8 @@ def trend_analysis(history: list[dict[str, Any]], limit: int = 10) -> dict[str, 
         "storage_usage_percent": [point(r, r.get("predictive_intelligence", {}).get("storage_forecast", {}).get("current_usage_percent", 61)) for r in runs],
         "memory_usage_percent": [point(r, 64 if r.get("performance", {}).get("memory_usage") == "unavailable" else r.get("performance", {}).get("memory_usage", 64)) for r in runs],
         "deployment_duration_ms": [point(r, r.get("performance", {}).get("total_execution_time_ms", r.get("performance_timings", {}).get("total_execution_time_ms"))) for r in runs],
-        "public_verification": [point(r, 100 if r.get("public_verification_status", "PASS") == "PASS" else 0) for r in runs],
+        "public_verification_score": [point(r, 100 if r.get("public_verification_status", "PASS") == "PASS" else 0) for r in runs],
+        "public_verification_latency_ms": [point(r, r.get("performance_summary", {}).get("verification_time_ms", r.get("verification_time_ms", 0))) for r in runs],
     }
 
 
@@ -663,6 +674,14 @@ def build_stabilization_report(layers: list[dict[str, Any]]) -> dict[str, Any]:
         "warnings_should_disappear_after_fix": warnings_after_fix,
         "warnings_still_legitimate": legitimate,
         "category_counts": {key: len([layer for layer in layers if layer.get("diagnostic_category") == key]) for key in ["connection_failure", "runtime_propagation_failure", "baseline_drift", "scoring_regression", "expected_improvement", "safe_pass"]},
+        "stabilization_checklist": {
+            "unresolved_intelligence_warnings": [layer.get("layer") for layer in unresolved if layer.get("status") == "WARNING"],
+            "resolved_warnings": [layer.get("layer") for layer in layers if layer.get("status") == "PASS"],
+            "remaining_true_regressions": [layer.get("layer") for layer in unresolved if layer.get("regression")],
+            "warnings_requiring_rerun": [layer.get("layer") for layer in unresolved if layer.get("diagnostic_category") in {"baseline_drift", "expected_improvement"}],
+            "warnings_requiring_code_fix": [layer.get("layer") for layer in unresolved if layer.get("diagnostic_category") == "scoring_regression"],
+            "warnings_requiring_config_fix": ["Discord bot_log_post 403 Forbidden"],
+        },
     }
 
 
@@ -856,14 +875,34 @@ def build_ai_coo_sprint_plan(run: dict[str, Any], initiatives: list[dict[str, An
     }
 
 
+def _safe_percent_from_text(value: Any) -> int | None:
+    if isinstance(value, (int, float)):
+        return int(value)
+    if not isinstance(value, str):
+        return None
+    match = re.search(r"(?<!\d)(\d{1,3})(?:\s*%)?", value)
+    if not match:
+        return None
+    percent = int(match.group(1))
+    return percent if 0 <= percent <= 100 else None
+
+
 def build_ai_forecast_scenarios(run: dict[str, Any], sprint_plan: dict[str, Any]) -> list[dict[str, Any]]:
     current = int(run.get("overall_health_percent") or 0)
     regression_count = int(run.get("regression_count") or 0)
     no_action_health = max(0, current - max(3, regression_count * 3))
-    sprint_health = int(re.sub(r"\D", "", sprint_plan.get("expected_health_after_sprint_completion", "")) or min(100, current + 8))
+    projected = _safe_percent_from_text(sprint_plan.get("expected_health_after_sprint_completion"))
+    risk_reduction = _safe_percent_from_text(sprint_plan.get("risk_reduction_estimate")) or 0
+    unresolved = [l for l in run.get("layers", []) if l.get("status") != "PASS"]
+    if projected is None or unresolved:
+        sprint_health = "Requires rerun after unresolved diagnostics"
+    else:
+        if risk_reduction > 0:
+            projected = max(current, projected)
+        sprint_health = f"{min(100, projected)}%"
     return [
         {"scenario": "If no action is taken", "projected_health_score": f"{no_action_health}%", "regression_risk": "Elevated" if regression_count else "Low", "technical_debt_trend": "Increasing", "confidence": 88, "primary_reason": "Repeated layer recommendations remain unresolved and continue to compound downstream."},
-        {"scenario": "If recommended sprint is completed", "projected_health_score": f"{sprint_health}%", "regression_risk": "Reduced", "technical_debt_trend": "Stabilizing", "confidence": sprint_plan.get("confidence", 92), "primary_reason": "The sprint addresses duplicate recommendations as upstream initiatives instead of isolated layer tasks."},
+        {"scenario": "If recommended sprint is completed", "projected_health_score": sprint_health, "regression_risk": "Reduced", "technical_debt_trend": "Stabilizing", "confidence": sprint_plan.get("confidence", 92), "primary_reason": "The sprint addresses duplicate recommendations as upstream initiatives instead of isolated layer tasks; unresolved diagnostics must be rerun before a final percentage is displayed."},
     ]
 
 def ai_chief_operating_officer(run: dict[str, Any], advisor: list[dict[str, Any]]) -> dict[str, Any]:
@@ -974,6 +1013,7 @@ def run_full_intelligence_diagnostic(db: Session | None = None) -> dict[str, Any
     run["ecosystem_intelligence"] = ecosystem_intelligence(layers)
     run["ai_chief_operating_officer"] = ai_chief_operating_officer(run, run["ai_operations_advisor"])
     run["command_center"] = {"mission_status": "Operational" if run["overall_status"] == "PASS" and run["overall_health_percent"] >= 90 else "Needs intervention", "deployment_status": "Pending", "risk_level": run["ai_operations_advisor"][0]["priority"] if run["ai_operations_advisor"] else "LOW", "todays_recommendation": run["ai_operations_advisor"][0]["suggested_fix"] if run["ai_operations_advisor"] else "No administrator action required."}
+    run["discord_configuration_warnings"] = discord_configuration_warnings()
     run["pipeline"] = build_intelligence_pipeline(run)
     run["verification_source_of_truth"] = run["pipeline"].get("verification_source_of_truth", verification_source_of_truth(run))
     run["command_center"]["deployment_status"] = run["pipeline"].get("overall_status", "Pending")
