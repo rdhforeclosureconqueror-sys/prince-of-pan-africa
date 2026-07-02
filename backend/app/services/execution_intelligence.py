@@ -17,8 +17,8 @@ def _pct(part: int, whole: int) -> int:
 
 
 def _confidence(evidence: int, missing: int) -> str:
-    score = max(0, min(100, evidence * 10 - missing * 8))
-    return "high" if score >= 75 else "substantial" if score >= 55 else "developing" if score >= 30 else "limited"
+    score = max(0, min(100, evidence * 16 - missing * 5))
+    return "high" if score >= 85 else "substantial" if score >= 55 else "developing" if score >= 30 else "limited"
 
 
 def _days_between(start: date | None, end: date | None) -> int | None:
@@ -59,7 +59,7 @@ def generate_execution_intelligence(db: Session, *, society_id: int | None = Non
     evidence = [f"{len(plans.get('execution_plans', []))} read-only execution plans", f"{len(tasks)} Trust Board tasks", f"{len(completed_tasks)} completed tasks", f"{len(containers)} containers", f"{len(audits)} blueprint audits"]
     missing = []
     if not tasks: missing.append("Task completion evidence")
-    if not audits: missing.append("Before/after trust audit evidence")
+    if len(audits) < 2: missing.append("Before/after trust audit evidence")
     if not containers: missing.append("Execution container records")
     if not any(t.completed_at for t in tasks): missing.append("Task completion timestamps")
 
@@ -73,5 +73,5 @@ def generate_execution_intelligence(db: Session, *, society_id: int | None = Non
         "expected_resources_vs_actual_resources": len(plans.get("dashboard", {}).get("required_resources", [])) - len({t.linked_module for t in tasks if t.linked_module}),
         "expected_risks_vs_realized_risks": len(plans.get("dashboard", {}).get("risks", [])) - len(blocked),
     }
-    score = max(0, min(100, round(mean([actual_completion, completion_percentage, max(0, 100 - len(blocked) * 8), max(0, 100 - len(delayed) * 10)]))))
+    score = max(0, min(100, round(mean([actual_completion, completion_percentage, planned_completion, max(0, 100 - len(missing) * 15)]))))
     return {"ok": True, "layer": "Execution Intelligence", "version": "v1", "read_only": True, "warnings": [READ_ONLY_WARNING], "execution_score": score, "success_score": round(mean([score, max(0, 100 + min(0, variances['planned_completion_vs_actual_completion']))])), "completion_percentage": completion_percentage, "variance_analysis": variances, "bottlenecks": [t.title for t in blocked[:8]], "delays": [t.title for t in delayed[:8]], "missed_milestones": [m.title for m in missed_milestones[:8]], "over_performing_areas": [k for k, v in variances.items() if isinstance(v, int) and v > 0], "under_performing_areas": [k for k, v in variances.items() if isinstance(v, int) and v < 0], "confidence": _confidence(len(evidence), len(missing)), "evidence": evidence, "missing_evidence": missing, "assumptions": ["Execution plans are read-only expected state.", "Trust Board tasks and containers are treated as actual execution evidence."], "recommended_lessons_learned": ["Record completion timestamps on execution tasks.", "Capture before/after trust audits for each major plan.", "Review blocked and delayed items before approving new work."], "debug": {"execution_planning": plans} if include_debug else None}
