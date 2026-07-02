@@ -110,6 +110,22 @@ LAYER_DEPENDENCIES = {
     "Institutional Learning": ["Institutional Memory"],
 }
 
+LAYER_REPAIR_TARGETS = {
+    "Member Intelligence": {"backend_file": "backend/app/services/member_intelligence.py", "frontend_file": "src/components/IntelligenceHealthMonitor.jsx", "function": "generate_member_intelligence"},
+    "Society Intelligence": {"backend_file": "backend/app/services/society_intelligence.py", "frontend_file": "src/components/IntelligenceHealthMonitor.jsx", "function": "generate_society_intelligence"},
+    "Institution Intelligence": {"backend_file": "backend/app/services/institution_intelligence.py", "frontend_file": "src/components/IntelligenceHealthMonitor.jsx", "function": "generate_institution_intelligence"},
+    "Opportunity Intelligence": {"backend_file": "backend/app/services/opportunity_intelligence.py", "frontend_file": "src/components/IntelligenceHealthMonitor.jsx", "function": "generate_opportunity_intelligence / opportunity scoring helper"},
+    "Predictive Intelligence": {"backend_file": "backend/app/services/intelligence_health.py", "frontend_file": "src/components/IntelligenceHealthMonitor.jsx", "function": "_predictive"},
+    "Decision Support": {"backend_file": "backend/app/services/decision_support.py", "frontend_file": "src/components/IntelligenceHealthMonitor.jsx", "function": "generate_decision_support"},
+    "Execution Planning": {"backend_file": "backend/app/services/execution_planning.py", "frontend_file": "src/components/IntelligenceHealthMonitor.jsx", "function": "generate_execution_plans"},
+    "Execution Intelligence": {"backend_file": "backend/app/services/execution_intelligence.py", "frontend_file": "src/components/IntelligenceHealthMonitor.jsx", "function": "generate_execution_intelligence"},
+    "Institutional Memory": {"backend_file": "backend/app/services/institutional_memory.py", "frontend_file": "src/components/IntelligenceHealthMonitor.jsx", "function": "generate_institutional_memory"},
+    "Institutional Learning": {"backend_file": "backend/app/services/institutional_learning.py", "frontend_file": "src/components/IntelligenceHealthMonitor.jsx", "function": "generate_institutional_learning"},
+}
+
+DOWNSTREAM_BY_LAYER = {
+    name: DIAGNOSTIC_LAYER_ORDER[index + 1:] for index, name in enumerate(DIAGNOSTIC_LAYER_ORDER)
+}
 
 
 def _stable_fingerprint(value: Any) -> str:
@@ -676,6 +692,119 @@ def _verification_step(layer: str, expected: dict[str, Any]) -> str:
     return f"Rerun diagnostic and confirm {layer} returns expected score {expected.get('score')}, recommendation count {expected.get('recommendations')}, priority {expected.get('priority')}, and confidence {expected.get('confidence')}."
 
 
+def _repair_fix_type(fix_type: str, category: str) -> str:
+    if category == "frontend_display":
+        return "frontend_display"
+    return {
+        "CODE_FIX_REQUIRED": "code_change",
+        "CONFIG_FIX_REQUIRED": "config_change",
+        "EXTERNAL_SERVICE_FIX_REQUIRED": "permission_issue",
+        "BASELINE_UPDATE_REQUIRED": "baseline_update",
+        "RERUN_REQUIRED": "rerun_required",
+        "NO_ACTION_REQUIRED": "rerun_required",
+    }.get(fix_type, "rerun_required")
+
+
+def _field_mismatches(expected: dict[str, Any], actual: dict[str, Any]) -> list[dict[str, Any]]:
+    mismatches = []
+    for field in sorted(set(expected) | set(actual)):
+        if expected.get(field) != actual.get(field):
+            mismatches.append({
+                "field": field,
+                "expected": expected.get(field),
+                "actual": actual.get(field),
+                "mismatch": f"{field}: expected {expected.get(field)!r}, actual {actual.get(field)!r}",
+            })
+    return mismatches
+
+
+def _business_rule_for(layer: str, field: str | None) -> str:
+    if layer == "Opportunity Intelligence" and field == "opportunity_count":
+        return "Institution-formation opportunities should remain counted when Institution Intelligence is stable-but-developing."
+    if field == "score":
+        return "Deterministic fixture scores must remain stable unless the scoring rule changed intentionally and is documented."
+    if field == "recommendations":
+        return "Recommendation counts must not drift unless the underlying qualifying evidence or recommendation contract changed intentionally."
+    if field == "confidence":
+        return "Confidence labels must reflect evidence quality and must not be normalized by display code alone."
+    if field == "missing_count":
+        return "Missing evidence counts must track fixture evidence gaps without losing runtime-readiness requirements."
+    if field == "priority":
+        return "Priority labels must stay aligned with score thresholds and evidence severity."
+    return "Every non-PASS diagnostic must explain the concrete expected-vs-actual mismatch before baselines are changed."
+
+
+def build_repair_brief(layer: dict[str, Any]) -> dict[str, Any]:
+    expected = deepcopy(layer.get("expected", {}))
+    actual = deepcopy(layer.get("actual", {}))
+    mismatches = _field_mismatches(expected, actual)
+    primary = next((item for item in mismatches if item["field"] == "opportunity_count"), mismatches[0] if mismatches else {"field": "status", "expected": "PASS", "actual": layer.get("status")})
+    name = layer.get("layer") or "Unknown Layer"
+    target = LAYER_REPAIR_TARGETS.get(name, {"backend_file": "backend/app/services/intelligence_health.py", "frontend_file": "src/components/IntelligenceHealthMonitor.jsx", "function": "_compare"})
+    category = layer.get("diagnostic_category") or "baseline_drift"
+    fix_type = _repair_fix_type(layer.get("fix_type", "RERUN_REQUIRED"), category)
+    safe_baseline_update = "yes" if fix_type == "baseline_update" and not layer.get("regression") and len(mismatches) == 1 and primary.get("field") == "confidence" else "no"
+    do_not = "Do not update baseline." if safe_baseline_update == "no" else "Do not update the deterministic baseline until the changed output is proven intentional, member-safe, and documented."
+    downstream = DOWNSTREAM_BY_LAYER.get(name, [])
+    related = [item for item in downstream if layer.get("status") != "PASS"]
+    return {
+        "marker": "AI_REPAIR_HINT",
+        "layer_name": name,
+        "diagnostic_status": layer.get("status"),
+        "failure_type": category,
+        "expected_value": {primary.get("field"): primary.get("expected")},
+        "actual_value": {primary.get("field"): primary.get("actual")},
+        "field_that_drifted": primary.get("field"),
+        "field_mismatches": mismatches,
+        "business_rule_violated": _business_rule_for(name, primary.get("field")),
+        "likely_backend_file": target["backend_file"],
+        "likely_frontend_file": target["frontend_file"] if category == "frontend_display" or target.get("frontend_file") else None,
+        "likely_function_service": target["function"],
+        "fix_type": fix_type,
+        "safe_baseline_update": safe_baseline_update,
+        "do_not_change_notes": do_not,
+        "recommended_fix_steps": [
+            f"Inspect {target['backend_file']}::{target['function']} for the {primary.get('field')} mismatch.",
+            layer.get("suggested_admin_action") or "Repair the upstream diagnostic cause, then rerun Mission Control.",
+            "Rerun the full intelligence diagnostic before projecting restored health.",
+        ],
+        "verification_command": "cd backend && pytest tests/test_intelligence_health_monitor_phase9.py tests/test_public_intelligence_diagnostic_report.py",
+        "expected_result_after_fix": f"{name} returns {primary.get('field')}={primary.get('expected')} and the warning/regression clears or is replaced by a documented intentional change.",
+        "downstream_impact": downstream,
+        "related_layers_likely_to_clear_after_this_fix": related,
+        "confidence_score": layer.get("confidence_score") or _confidence_percent(layer),
+    }
+
+
+def build_repair_briefs(layers: list[dict[str, Any]], discord_warnings: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
+    briefs = [build_repair_brief(layer) for layer in layers if layer.get("status") != "PASS" or layer.get("regression")]
+    for warning in discord_warnings or []:
+        briefs.append({
+            "marker": "AI_REPAIR_HINT",
+            "layer_name": "Discord Permissions",
+            "diagnostic_status": "WARNING",
+            "failure_type": "discord_permission",
+            "expected_value": {"bot_log_post": "allowed"},
+            "actual_value": {"bot_log_post": "403 Forbidden"},
+            "field_that_drifted": "bot_log_post_permission",
+            "field_mismatches": [{"field": "bot_log_post_permission", "expected": "allowed", "actual": "403 Forbidden", "mismatch": "bot_log_post_permission: expected allowed, actual 403 Forbidden"}],
+            "business_rule_violated": "Discord delivery permissions must not be counted as SimbaBrain intelligence health drift.",
+            "likely_backend_file": "backend/app/services/discord_bridge.py",
+            "likely_frontend_file": "src/pages/AdminOperationsDashboard.jsx",
+            "likely_function_service": "Discord bot_log_post diagnostics / webhook send",
+            "fix_type": "permission_issue",
+            "safe_baseline_update": "no",
+            "do_not_change_notes": "Do not update baseline. This is an integration permission issue, not intelligence drift.",
+            "recommended_fix_steps": [warning.get("recommended_fix") or "Verify Discord bot permissions.", "Rerun Discord diagnostics separately from SimbaBrain intelligence health."],
+            "verification_command": "cd backend && pytest tests/test_discord_bridge_phase6c.py",
+            "expected_result_after_fix": "Discord bot_log_post no longer returns 403 Forbidden; intelligence layer health is unchanged unless separate layer drift exists.",
+            "downstream_impact": [],
+            "related_layers_likely_to_clear_after_this_fix": [],
+            "confidence_score": 96,
+        })
+    return briefs
+
+
 def _suggested_action(layer: str, status: str, regression: str | None, expected: dict[str, Any], actual: dict[str, Any]) -> str:
     return _fix_path(_diagnostic_fix_type(layer, status, regression, expected, actual), layer)
 
@@ -1134,6 +1263,15 @@ def run_full_intelligence_diagnostic(db: Session | None = None) -> dict[str, Any
     run["ai_chief_operating_officer"] = ai_chief_operating_officer(run, run["ai_operations_advisor"])
     run["command_center"] = {"mission_status": "Operational" if run["overall_status"] == "PASS" and run["overall_health_percent"] >= 90 else "Needs intervention", "deployment_status": "Pending", "risk_level": run["ai_operations_advisor"][0]["priority"] if run["ai_operations_advisor"] else "LOW", "todays_recommendation": run["ai_operations_advisor"][0]["suggested_fix"] if run["ai_operations_advisor"] else "No administrator action required."}
     run["discord_configuration_warnings"] = discord_configuration_warnings()
+    run["repair_briefs"] = build_repair_briefs(layers, run["discord_configuration_warnings"])
+    repair_by_layer = {brief.get("layer_name"): brief for brief in run["repair_briefs"]}
+    for layer in layers:
+        if layer.get("layer") in repair_by_layer:
+            layer["repair_brief"] = repair_by_layer[layer.get("layer")]
+    run["executive_repair_brief_summary"] = [
+        f"{brief['layer_name']}: fix {brief['field_that_drifted']} in {brief['likely_backend_file']} and rerun verification."
+        for brief in run["repair_briefs"][:3]
+    ]
     run["pipeline"] = build_intelligence_pipeline(run)
     run["verification_source_of_truth"] = run["pipeline"].get("verification_source_of_truth", verification_source_of_truth(run))
     run["command_center"]["deployment_status"] = run["pipeline"].get("overall_status", "Pending")
@@ -1203,6 +1341,7 @@ def _public_layer(layer: dict[str, Any]) -> dict[str, Any]:
         "suggested_admin_action": layer.get("suggested_admin_action"),
         "confidence_score": layer.get("confidence_score"),
         "supporting_evidence": deepcopy(layer.get("supporting_evidence", [])),
+        "repair_brief": deepcopy(layer.get("repair_brief", {})),
     }
 
 
@@ -1234,6 +1373,8 @@ def sanitize_diagnostic_for_public_report(run: dict[str, Any]) -> dict[str, Any]
         "expired": False,
         "overall_summary": run.get("executive_summary", "Diagnostic summary unavailable."),
         "root_cause_analysis": deepcopy(run.get("root_cause_analysis", [])),
+        "repair_briefs": deepcopy(run.get("repair_briefs", [])),
+        "executive_repair_brief_summary": deepcopy(run.get("executive_repair_brief_summary", [])),
         "stabilization_report": deepcopy(run.get("stabilization_report", {})),
         "recommended_admin_actions": list(run.get("recommended_next_actions", ADMIN_RECOMMENDED_ACTIONS)),
         "diagnostic_history_summary": {
@@ -1545,6 +1686,34 @@ def public_report_to_markdown(report: dict[str, Any]) -> str:
             f"- Explanation: {text(layer.get('why_this_changed') or layer.get('plain_language_reason') or layer.get('explanation'))}",
             "",
         ]
+    lines += ["## AI Repair Briefs"]
+    for brief in report.get("repair_briefs", []):
+        lines += [
+            "",
+            "AI_REPAIR_HINT",
+            f"- Layer: {text(brief.get('layer_name'))}",
+            f"- Diagnostic Status: {text(brief.get('diagnostic_status'))}",
+            f"- Failure Type: {text(brief.get('failure_type'))}",
+            f"- Expected: {text(brief.get('expected_value'))}",
+            f"- Actual: {text(brief.get('actual_value'))}",
+            f"- Field: {text(brief.get('field_that_drifted'))}",
+            f"- Business Rule: {text(brief.get('business_rule_violated'))}",
+            f"- Likely File: {text(brief.get('likely_backend_file'))}",
+            f"- Likely Frontend File: {text(brief.get('likely_frontend_file'))}",
+            f"- Likely Function: {text(brief.get('likely_function_service'))}",
+            f"- Fix Type: {text(brief.get('fix_type'))}",
+            f"- Safe Baseline Update: {text(brief.get('safe_baseline_update'))}",
+            f"- Do Not Change: {text(brief.get('do_not_change_notes'))}",
+            f"- Recommended Fix: {text('; '.join(brief.get('recommended_fix_steps', [])))}",
+            f"- Verification: {text(brief.get('verification_command'))}",
+            f"- Expected Result: {text(brief.get('expected_result_after_fix'))}",
+            f"- Downstream Impact: {text(brief.get('downstream_impact'))}",
+            f"- Related Layers Likely To Clear: {text(brief.get('related_layers_likely_to_clear_after_this_fix'))}",
+            f"- Confidence: {text(brief.get('confidence_score'))}",
+            "",
+        ]
+    if not report.get("repair_briefs"):
+        lines += ["- No open repair briefs.", ""]
     lines += ["## Regression Summary", f"- Count: {text(report.get('regression_summary', {}).get('count', 0))}", "", "## Root Cause Analysis"]
     lines += [f"- {text(item)}" for item in report.get("root_cause_analysis", [])] or ["- No root cause analysis available."]
     lines += ["", "## Performance Metrics"]
