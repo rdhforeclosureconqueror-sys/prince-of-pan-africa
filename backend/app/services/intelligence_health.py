@@ -541,6 +541,7 @@ def _extract(layer: str, output: dict[str, Any]) -> dict[str, Any]:
         score = output["institution_health"]["score"]; missing = len(output.get("missing_evidence", [])); recs = len(output.get("recommendations", []))
     elif layer == "Opportunity Intelligence":
         score = output["overall_priority"]["score"]; missing = len(output.get("missing_evidence", [])); recs = output.get("dashboard", {}).get("recommendations_count", 0)
+        output = {**output, "confidence": output.get("dashboard", {}).get("confidence", output.get("confidence"))}
     elif layer == "Predictive Intelligence":
         score = output["readiness_score"]; missing = 4; recs = len(output.get("predictions", []))
     elif layer == "Decision Support":
@@ -595,7 +596,7 @@ def _layer_reason(layer: str, expected: dict[str, Any], actual: dict[str, Any], 
 def _suggested_action(layer: str, status: str, regression: str | None, expected: dict[str, Any], actual: dict[str, Any]) -> str:
     if status == "PASS":
         return "No baseline update needed; keep monitoring future diagnostic runs."
-    if layer == "Opportunity Intelligence" or actual.get("opportunity_count") != expected.get("opportunity_count"):
+    if layer == "Opportunity Intelligence" or ("opportunity_count" in expected and actual.get("opportunity_count") != expected.get("opportunity_count")):
         return "Review Opportunity Intelligence scoring and qualifying-opportunity rules before updating baselines."
     if regression:
         return f"Review {layer} scoring logic against the deterministic fixture, then re-run diagnostics before changing baselines."
@@ -624,9 +625,45 @@ def _compare(layer: str, actual: dict[str, Any], elapsed: float, output: dict[st
         if regression or drift_fields
         else "No unexpected change detected."
     )
-    return {"layer": layer, "status": status, "health_status": status, "regression": regression, "regression_level": regression or "None", "expected": expected, "actual": actual, "score_delta": diffs.get("score", 0), "difference_summary": diffs, "confidence_difference": {"expected": expected.get("confidence"), "actual": actual.get("confidence")}, "confidence_score": None, "supporting_evidence": [], "missing_evidence_difference": actual.get("missing_count") - expected.get("missing_count", 0), "priority_difference": {"expected": expected.get("priority"), "actual": actual.get("priority")}, "execution_time_ms": round(elapsed, 2), "debug_payload": output.get("debug") or {"sample_keys": sorted(output.keys())[:12]}, "explanation": f"{layer} {status}: expected score {expected.get('score')} and actual score {actual.get('score')} ({_score_delta_label(diffs.get('score', 0))}). {likely}", "plain_language_reason": reason, "why_this_changed": reason, "suggested_admin_action": _suggested_action(layer, status, regression, expected, actual), "likely_cause": likely}
+    category = _diagnostic_category(status, regression, expected, actual, drift_fields)
+    display_status = "Connected with baseline drift" if category in {"baseline_drift", "scoring_regression"} else status
+    return {"layer": layer, "status": status, "health_status": status, "display_status": display_status, "diagnostic_category": category, "regression": regression, "regression_level": regression or "None", "expected": expected, "actual": actual, "score_delta": diffs.get("score", 0), "difference_summary": diffs, "confidence_difference": {"expected": expected.get("confidence"), "actual": actual.get("confidence")}, "confidence_score": None, "supporting_evidence": [], "missing_evidence_difference": actual.get("missing_count") - expected.get("missing_count", 0), "priority_difference": {"expected": expected.get("priority"), "actual": actual.get("priority")}, "execution_time_ms": round(elapsed, 2), "debug_payload": output.get("debug") or {"sample_keys": sorted(output.keys())[:12]}, "explanation": f"{layer} {status}: expected score {expected.get('score')} and actual score {actual.get('score')} ({_score_delta_label(diffs.get('score', 0))}). {likely}", "plain_language_reason": reason, "why_this_changed": reason, "suggested_admin_action": _suggested_action(layer, status, regression, expected, actual), "likely_cause": likely}
 
 
+
+
+def _diagnostic_category(status: str, regression: str | None, expected: dict[str, Any], actual: dict[str, Any], drift_fields: list[str]) -> str:
+    if status == "FAIL":
+        return "connection_failure" if actual.get("score") is None else "scoring_regression"
+    if regression:
+        return "scoring_regression"
+    if drift_fields:
+        return "baseline_drift"
+    if status == "WARNING":
+        return "runtime_propagation_failure"
+    score_delta = actual.get("score", 0) - expected.get("score", 0) if isinstance(actual.get("score"), int) and isinstance(expected.get("score"), int) else 0
+    if score_delta > 0:
+        return "expected_improvement"
+    return "safe_pass"
+
+def build_stabilization_report(layers: list[dict[str, Any]]) -> dict[str, Any]:
+    unresolved = [layer for layer in layers if layer.get("status") != "PASS"]
+    first = unresolved[0] if unresolved else None
+    opportunity = next((layer for layer in layers if layer.get("layer") == "Opportunity Intelligence"), None)
+    warnings_after_fix = [layer.get("layer") for layer in unresolved if layer.get("diagnostic_category") in {"baseline_drift", "scoring_regression"}]
+    legitimate = [layer.get("layer") for layer in unresolved if layer.get("diagnostic_category") in {"connection_failure", "runtime_propagation_failure"}]
+    return {
+        "root_cause": (first.get("plain_language_reason") if first else "All deterministic intelligence outputs match the baseline."),
+        "files_functions_responsible": [
+            "backend/app/services/opportunity_intelligence.py::generate_opportunity_intelligence",
+            "backend/app/services/intelligence_health.py::_compare",
+            "backend/app/services/intelligence_health.py::_suggested_action",
+        ],
+        "fix_requires": "code_change" if opportunity and opportunity.get("actual", {}).get("opportunity_count") != opportunity.get("expected", {}).get("opportunity_count") else "baseline_update_only_if_intentional",
+        "warnings_should_disappear_after_fix": warnings_after_fix,
+        "warnings_still_legitimate": legitimate,
+        "category_counts": {key: len([layer for layer in layers if layer.get("diagnostic_category") == key]) for key in ["connection_failure", "runtime_propagation_failure", "baseline_drift", "scoring_regression", "expected_improvement", "safe_pass"]},
+    }
 
 
 def _confidence_percent(layer: dict[str, Any]) -> int:
@@ -811,8 +848,8 @@ def build_ai_coo_sprint_plan(run: dict[str, Any], initiatives: list[dict[str, An
         "highest_roi_tasks": deduped_tasks,
         "recommended_implementation_order": deduped_tasks,
         "risk_reduction_estimate": f"{min(75, 20 + len(top) * 15)}%",
-        "expected_health_after_sprint_completion": f"{expected_health}%",
-        "expected_health_after_completion": f"{expected_health}%",
+        "expected_health_after_sprint_completion": f"{expected_health}%" if not unresolved else f"Requires rerun after {len(unresolved)} unresolved diagnostics",
+        "expected_health_after_completion": f"{expected_health}%" if not unresolved else f"Requires rerun after {len(unresolved)} unresolved diagnostics",
         "confidence": confidence,
         "estimated_time_to_completion": f"{max(1, len(deduped_tasks) * 2)} hours",
         "estimated_completion": f"{max(1, len(deduped_tasks) * 2)} hours",
@@ -840,7 +877,7 @@ def ai_chief_operating_officer(run: dict[str, Any], advisor: list[dict[str, Any]
         "what_can_wait": "Stable layer cards, raw evidence review, and public report polish can wait until the top initiative is re-run and verified.",
     }
     return {
-        "recommendation": f"Focus leadership on {top.get('title', 'the top intelligence initiative')} before changing baselines.",
+        "recommendation": f"Focus leadership on {top.get('title', 'the top intelligence initiative')} before changing baselines; projected health is not inflated until diagnostics pass.",
         "why_this_matters": why,
         "initiatives": initiatives,
         "sprint_planning": sprint_plan,
@@ -922,7 +959,7 @@ def run_full_intelligence_diagnostic(db: Session | None = None) -> dict[str, Any
         validation_suite["system_readiness_report"]["real_data_readiness"] = "NOT_VERIFIED: live runtime propagation did not verify every required object and layer."
         validation_suite["system_readiness_report"]["overall_operational_readiness"] = "NOT_PRODUCTION_READY"
     runtime_evidence = _runtime_evidence_by_layer(runtime_propagation)
-    run = {"ok": True, "runtime_propagation": runtime_propagation, "runtime_evidence": runtime_evidence, "validation_suite": validation_suite, "system_readiness_report": validation_suite["system_readiness_report"], "verification_source_of_truth": {}, "diagnostic_id": f"intel-health-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}", "created_at": datetime.utcnow().isoformat(), "admin_only": True, "isolated_fixture": True, "fixture_name": FIXTURE_NAME, "fixture_version": FIXTURE_VERSION, "environment": _environment_name(), "build_commit": _build_commit(), "report_token": None, "production_writes": 0, "workflow_execution": False, "notification_count": 0, "assignment_count": 0, "persistence_of_intelligence_outputs": False, "execution_order": [l["layer"] for l in layers], "overall_health_percent": health, "overall_status": _overall_status(layers), "status_counts": status_counts, "pass_fail_summary": {"passed": status_counts["pass"], "warnings": status_counts["warning"], "failed": status_counts["fail"], "regressions": status_counts["regression"]}, "layers": layers, "regression_count": len(regressions), "warnings": [l for l in layers if l["status"] == "WARNING"], "critical_failures": failures, "last_successful_diagnostic": None, "performance": {"total_execution_time_ms": total, "memory_usage": "unavailable", "api_response_time_ms": total, "largest_payload_layer": max(layers, key=lambda l: len(str(l["debug_payload"]))) ["layer"], "slowest_layer": max(layers, key=lambda l: l["execution_time_ms"])["layer"], "fastest_layer": min(layers, key=lambda l: l["execution_time_ms"])["layer"]}, "root_cause_analysis": _root_cause(layers), "root_cause_classification": _classify_root_cause(" ".join(_root_cause(layers))), "dependency_impact": dependency_impact(layers), "executive_summary": executive_summary(layers), "recommended_next_actions": recommended_next_actions(layers), "health_trend": "stable"}
+    run = {"ok": True, "runtime_propagation": runtime_propagation, "runtime_evidence": runtime_evidence, "validation_suite": validation_suite, "system_readiness_report": validation_suite["system_readiness_report"], "verification_source_of_truth": {}, "diagnostic_id": f"intel-health-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}", "created_at": datetime.utcnow().isoformat(), "admin_only": True, "isolated_fixture": True, "fixture_name": FIXTURE_NAME, "fixture_version": FIXTURE_VERSION, "environment": _environment_name(), "build_commit": _build_commit(), "report_token": None, "production_writes": 0, "workflow_execution": False, "notification_count": 0, "assignment_count": 0, "persistence_of_intelligence_outputs": False, "execution_order": [l["layer"] for l in layers], "overall_health_percent": health, "overall_status": _overall_status(layers), "status_counts": status_counts, "pass_fail_summary": {"passed": status_counts["pass"], "warnings": status_counts["warning"], "failed": status_counts["fail"], "regressions": status_counts["regression"]}, "layers": layers, "regression_count": len(regressions), "warnings": [l for l in layers if l["status"] == "WARNING"], "critical_failures": failures, "last_successful_diagnostic": None, "performance": {"total_execution_time_ms": total, "memory_usage": "unavailable", "api_response_time_ms": total, "largest_payload_layer": max(layers, key=lambda l: len(str(l["debug_payload"]))) ["layer"], "slowest_layer": max(layers, key=lambda l: l["execution_time_ms"])["layer"], "fastest_layer": min(layers, key=lambda l: l["execution_time_ms"])["layer"]}, "root_cause_analysis": _root_cause(layers), "stabilization_report": build_stabilization_report(layers), "root_cause_classification": _classify_root_cause(" ".join(_root_cause(layers))), "dependency_impact": dependency_impact(layers), "executive_summary": executive_summary(layers), "recommended_next_actions": recommended_next_actions(layers), "health_trend": "stable"}
     previous = _DIAGNOSTIC_HISTORY[-1] if _DIAGNOSTIC_HISTORY else None
     run["last_successful_diagnostic"] = previous["created_at"] if previous and previous["overall_health_percent"] >= 90 else None
     run["comparison_to_previous"] = compare_diagnostics(run, previous)
@@ -936,7 +973,7 @@ def run_full_intelligence_diagnostic(db: Session | None = None) -> dict[str, Any
     run["predictive_intelligence"] = predictive_intelligence(run, _DIAGNOSTIC_HISTORY)
     run["ecosystem_intelligence"] = ecosystem_intelligence(layers)
     run["ai_chief_operating_officer"] = ai_chief_operating_officer(run, run["ai_operations_advisor"])
-    run["command_center"] = {"mission_status": "Operational" if run["overall_status"] != "FAIL" else "Needs intervention", "deployment_status": "Pending", "risk_level": run["ai_operations_advisor"][0]["priority"] if run["ai_operations_advisor"] else "LOW", "todays_recommendation": run["ai_operations_advisor"][0]["suggested_fix"] if run["ai_operations_advisor"] else "No administrator action required."}
+    run["command_center"] = {"mission_status": "Operational" if run["overall_status"] == "PASS" and run["overall_health_percent"] >= 90 else "Needs intervention", "deployment_status": "Pending", "risk_level": run["ai_operations_advisor"][0]["priority"] if run["ai_operations_advisor"] else "LOW", "todays_recommendation": run["ai_operations_advisor"][0]["suggested_fix"] if run["ai_operations_advisor"] else "No administrator action required."}
     run["pipeline"] = build_intelligence_pipeline(run)
     run["verification_source_of_truth"] = run["pipeline"].get("verification_source_of_truth", verification_source_of_truth(run))
     run["command_center"]["deployment_status"] = run["pipeline"].get("overall_status", "Pending")
@@ -997,6 +1034,8 @@ def _public_layer(layer: dict[str, Any]) -> dict[str, Any]:
         "priority_difference": deepcopy(layer.get("priority_difference", {})),
         "execution_time_ms": layer.get("execution_time_ms"),
         "score_delta": layer.get("score_delta"),
+        "display_status": layer.get("display_status"),
+        "diagnostic_category": layer.get("diagnostic_category"),
         "regression_level": layer.get("regression_level"),
         "explanation": layer.get("explanation"),
         "plain_language_reason": layer.get("plain_language_reason"),
@@ -1035,6 +1074,7 @@ def sanitize_diagnostic_for_public_report(run: dict[str, Any]) -> dict[str, Any]
         "expired": False,
         "overall_summary": run.get("executive_summary", "Diagnostic summary unavailable."),
         "root_cause_analysis": deepcopy(run.get("root_cause_analysis", [])),
+        "stabilization_report": deepcopy(run.get("stabilization_report", {})),
         "recommended_admin_actions": list(run.get("recommended_next_actions", ADMIN_RECOMMENDED_ACTIONS)),
         "diagnostic_history_summary": {
             "stored_run_count": len(_DIAGNOSTIC_HISTORY),
