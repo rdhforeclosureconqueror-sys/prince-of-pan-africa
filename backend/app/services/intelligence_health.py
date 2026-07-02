@@ -185,7 +185,12 @@ def _json_contains_identity(value: Any, identity_values: set[str]) -> bool:
 def _field_delta(before: dict[str, Any], after: dict[str, Any]) -> dict[str, list[str]]:
     before_keys = set(before.keys())
     after_keys = set(after.keys())
-    return {"fields_added": sorted(after_keys - before_keys), "fields_removed": sorted(before_keys - after_keys)}
+    common = before_keys & after_keys
+    return {
+        "fields_added": sorted(after_keys - before_keys),
+        "fields_removed": sorted(before_keys - after_keys),
+        "fields_mutated": sorted(key for key in common if before.get(key) != after.get(key)),
+    }
 
 def _object_timestamp(row: Any) -> str | None:
     for field in ("updated_at", "created_at", "timestamp", "current_period_end"):
@@ -273,17 +278,26 @@ def build_runtime_propagation_report(db: Session | None) -> dict[str, Any]:
             next_layer = DIAGNOSTIC_LAYER_ORDER[index + 1] if index + 1 < len(DIAGNOSTIC_LAYER_ORDER) else None
             next_output = _run_live_layer(db, next_layer, obj.get("society_id"), obj.get("member_id"), output) if next_layer else None
             next_received = _json_contains_identity(next_output, identity) if isinstance(next_output, dict) else False
+            field_delta = _field_delta(previous_output or obj.get("snapshot", {}), output)
+            output_hash = _stable_fingerprint(output)
+            trace_id = f"runtime-{layer.lower().replace(' ', '-')}-{obj.get('type', 'object').lower().replace(' ', '-')}-{obj.get('id') or 'missing'}-{output_hash}"
             trace.append({
                 "layer": layer,
+                "runtime_status": "VERIFIED" if next_received else "NOT_VERIFIED",
+                "source_type": "Real DB",
+                "runtime_trace_id": trace_id,
                 "object_id": obj.get("id"),
+                "input_object_id_received": obj.get("id"),
+                "output_object_id_produced": output_hash,
                 "timestamp": datetime.utcnow().isoformat(),
-                "input_received": {"object_type": obj.get("type"), "object_snapshot": obj.get("snapshot"), "previous_output_hash": _stable_fingerprint(previous_output) if previous_output else None},
-                "output_produced": {"output_hash": _stable_fingerprint(output), "top_level_fields": sorted(output_keys), "runtime_status": output.get("runtime_status", "OBSERVED")},
-                "fields_added": sorted(output_keys - previous_keys),
-                "fields_removed": sorted(previous_keys - output_keys),
+                "input_received": {"object_type": obj.get("type"), "object_id": obj.get("id"), "object_snapshot": obj.get("snapshot"), "previous_output_hash": _stable_fingerprint(previous_output) if previous_output else None},
+                "output_produced": {"object_id": output_hash, "output_hash": output_hash, "top_level_fields": sorted(output_keys), "runtime_status": output.get("runtime_status", "OBSERVED")},
+                **field_delta,
                 "downstream_consumer": next_layer,
+                "downstream_consumption_observed": bool(next_received),
                 "evidence_next_layer_actually_received_it": {"status": "VERIFIED" if next_received else "NOT_VERIFIED", "method": "Searched next live layer output for the runtime object/member/society id values; no contract inference was accepted.", "identity_values": sorted(identity)},
                 "fixture_data_used": False,
+                "evidence_summary": "Runtime identity was observed in the next live layer output." if next_received else "No runtime propagation evidence was observed in the next downstream layer; contract-only inference is not counted.",
             })
             previous_output = output
             previous_keys = output_keys
@@ -292,6 +306,32 @@ def build_runtime_propagation_report(db: Session | None) -> dict[str, Any]:
     verified_count = len([obj for obj in objects if obj.get("status") == "RUNTIME_PROPAGATION_VERIFIED"])
     no_data = len([obj for obj in objects if obj.get("status") == "NO_RUNTIME_DATA"])
     return {"status": "VERIFIED" if verified_count == len(objects) and objects else "NOT_VERIFIED", "production_ready": False, "source": "live_runtime_database", "fixture_data_used": False, "summary": {"objects_checked": len(objects), "runtime_verified": verified_count, "no_runtime_data": no_data, "not_verified": len(objects) - verified_count - no_data}, "objects": objects, "production_readiness_statement": "NOT_PRODUCTION_READY: live runtime propagation must be VERIFIED for every required object before production readiness can be reported."}
+
+
+def _runtime_evidence_by_layer(runtime_propagation: dict[str, Any]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    objects = runtime_propagation.get("objects", []) if isinstance(runtime_propagation, dict) else []
+    for layer in DIAGNOSTIC_LAYER_ORDER:
+        traces = [step for obj in objects if isinstance(obj, dict) for step in obj.get("pipeline_trace", []) if isinstance(step, dict) and step.get("layer") == layer]
+        verified = next((step for step in traces if step.get("runtime_status") == "VERIFIED" and step.get("downstream_consumption_observed") is True), None)
+        step = verified or (traces[0] if traces else {})
+        rows.append({
+            "layer": layer,
+            "runtime_status": "VERIFIED" if verified else "NOT VERIFIED",
+            "source_type": step.get("source_type") or ("Missing" if not traces else "Real DB"),
+            "runtime_trace_id": step.get("runtime_trace_id") or "missing",
+            "input_object_id_received": step.get("input_object_id_received"),
+            "output_object_id_produced": step.get("output_object_id_produced"),
+            "timestamp": step.get("timestamp"),
+            "next_downstream_consumer": step.get("downstream_consumer"),
+            "downstream_consumption_observed": bool(verified),
+            "fields_added": step.get("fields_added", []),
+            "fields_removed": step.get("fields_removed", []),
+            "fields_mutated": step.get("fields_mutated", []),
+            "fixture_usage": "yes" if step.get("fixture_data_used") else "no",
+            "evidence_summary": step.get("evidence_summary") or "No runtime propagation trace is present; this layer is not verified.",
+        })
+    return rows
 
 
 def _history_storage_path() -> Path:
@@ -881,7 +921,8 @@ def run_full_intelligence_diagnostic(db: Session | None = None) -> dict[str, Any
     if runtime_propagation.get("status") != "VERIFIED":
         validation_suite["system_readiness_report"]["real_data_readiness"] = "NOT_VERIFIED: live runtime propagation did not verify every required object and layer."
         validation_suite["system_readiness_report"]["overall_operational_readiness"] = "NOT_PRODUCTION_READY"
-    run = {"ok": True, "runtime_propagation": runtime_propagation, "validation_suite": validation_suite, "system_readiness_report": validation_suite["system_readiness_report"], "verification_source_of_truth": {}, "diagnostic_id": f"intel-health-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}", "created_at": datetime.utcnow().isoformat(), "admin_only": True, "isolated_fixture": True, "fixture_name": FIXTURE_NAME, "fixture_version": FIXTURE_VERSION, "environment": _environment_name(), "build_commit": _build_commit(), "report_token": None, "production_writes": 0, "workflow_execution": False, "notification_count": 0, "assignment_count": 0, "persistence_of_intelligence_outputs": False, "execution_order": [l["layer"] for l in layers], "overall_health_percent": health, "overall_status": _overall_status(layers), "status_counts": status_counts, "pass_fail_summary": {"passed": status_counts["pass"], "warnings": status_counts["warning"], "failed": status_counts["fail"], "regressions": status_counts["regression"]}, "layers": layers, "regression_count": len(regressions), "warnings": [l for l in layers if l["status"] == "WARNING"], "critical_failures": failures, "last_successful_diagnostic": None, "performance": {"total_execution_time_ms": total, "memory_usage": "unavailable", "api_response_time_ms": total, "largest_payload_layer": max(layers, key=lambda l: len(str(l["debug_payload"]))) ["layer"], "slowest_layer": max(layers, key=lambda l: l["execution_time_ms"])["layer"], "fastest_layer": min(layers, key=lambda l: l["execution_time_ms"])["layer"]}, "root_cause_analysis": _root_cause(layers), "root_cause_classification": _classify_root_cause(" ".join(_root_cause(layers))), "dependency_impact": dependency_impact(layers), "executive_summary": executive_summary(layers), "recommended_next_actions": recommended_next_actions(layers), "health_trend": "stable"}
+    runtime_evidence = _runtime_evidence_by_layer(runtime_propagation)
+    run = {"ok": True, "runtime_propagation": runtime_propagation, "runtime_evidence": runtime_evidence, "validation_suite": validation_suite, "system_readiness_report": validation_suite["system_readiness_report"], "verification_source_of_truth": {}, "diagnostic_id": f"intel-health-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}", "created_at": datetime.utcnow().isoformat(), "admin_only": True, "isolated_fixture": True, "fixture_name": FIXTURE_NAME, "fixture_version": FIXTURE_VERSION, "environment": _environment_name(), "build_commit": _build_commit(), "report_token": None, "production_writes": 0, "workflow_execution": False, "notification_count": 0, "assignment_count": 0, "persistence_of_intelligence_outputs": False, "execution_order": [l["layer"] for l in layers], "overall_health_percent": health, "overall_status": _overall_status(layers), "status_counts": status_counts, "pass_fail_summary": {"passed": status_counts["pass"], "warnings": status_counts["warning"], "failed": status_counts["fail"], "regressions": status_counts["regression"]}, "layers": layers, "regression_count": len(regressions), "warnings": [l for l in layers if l["status"] == "WARNING"], "critical_failures": failures, "last_successful_diagnostic": None, "performance": {"total_execution_time_ms": total, "memory_usage": "unavailable", "api_response_time_ms": total, "largest_payload_layer": max(layers, key=lambda l: len(str(l["debug_payload"]))) ["layer"], "slowest_layer": max(layers, key=lambda l: l["execution_time_ms"])["layer"], "fastest_layer": min(layers, key=lambda l: l["execution_time_ms"])["layer"]}, "root_cause_analysis": _root_cause(layers), "root_cause_classification": _classify_root_cause(" ".join(_root_cause(layers))), "dependency_impact": dependency_impact(layers), "executive_summary": executive_summary(layers), "recommended_next_actions": recommended_next_actions(layers), "health_trend": "stable"}
     previous = _DIAGNOSTIC_HISTORY[-1] if _DIAGNOSTIC_HISTORY else None
     run["last_successful_diagnostic"] = previous["created_at"] if previous and previous["overall_health_percent"] >= 90 else None
     run["comparison_to_previous"] = compare_diagnostics(run, previous)
@@ -1033,6 +1074,8 @@ def sanitize_diagnostic_for_public_report(run: dict[str, Any]) -> dict[str, Any]
         "system_readiness_report": deepcopy(run.get("system_readiness_report", {})),
         "verification_source_of_truth": deepcopy(run.get("verification_source_of_truth", {})),
         "runtime_propagation": deepcopy(run.get("runtime_propagation", {})),
+        "runtime_evidence": deepcopy(run.get("runtime_evidence", _runtime_evidence_by_layer(run.get("runtime_propagation", {})))),
+        "runtime_evidence_rule": "A layer is VERIFIED only when live runtime propagation evidence is present and downstream consumption was actually observed; contract-only inference is never counted.",
         "source_note": "Sanitized deterministic fixture diagnostics only. No member records, emails, private society records, tokens beyond this requested public report token, raw debug payloads, stack traces, secrets, user PII, auth data, payments, businesses, workflow records, private member data, or sensitive internal IDs are included.",
     }
 
@@ -1174,6 +1217,27 @@ def public_report_to_html(report: dict[str, Any]) -> str:
         for layer in layers
         if isinstance(layer, dict)
     )
+    runtime_evidence = report.get("runtime_evidence", []) if isinstance(report.get("runtime_evidence"), list) else []
+    runtime_rows = "".join(
+        "<tr>"
+        f"<td>{_html_escape(row.get('layer', 'Unknown Layer'))}</td>"
+        f"<td>{_html_escape(row.get('runtime_status', 'NOT VERIFIED'))}</td>"
+        f"<td>{_html_escape(row.get('source_type', 'Missing'))}</td>"
+        f"<td>{_html_escape(row.get('runtime_trace_id', 'missing'))}</td>"
+        f"<td>{_html_escape(row.get('input_object_id_received', ''))}</td>"
+        f"<td>{_html_escape(row.get('output_object_id_produced', ''))}</td>"
+        f"<td>{_html_escape(row.get('timestamp', ''))}</td>"
+        f"<td>{_html_escape(row.get('next_downstream_consumer', ''))}</td>"
+        f"<td>{_html_escape(row.get('downstream_consumption_observed', False))}</td>"
+        f"<td>{_html_escape(', '.join(row.get('fields_added', [])) if isinstance(row.get('fields_added'), list) else row.get('fields_added', ''))}</td>"
+        f"<td>{_html_escape(', '.join(row.get('fields_removed', [])) if isinstance(row.get('fields_removed'), list) else row.get('fields_removed', ''))}</td>"
+        f"<td>{_html_escape(', '.join(row.get('fields_mutated', [])) if isinstance(row.get('fields_mutated'), list) else row.get('fields_mutated', ''))}</td>"
+        f"<td>{_html_escape(row.get('fixture_usage', 'no'))}</td>"
+        f"<td>{_html_escape(row.get('evidence_summary', 'No runtime evidence displayed; not verified.'))}</td>"
+        "</tr>"
+        for row in runtime_evidence
+        if isinstance(row, dict)
+    )
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -1192,6 +1256,9 @@ def public_report_to_html(report: dict[str, Any]) -> str:
       <a href="{json_url}">View JSON</a>
       <a href="{markdown_url}">View Markdown</a>
     </nav>
+    <h2>Runtime Evidence</h2>
+    <p>A layer is VERIFIED only when runtime propagation evidence is present and downstream consumption was actually observed. Contract-only inference is not counted.</p>
+    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%"><table><thead><tr><th>Layer</th><th>Runtime status</th><th>Source type</th><th>Runtime trace ID</th><th>Input object ID received</th><th>Output object ID produced</th><th>Timestamp</th><th>Next downstream consumer</th><th>Downstream consumption observed</th><th>Fields added</th><th>Fields removed</th><th>Fields mutated</th><th>Fixture usage</th><th>Evidence summary</th></tr></thead><tbody>{runtime_rows or '<tr><td colspan="14">Runtime evidence is missing. No layer is verified.</td></tr>'}</tbody></table></div>
     <h2>Layer Results</h2>
     <ul>{layer_items}</ul>
   </main>
@@ -1236,6 +1303,31 @@ def public_report_to_markdown(report: dict[str, Any]) -> str:
         f"- Can rerun diagnostics: {text(no_write.get('can_rerun_diagnostics', False))}",
         f"- Source note: {text(report.get('source_note'))}",
         "",
+        "## Runtime Evidence",
+        "A layer is VERIFIED only when runtime propagation evidence is present and downstream consumption was actually observed. Contract-only inference is not counted.",
+        "",
+    ]
+    for row in report.get("runtime_evidence", []):
+        lines += [
+            f"### Runtime Evidence: {text(row.get('layer'), 'Unknown Layer')}",
+            f"- Runtime status: {text(row.get('runtime_status'), 'NOT VERIFIED')}",
+            f"- Source type: {text(row.get('source_type'), 'Missing')}",
+            f"- Runtime trace ID: {text(row.get('runtime_trace_id'), 'missing')}",
+            f"- Input object ID received: {text(row.get('input_object_id_received'))}",
+            f"- Output object ID produced: {text(row.get('output_object_id_produced'))}",
+            f"- Timestamp: {text(row.get('timestamp'))}",
+            f"- Next downstream consumer: {text(row.get('next_downstream_consumer'))}",
+            f"- Downstream consumption observed: {text(row.get('downstream_consumption_observed', False))}",
+            f"- Fields added: {text(row.get('fields_added'))}",
+            f"- Fields removed: {text(row.get('fields_removed'))}",
+            f"- Fields mutated: {text(row.get('fields_mutated'))}",
+            f"- Fixture usage: {text(row.get('fixture_usage'), 'no')}",
+            f"- Evidence summary: {text(row.get('evidence_summary'))}",
+            "",
+        ]
+    if not report.get("runtime_evidence"):
+        lines += ["- Runtime evidence is missing. No layer is verified.", ""]
+    lines += [
         "## Layer Results",
     ]
     for layer in report.get("layers", []):

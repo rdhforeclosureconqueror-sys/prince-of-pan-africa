@@ -171,6 +171,7 @@ const average = (values) => {
   return Math.round(numeric.reduce((sum, value) => sum + value, 0) / numeric.length);
 };
 const formatMetric = (value, unit = "") => value === null || value === undefined || value === "" ? "—" : `${value}${unit}`;
+const formatList = (value) => asArray(value).length ? asArray(value).join(", ") : "—";
 const trendDirectionFrom = (current, previous, lowerIsBetter = false) => {
   const currentNumber = numberOrNull(current);
   const previousNumber = numberOrNull(previous);
@@ -308,6 +309,7 @@ export default function IntelligenceHealthMonitor() {
   const pipeline = safeObject(result?.pipeline);
   const pipelineSteps = asArray(pipeline.steps);
   const performanceSummary = safeObject(result?.performance_summary);
+  const runtimeEvidence = asArray(result?.runtime_evidence);
   const timeline = asArray(result?.timeline);
   const rootCauseClassification = safeObject(result?.root_cause_classification);
   const passFailSummary = safeObject(result?.pass_fail_summary);
@@ -469,6 +471,16 @@ export default function IntelligenceHealthMonitor() {
 
       <h3>AI COO Sprint Planning</h3>
       <article className="stat-card wide-card"><h4>Sprint goal</h4><p>{sprint.goal || sprint.sprint_goal || `Restore the intelligence chain to ${failureCount ? "non-critical" : "healthy"} status while protecting public diagnostic confidence.`}</p><h4>Highest ROI tasks</h4><ul>{(asArray(sprint.highest_roi_tasks).length ? asArray(sprint.highest_roi_tasks) : priorityQueue.slice(0, 3).map((action) => action.title)).map((task) => <li key={task}>{task}</li>)}</ul><h4>Recommended implementation order</h4><ol>{(asArray(sprint.recommended_implementation_order).length ? asArray(sprint.recommended_implementation_order) : priorityQueue.slice(0, 4).map((action) => action.title)).map((task) => <li key={task}>{task}</li>)}</ol><p><strong>Risk reduction estimate:</strong> {sprint.risk_reduction_estimate || "25–40% after the top two queue items are verified."}</p><p><strong>Expected health after sprint completion:</strong> {sprint.expected_health_after_sprint_completion || sprint.expected_health_after_completion || sprint.expected_result?.overall_health || "90%+ with no critical failures."}</p><p><strong>Confidence:</strong> {sprint.confidence || sprint.estimated_confidence || "—"}%</p><p><strong>Estimated time to completion:</strong> {sprint.estimated_time_to_completion || sprint.estimated_completion || "—"}</p></article>
+
+      <h3>Runtime Evidence</h3>
+      <article className="stat-card wide-card runtime-evidence-panel" aria-label="Runtime Evidence">
+        <h4>Are the intelligence layers actually connected?</h4>
+        <p><strong>Verification rule:</strong> A layer is VERIFIED only when runtime propagation evidence is present and downstream consumption was actually observed. Contract-only inference is not counted.</p>
+        <table className="admin-table runtime-evidence-table">
+          <thead><tr><th>Layer</th><th>Runtime status</th><th>Source type</th><th>Runtime trace ID</th><th>Input object ID received</th><th>Output object ID produced</th><th>Timestamp</th><th>Next downstream consumer</th><th>Downstream consumption observed</th><th>Fields added</th><th>Fields removed</th><th>Fields mutated</th><th>Fixture usage</th><th>Evidence summary</th></tr></thead>
+          <tbody>{runtimeEvidence.length ? runtimeEvidence.map((evidence) => <tr key={evidence.layer}><td>{evidence.layer}</td><td><strong>{evidence.runtime_status}</strong></td><td>{evidence.source_type}</td><td>{evidence.runtime_trace_id}</td><td>{evidence.input_object_id_received ?? "—"}</td><td>{evidence.output_object_id_produced ?? "—"}</td><td>{evidence.timestamp || "—"}</td><td>{evidence.next_downstream_consumer || "—"}</td><td>{evidence.downstream_consumption_observed ? "yes" : "no"}</td><td>{formatList(evidence.fields_added)}</td><td>{formatList(evidence.fields_removed)}</td><td>{formatList(evidence.fields_mutated)}</td><td>{evidence.fixture_usage || (evidence.fixture_data_used ? "yes" : "no")}</td><td>{evidence.evidence_summary || "No runtime evidence displayed; not verified."}</td></tr>) : <tr><td colSpan={14}>Runtime evidence is missing. No layer is counted as verified until propagation evidence is displayed.</td></tr>}</tbody>
+        </table>
+      </article>
 
       <h3>Technical Diagnostic Evidence</h3>
 
