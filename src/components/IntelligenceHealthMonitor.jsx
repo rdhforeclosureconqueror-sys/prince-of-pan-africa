@@ -187,6 +187,17 @@ const statusIcon = (layer) => {
   return "🟢 Healthy";
 };
 
+const isRuntimeVerified = (evidence) => Boolean(evidence && (evidence.runtime_status === "VERIFIED" || evidence.live_runtime_propagation_observed) && evidence.downstream_consumption_observed);
+const operationalLayerName = (name = "Intelligence") => `${String(name).replace(/ Intelligence$/i, "")} Intelligence`;
+const executiveConnectionPhrase = (layer, nextLayer) => nextLayer ? `${operationalLayerName(layer)} is successfully feeding ${operationalLayerName(nextLayer)}.` : `${operationalLayerName(layer)} is reaching its final operating destination.`;
+const executiveStatusFor = (layer, evidence) => {
+  if (!isRuntimeVerified(evidence)) return layer?.status === "FAIL" ? "Disconnected" : layer?.regression ? "Regression" : "Warning";
+  if (layer?.regression) return "Regression";
+  if (layer?.status === "WARNING") return "Warning";
+  return "Connected";
+};
+const executiveStatusIcon = (status) => status === "Connected" ? "🟢" : status === "Disconnected" ? "🔴" : status === "Regression" ? "🟠" : "🟡";
+
 export default function IntelligenceHealthMonitor() {
   const mountedRef = useRef(true);
   const [running, setRunning] = useState(false);
@@ -202,6 +213,7 @@ export default function IntelligenceHealthMonitor() {
   const [generatingReport, setGeneratingReport] = useState(false);
   const [trendWindow, setTrendWindow] = useState("10");
   const [selectedLayer, setSelectedLayer] = useState("Decision Support");
+  const [viewMode, setViewMode] = useState("executive");
 
   const clearPublicReport = () => {
     setPublicReportState(null);
@@ -310,11 +322,14 @@ export default function IntelligenceHealthMonitor() {
   const pipelineSteps = asArray(pipeline.steps);
   const performanceSummary = safeObject(result?.performance_summary);
   const runtimeEvidence = asArray(result?.runtime_evidence);
+  const runtimeEvidenceByLayer = new Map(runtimeEvidence.map((evidence) => [String(evidence.layer || "").replace(/ Intelligence$/i, ""), evidence]));
   const timeline = asArray(result?.timeline);
   const rootCauseClassification = safeObject(result?.root_cause_classification);
   const passFailSummary = safeObject(result?.pass_fail_summary);
   const dependencyLayers = ["Member", "Society", "Institution", "Opportunity", "Predictive", "Decision Support", "Execution Planning", "Execution Intelligence", "Institutional Memory", "Institutional Learning"];
   const selectedLayerIndex = Math.max(0, dependencyLayers.indexOf(selectedLayer));
+  const firstFailureIndex = dependencyLayers.findIndex((layer) => { const match = layers.find((item) => (item.layer || "").includes(layer)); const evidence = runtimeEvidenceByLayer.get(layer); return !isRuntimeVerified(evidence) || match?.status === "FAIL" || match?.regression; });
+  const blastRadius = firstFailureIndex >= 0 ? dependencyLayers.slice(firstFailureIndex + 1) : [];
   const healthScore = (result?.overall_health_percent ?? result?.overall_health?.percent) ?? "—";
   const failureCount = asArray(result?.critical_failures).length || asArray(result?.failed_layers).length || (passFailSummary.failed ?? 0);
   const regressionCount = result?.regression_count ?? result?.regression_summary?.count ?? 0;
@@ -412,8 +427,9 @@ export default function IntelligenceHealthMonitor() {
   return (
     <section className="cosmic-section intelligence-health-monitor" aria-labelledby="intelligence-health-title">
       <p className="section-kicker">Admin Only · Read-Only Diagnostic</p>
-      <h2 id="intelligence-health-title">🧠 Intelligence Health Monitor</h2>
-      <p className="admin-subtext">Runs deterministic isolated fixtures through Member, Society, Institution, Opportunity, Predictive, Decision Support, Execution Planning, Execution Intelligence, Institutional Memory, and Institutional Learning layers without touching production records, workflow tasks, assignments, notifications, calendars, payments, businesses, or persisted intelligence outputs.</p>
+      <h2 id="intelligence-health-title">🧠 SimbaBrain Mission Control</h2>
+      <p className="admin-subtext">Executive operating center for Simba intelligence: what is happening, why it matters, what leadership should do next, and what happens if no action is taken.</p>
+      <div className="view-mode-toggle" role="tablist" aria-label="Dashboard viewing mode"><button type="button" role="tab" aria-selected={viewMode === "executive"} className={viewMode === "executive" ? "active" : ""} onClick={() => setViewMode("executive")}>Executive View</button><button type="button" role="tab" aria-selected={viewMode === "technical"} className={viewMode === "technical" ? "active" : ""} onClick={() => setViewMode("technical")}>Technical View</button></div>
       <div className="hero-actions">
         <button className="hero-btn" type="button" onClick={run} disabled={actionDisabled}>{running ? "Running Full Intelligence Diagnostic..." : "Run Full Intelligence Diagnostic"}</button>
         <button className="hero-btn secondary" type="button" onClick={generateReport} disabled={actionDisabled}>{generatingReport ? "Generating Public Report..." : "Generate Public Diagnostic Report"}</button>
@@ -423,7 +439,7 @@ export default function IntelligenceHealthMonitor() {
       {publicReportError && <article className="stat-card admin-error"><h3>Public report could not be generated</h3><p>⚠️ {publicReportError}</p><button type="button" onClick={clearPublicReport}>Clear Public Report Link</button></article>}
       {historyError && !layers.length && <article className="stat-card"><h3>Last run could not be loaded</h3><p>Diagnostics unavailable</p></article>}
 
-      <section className="mission-control" aria-label="Executive Brief">
+      {viewMode === "executive" && <section className="mission-control" aria-label="Executive Brief">
         <h3>Executive Brief</h3>
         <div className="dashboard-grid executive-brief-grid">
           <article className={`stat-card state-${missionStatus.toLowerCase().replace(/\s+/g, "-")}`}><h3>Mission Status</h3><h2>{missionStatus}</h2></article>
@@ -437,8 +453,9 @@ export default function IntelligenceHealthMonitor() {
         <article className="stat-card ai-coo-recommendation"><h3>AI COO Daily Briefing</h3><p><strong>Yesterday:</strong> {dailyBriefing.yesterday}</p><p><strong>Today:</strong> {dailyBriefing.today}</p><p><strong>Highest risk:</strong> {dailyBriefing.highestRisk}</p><p><strong>Highest opportunity:</strong> {dailyBriefing.highestOpportunity}</p><p><strong>Recommended work order:</strong> {dailyBriefing.workOrder}</p><p><strong>Expected outcome if completed:</strong> {dailyBriefing.expectedOutcome}</p><p><strong>Estimated confidence:</strong> {dailyBriefing.confidence}%</p><div className="action-strip">{["Create Sprint Task", "Assign Owner", "Run Diagnostic Again"].map((action) => <button key={action} type="button" onClick={action === "Run Diagnostic Again" ? run : undefined} disabled={actionDisabled && action === "Run Diagnostic Again"}>{action}</button>)}</div></article>
         <article className="stat-card wide-card"><h3>Executive Change Log</h3><table className="admin-table"><thead><tr><th>Metric</th><th>Previous</th><th>Current</th><th>Direction</th><th>Action</th></tr></thead><tbody>{changeLogRows.map(([label, previous, current, unit, lowerIsBetter]) => { const direction = trendDirectionFrom(current, previous, lowerIsBetter); return <tr key={label}><td>{label}</td><td>{formatMetric(previous, unit)}</td><td>{formatMetric(current, unit)}</td><td>{direction === "improved" ? "🟢 Improved" : direction === "worse" ? "🔴 Worse" : "🟡 Stable / awaiting history"}</td><td><button type="button">Compare Previous Run</button></td></tr>; })}</tbody></table></article>
         <article className="stat-card wide-card"><h3>Why This Matters</h3><p><strong>What changed:</strong> {whyThisMatters.what_changed || result?.executive_summary || "Diagnostic output changed against the intelligence baseline."}</p><p><strong>Why it matters:</strong> {whyThisMatters.why_it_matters || "Leadership needs consolidated initiatives instead of duplicate layer recommendations."}</p><p><strong>Fix first:</strong> {whyThisMatters.what_should_be_fixed_first || highestPriority}</p><p><strong>Can wait:</strong> {whyThisMatters.what_can_wait || "Stable layer evidence and lower-risk polish can wait until the top initiative is verified."}</p><div className="action-strip">{["Review", "View Evidence", "Open Layer", "Mark Resolved"].map((action) => <button key={action} type="button">{action}</button>)}</div></article>
-      </section>
+      </section>}
 
+      {viewMode === "executive" && <>
       <h3>AI COO Initiative Synthesis</h3>
       <div className="dashboard-grid" aria-label="AI COO Initiative Synthesis">
         {initiatives.length ? initiatives.map((initiative, index) => <details className="stat-card drilldown-card" key={initiative.id || initiative.title} open={index === 0}><summary><strong>Initiative {index + 1}: {initiative.title}</strong> · {initiative.status || "recommended"}</summary><p><strong>Root cause:</strong> {initiative.root_cause}</p><p><strong>Why it matters:</strong> {initiative.why_it_matters}</p><p><strong>Affected layers:</strong> {asArray(initiative.affected_layers).join(", ") || "—"}</p><p><strong>Expected health improvement:</strong> {initiative.expected_health_improvement}</p><p><strong>Estimated effort:</strong> {initiative.estimated_effort}</p><p><strong>Confidence:</strong> {initiative.confidence}%</p><p><strong>Owner/type of work:</strong> {initiative.recommended_owner_type_of_work}</p><div className="drilldown-grid"><span>Health Timeline</span><span>Historical Scores</span><span>Regression History</span><span>Evidence</span><span>Related Commits</span><span>Affected Systems</span><span>Recommended Fixes</span><span>Dependent Layers</span></div><div className="action-strip">{actionButtons.slice(0, 8).map((action) => <button key={action} type="button">{action}</button>)}</div></details>) : <article className="stat-card"><p>Run a diagnostic to synthesize repeated layer recommendations into executive initiatives.</p><div className="action-strip"><button type="button" onClick={run} disabled={actionDisabled}>Run Diagnostic Again</button></div></article>}
@@ -449,17 +466,32 @@ export default function IntelligenceHealthMonitor() {
         <table className="admin-table"><thead><tr><th>Priority</th><th>Action</th><th>Impact</th><th>Effort</th><th>Affected intelligence layers</th><th>Expected health improvement</th><th>Run Action</th></tr></thead><tbody>{priorityQueue.length ? priorityQueue.map((action) => <tr key={action.id}><td><strong>{action.priority}</strong></td><td>{action.title}</td><td>{action.impact}</td><td>{action.effort}</td><td>{action.layers}</td><td>{action.improvement}</td><td><div className="action-strip compact"><button type="button">Create Sprint Task</button><button type="button">Assign Owner</button><button type="button" onClick={run} disabled={actionDisabled}>Run Diagnostic Again</button></div></td></tr>) : <tr><td colSpan={7}>Run a diagnostic to generate ranked recommended actions by impact.</td></tr>}</tbody></table>
       </article>
 
-      <h3>Dependency Map</h3>
-      <article className="stat-card wide-card dependency-map" aria-label="Dependency Map">
-        <p>Member → Society → Institution → Opportunity → Predictive → Decision Support → Execution Planning → Execution Intelligence → Institutional Memory → Institutional Learning</p>
-        <div className="dependency-chain">{dependencyLayers.map((layer, index) => {
+      <h3>Visual Intelligence Pipeline</h3>
+      <article className="stat-card wide-card dependency-map mission-pipeline" aria-label="Visual Intelligence Pipeline">
+        <div className="dependency-chain vertical-pipeline">{dependencyLayers.map((layer, index) => {
           const match = layers.find((item) => (item.layer || "").includes(layer));
-          const state = match?.status === "FAIL" ? "failure" : match?.regression ? "regression" : match?.status === "WARNING" ? "warning" : "healthy";
+          const evidence = runtimeEvidenceByLayer.get(layer);
+          const businessStatus = executiveStatusFor(match, evidence);
+          const state = businessStatus === "Disconnected" ? "failure" : businessStatus === "Regression" ? "regression" : businessStatus === "Warning" ? "warning" : "healthy";
           const relation = index < selectedLayerIndex ? "upstream" : index > selectedLayerIndex ? "downstream" : "selected";
-          return <button type="button" key={layer} className={`dependency-node ${state} ${relation}`} onClick={() => setSelectedLayer(layer)} aria-pressed={selectedLayer === layer}>{layer}</button>;
+          const isFirstFailure = index === firstFailureIndex;
+          const inBlastRadius = firstFailureIndex >= 0 && index > firstFailureIndex;
+          return <button type="button" key={layer} className={`dependency-node pipeline-node ${state} ${relation} ${isFirstFailure ? "first-failure" : ""} ${inBlastRadius ? "blast-radius" : ""}`} onClick={() => setSelectedLayer(layer)} aria-pressed={selectedLayer === layer}><span>{executiveStatusIcon(businessStatus)} {operationalLayerName(layer)}</span><small>{businessStatus}{isFirstFailure ? " · first point of failure" : inBlastRadius ? " · blast radius" : ""}</small></button>;
         })}</div>
-        <p><strong>Selected layer:</strong> {selectedLayer}. Upstream dependencies are highlighted before it; downstream dependencies are highlighted after it.</p>
+        <p><strong>Selected layer:</strong> {operationalLayerName(selectedLayer)}. Upstream dependencies are highlighted before it; downstream dependencies are highlighted after it.</p>
+        <p><strong>First point of failure:</strong> {firstFailureIndex >= 0 ? operationalLayerName(dependencyLayers[firstFailureIndex]) : "No broken propagation detected."}</p>
+        <p><strong>Blast radius:</strong> {blastRadius.length ? blastRadius.map(operationalLayerName).join(" → ") : "No downstream blast radius detected."}</p>
       </article>
+
+      <h3>Leadership Layer Briefs</h3>
+      <div className="dashboard-grid executive-layer-grid">{dependencyLayers.map((layer, index) => {
+        const match = layers.find((item) => (item.layer || "").includes(layer));
+        const evidence = runtimeEvidenceByLayer.get(layer);
+        const nextLayer = dependencyLayers[index + 1];
+        const status = executiveStatusFor(match, evidence);
+        const action = priorityQueue.find((item) => item.layers.includes(layer)) || priorityQueue[0];
+        return <article className={`stat-card executive-layer-card status-${status.toLowerCase()}`} key={layer}><h4>{executiveStatusIcon(status)} {operationalLayerName(layer)}</h4><p><strong>Status:</strong> {status}</p><p><strong>Why:</strong> {isRuntimeVerified(evidence) ? executiveConnectionPhrase(layer, nextLayer) : (match?.explanation || "Information has not been proven to reach the next intelligence layer yet.")}</p><p><strong>Business impact:</strong> {status === "Connected" ? "Leadership can rely on this layer when making decisions." : "Leadership should treat downstream recommendations as lower confidence until this handoff is repaired."}</p><p><strong>Affected systems:</strong> {dependencyLayers.slice(index + 1, Math.min(dependencyLayers.length, index + 4)).map(operationalLayerName).join(", ") || "Final intelligence destination"}</p><p><strong>Recommended fix:</strong> {match?.suggested_admin_action || action?.title || "Assign an owner, repair the handoff, and rerun Mission Control."}</p><p><strong>Expected improvement:</strong> {action?.improvement || "+2–6 health points"}</p><p><strong>Estimated effort:</strong> {action?.effort || timeToResolution}</p><p><strong>Confidence:</strong> {match?.confidence ?? action?.confidence ?? dailyBriefing.confidence}%</p></article>;
+      })}</div>
 
       <h3>Executive Trends</h3>
       <article className="stat-card wide-card"><label htmlFor="trend-window"><strong>View window</strong></label> <select id="trend-window" value={trendWindow} onChange={(event) => setTrendWindow(event.target.value)}><option value="10">Last 10 runs</option><option value="30">Last 30 runs</option><option value="100">Last 100 runs</option><option value="all">All Time</option></select><div className="dashboard-grid">{trendMetrics.filter(([, key]) => ["overall_health_score", "regression_count", "api_latency_ms", "diagnostic_duration_ms", "public_verification"].includes(key)).map(([label, key, unit]) => { const points = asArray(trends[key]); const last = points[points.length - 1]; const max = Math.max(1, ...points.map((point) => Number(point.value) || 0)); return <section className="stat-card" key={key}><h4>{label === "Overall Health Score" ? "Health trend" : label === "Regression Count" ? "Regression trend" : label === "API Latency" ? "API latency" : label === "Diagnostic Duration" ? "Diagnostic duration" : "Public verification history"}</h4><p>{last?.value ?? "—"}{unit}</p><div className="spark-bars" aria-label={`${label} chart`}>{points.map((point, index) => <span key={`${key}-${index}`} title={`${point.timestamp}: ${point.value}${unit}`} style={{ height: `${Math.max(4, ((Number(point.value) || 0) / max) * 48)}px` }} />)}</div><div className="action-strip compact"><button type="button">View Evidence</button><button type="button">Investigate</button></div></section>; })}<section className="stat-card"><h4>Institutional Memory</h4><p>Average health {formatMetric(historyStats.averageHealth, "%")} · Average deployment quality {formatMetric(historyStats.averageDeploymentQuality, "%")}</p><p>Most common failures: {historyStats.mostCommonFailures}</p><p>Most unstable layer: {historyStats.mostUnstableLayer}</p><p>Fastest improving layer: {historyStats.fastestImprovingLayer}</p><p>Average verification score {formatMetric(historyStats.averageVerificationScore, "%")} · Average diagnostic duration {formatMetric(historyStats.averageDiagnosticDuration, "ms")}</p><div className="action-strip compact"><button type="button">Open Layer</button><button type="button">View Evidence</button></div></section><section className="stat-card"><h4>Deployment history</h4><p>{history.length || "—"} recorded runs</p><div className="spark-bars" aria-label="Deployment history chart">{history.slice(0, 12).reverse().map((run, index) => <span key={run.diagnostic_id || index} title={run.created_at} style={{ height: `${Math.max(4, Number(run.overall_health_percent ?? run.overall_health?.percent ?? 0) / 2)}px`, background: "#38bdf8" }} />)}</div></section></div></article>
@@ -472,6 +504,9 @@ export default function IntelligenceHealthMonitor() {
       <h3>AI COO Sprint Planning</h3>
       <article className="stat-card wide-card"><h4>Sprint goal</h4><p>{sprint.goal || sprint.sprint_goal || `Restore the intelligence chain to ${failureCount ? "non-critical" : "healthy"} status while protecting public diagnostic confidence.`}</p><h4>Highest ROI tasks</h4><ul>{(asArray(sprint.highest_roi_tasks).length ? asArray(sprint.highest_roi_tasks) : priorityQueue.slice(0, 3).map((action) => action.title)).map((task) => <li key={task}>{task}</li>)}</ul><h4>Recommended implementation order</h4><ol>{(asArray(sprint.recommended_implementation_order).length ? asArray(sprint.recommended_implementation_order) : priorityQueue.slice(0, 4).map((action) => action.title)).map((task) => <li key={task}>{task}</li>)}</ol><p><strong>Risk reduction estimate:</strong> {sprint.risk_reduction_estimate || "25–40% after the top two queue items are verified."}</p><p><strong>Expected health after sprint completion:</strong> {sprint.expected_health_after_sprint_completion || sprint.expected_health_after_completion || sprint.expected_result?.overall_health || "90%+ with no critical failures."}</p><p><strong>Confidence:</strong> {sprint.confidence || sprint.estimated_confidence || "—"}%</p><p><strong>Estimated time to completion:</strong> {sprint.estimated_time_to_completion || sprint.estimated_completion || "—"}</p></article>
 
+      </> }
+
+      {viewMode === "technical" && <>
       <h3>Runtime Evidence</h3>
       <article className="stat-card wide-card runtime-evidence-panel" aria-label="Runtime Evidence">
         <h4>Are the intelligence layers actually connected?</h4>
@@ -577,6 +612,7 @@ export default function IntelligenceHealthMonitor() {
       <h3>Compare Previous Run</h3>
       <pre className="data-note">{JSON.stringify(healthTrend, null, 2)}</pre>
       {DEBUG_ERRORS && <><h3>Debug Output</h3><pre className="data-note">{JSON.stringify(layers.map(({ layer, debug_payload }) => ({ layer, debug_payload })), null, 2)}</pre><h3>Public Report Debug Output</h3><pre className="data-note">{JSON.stringify({ publicReportState, publicReportError, publicReportVerification }, null, 2)}</pre></>}
+      </>}
     </section>
   );
 }

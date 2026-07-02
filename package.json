@@ -10,7 +10,8 @@
     "verify-system": "python backend/verification/run_full_verification.py",
     "validate:daily-spotlights": "node scripts/validateDailyHistoricalSpotlights.mjs",
     "validate:mutual-aid-role-blueprints": "node scripts/validateMutualAidRoleBlueprints.mjs",
-    "test:member-intelligence": "node scripts/testMemberIntelligenceIntegration.mjs"
+    "test:member-intelligence": "node scripts/testMemberIntelligenceIntegration.mjs",
+    "test:mission-control": "node scripts/testMissionControlDashboard.mjs"
   },
   "dependencies": {
     "axios": "^1.6.2",
