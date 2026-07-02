@@ -67,6 +67,18 @@ body {
   text-align: left;
 }
 
+.admin-table thead,
+.admin-table tbody,
+.admin-table tr {
+  min-width: max-content;
+}
+
+.admin-table th,
+.admin-table td {
+  min-width: 7.5rem;
+}
+
+
 .membership-status-card span {
   color: rgba(219, 234, 254, 0.76);
   display: block;
@@ -196,7 +208,13 @@ body {
 
 /* 🪩 TABLES */
 .admin-table {
+  display: block;
   width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-inline: contain;
+  white-space: nowrap;
   border-collapse: collapse;
   font-size: 0.9rem;
   text-align: left;
@@ -2126,4 +2144,46 @@ body {
   min-height: 4px;
   border-radius: 999px 999px 0 0;
   background: #22c55e;
+}
+
+@media (max-width: 700px) {
+  .admin-table {
+    border: 1px solid rgba(255, 215, 0, 0.14);
+    border-radius: 14px;
+    margin-inline: 0;
+    padding-bottom: 0.35rem;
+    scrollbar-width: thin;
+  }
+
+  .admin-table table,
+  .admin-table thead,
+  .admin-table tbody {
+    width: max-content;
+  }
+
+  .admin-table th,
+  .admin-table td {
+    min-width: 8.5rem;
+    max-width: 18rem;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    vertical-align: top;
+  }
+
+  .admin-table th:first-child,
+  .admin-table td:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: rgba(15, 23, 42, 0.96);
+  }
+
+  .admin-table .action-strip {
+    min-width: 12rem;
+  }
+
+  .runtime-evidence-table th,
+  .runtime-evidence-table td {
+    min-width: 10rem;
+  }
 }

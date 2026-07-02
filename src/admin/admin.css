@@ -47,3 +47,37 @@
   padding: 100px;
   font-size: 1.4rem;
 }
+
+.admin-table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-inline: contain;
+  white-space: nowrap;
+}
+
+.admin-table th,
+.admin-table td {
+  min-width: 7.5rem;
+}
+
+@media (max-width: 700px) {
+  .admin-shell {
+    padding: 24px 12px;
+  }
+
+  .admin-table {
+    border-radius: 8px;
+    scrollbar-width: thin;
+  }
+
+  .admin-table th,
+  .admin-table td {
+    min-width: 8.5rem;
+    max-width: 18rem;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    vertical-align: top;
+  }
+}
