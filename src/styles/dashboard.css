@@ -2279,3 +2279,166 @@ body {
     overflow-wrap: anywhere;
   }
 }
+
+/* Phase 2 Executive Mission Control */
+.executive-mission-control {
+  padding: clamp(1.25rem, 2vw, 2.25rem);
+  background:
+    radial-gradient(circle at 8% 0%, rgba(250, 204, 21, 0.18), transparent 30%),
+    radial-gradient(circle at 92% 10%, rgba(56, 189, 248, 0.2), transparent 34%),
+    linear-gradient(145deg, rgba(3, 7, 18, 0.96), rgba(15, 23, 42, 0.9) 58%, rgba(30, 41, 59, 0.78));
+}
+
+.ai-coo-morning-brief {
+  margin-bottom: 1.25rem;
+  border-color: rgba(250, 204, 21, 0.36);
+  background: linear-gradient(135deg, rgba(250, 204, 21, 0.12), rgba(15, 23, 42, 0.86));
+}
+
+.briefing-columns,
+.executive-focus-grid,
+.executive-kpi-grid,
+.executive-alert-feed,
+.ecosystem-command-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.briefing-columns {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.briefing-columns p,
+.focus-tile {
+  margin: 0;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 18px;
+  padding: 1rem;
+  background: rgba(15, 23, 42, 0.62);
+}
+
+.briefing-columns strong,
+.briefing-columns span,
+.focus-tile span,
+.focus-tile strong {
+  display: block;
+}
+
+.briefing-columns strong,
+.focus-tile span {
+  color: #93c5fd;
+  font-size: 0.76rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.briefing-columns span,
+.focus-tile strong {
+  margin-top: 0.4rem;
+  color: #f8fafc;
+  font-size: clamp(1rem, 1.5vw, 1.25rem);
+  line-height: 1.35;
+}
+
+.executive-focus-grid {
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  margin-bottom: 1.25rem;
+}
+
+.focus-tile:first-child,
+.focus-tile:nth-child(2),
+.focus-tile:nth-child(8) {
+  grid-column: span 2;
+  background: linear-gradient(135deg, rgba(14, 116, 144, 0.28), rgba(15, 23, 42, 0.74));
+}
+
+.executive-kpi-grid {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  margin: 1.25rem 0 1.5rem;
+}
+
+.executive-kpi-card h2 {
+  margin: 0.25rem 0;
+  font-size: clamp(2rem, 4vw, 3.2rem);
+}
+
+.trend {
+  font-weight: 800;
+}
+
+.trend-positive { color: #86efac; }
+.trend-neutral { color: #cbd5e1; }
+.trend-negative { color: #fbbf24; }
+
+.executive-timeline {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.timeline-row {
+  display: grid;
+  grid-template-columns: 5.5rem 1fr;
+  align-items: center;
+  gap: 1rem;
+  border-left: 3px solid rgba(56, 189, 248, 0.8);
+  padding: 0.8rem 1rem;
+  border-radius: 0 16px 16px 0;
+  background: rgba(15, 23, 42, 0.62);
+}
+
+.timeline-row time {
+  color: #facc15;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.executive-alert-feed {
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+
+.alert-card {
+  border-color: rgba(96, 165, 250, 0.38);
+}
+
+.alert-card strong,
+.alert-card span {
+  display: block;
+}
+
+.alert-card span {
+  margin-top: 0.35rem;
+  color: #cbd5e1;
+}
+
+.initiative-card {
+  border-color: rgba(250, 204, 21, 0.36);
+  background: linear-gradient(145deg, rgba(15, 23, 42, 0.92), rgba(30, 41, 59, 0.76));
+}
+
+.ecosystem-command-grid {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.ecosystem-command-card {
+  border-top: 4px solid rgba(34, 197, 94, 0.75);
+}
+
+.ecosystem-command-card button {
+  border: 1px solid rgba(56, 189, 248, 0.42);
+  border-radius: 999px;
+  padding: 0.5rem 0.8rem;
+  color: #e0f2fe;
+  background: rgba(14, 116, 144, 0.2);
+}
+
+@media (max-width: 700px) {
+  .focus-tile:first-child,
+  .focus-tile:nth-child(2),
+  .focus-tile:nth-child(8) {
+    grid-column: auto;
+  }
+
+  .timeline-row {
+    grid-template-columns: 1fr;
+  }
+}
