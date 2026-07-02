@@ -12,7 +12,7 @@ def test_forecast_math_clamps_sprint_projection_to_current_health_when_risk_redu
 
 
 def test_forecast_shows_rerun_message_instead_of_fake_percent_when_unsafe():
-    assert 'sprint_health = "Requires rerun after unresolved diagnostics"' in SERVICE
+    assert 'Projected health cannot be calculated until the {len(unresolved)} unresolved diagnostics are rerun.' in SERVICE
     assert "projected is None or unresolved" in SERVICE
 
 
@@ -47,4 +47,11 @@ def test_stabilization_checklist_categories_are_rendered():
     for text in ["stabilization_checklist", "unresolved_intelligence_warnings", "resolved_warnings", "remaining_true_regressions", "warnings_requiring_rerun", "warnings_requiring_code_fix", "warnings_requiring_config_fix"]:
         assert text in SERVICE
     for text in ["Stabilization Checklist", "Unresolved intelligence warnings", "Resolved warnings", "Remaining true regressions", "Warnings requiring rerun", "Warnings requiring code fix", "Warnings requiring config fix"]:
+        assert text in MONITOR
+
+
+def test_actionable_diagnostic_resolution_engine_is_exposed():
+    for text in ["diagnostic_resolution", "what_is_wrong", "why_it_happened", "how_to_fix", "fix_type", "owner", "verification_step", "learning_memory", "recurring_warning_patterns"]:
+        assert text in SERVICE
+    for text in ["Diagnostic Resolution Engine", "What is wrong?", "Why is it wrong?", "What fixes it?", "Who owns it?", "How do we prove it is fixed?", "Learning Memory"]:
         assert text in MONITOR

@@ -71,6 +71,32 @@ ADMIN_RECOMMENDED_ACTIONS = [
     "Generate public report only after the monitor is stable",
 ]
 
+
+
+CAUSE_LABELS = {
+    "code_logic_changed": "Code logic changed",
+    "baseline_outdated": "Baseline outdated",
+    "fixture_changed": "Fixture changed",
+    "scoring_formula_changed": "Scoring formula changed",
+    "input_output_contract_changed": "Input/output contract changed",
+    "runtime_data_missing": "Runtime data missing",
+    "configuration_issue": "Configuration issue",
+    "external_integration_issue": "External integration issue",
+}
+
+OWNER_BY_LAYER = {
+    "Member Intelligence": "Intelligence backend",
+    "Society Intelligence": "Intelligence backend",
+    "Institution Intelligence": "Data model",
+    "Opportunity Intelligence": "Intelligence backend",
+    "Predictive Intelligence": "AI COO",
+    "Decision Support": "AI COO",
+    "Execution Planning": "AI COO",
+    "Execution Intelligence": "AI COO",
+    "Institutional Memory": "Data model",
+    "Institutional Learning": "AI COO",
+}
+
 LAYER_DEPENDENCIES = {
     "Member Intelligence": [],
     "Society Intelligence": ["Member Intelligence"],
@@ -604,16 +630,54 @@ def _layer_reason(layer: str, expected: dict[str, Any], actual: dict[str, Any], 
     return f"{layer} {direction} from {expected.get('score')} to {actual.get('score')} because {', and '.join(reasons)}."
 
 
-def _suggested_action(layer: str, status: str, regression: str | None, expected: dict[str, Any], actual: dict[str, Any]) -> str:
+def _diagnostic_fix_type(layer: str, status: str, regression: str | None, expected: dict[str, Any], actual: dict[str, Any]) -> str:
     if status == "PASS":
-        return "No baseline update needed; keep monitoring future diagnostic runs."
-    if layer == "Opportunity Intelligence" or ("opportunity_count" in expected and actual.get("opportunity_count") != expected.get("opportunity_count")):
-        return "Review Opportunity Intelligence scoring and qualifying-opportunity rules before updating baselines."
-    if regression:
-        return f"Review {layer} scoring logic against the deterministic fixture, then re-run diagnostics before changing baselines."
+        return "NO_ACTION_REQUIRED"
+    if actual.get("score") is None:
+        return "CONFIG_FIX_REQUIRED"
+    if regression or actual.get("priority") != expected.get("priority"):
+        return "CODE_FIX_REQUIRED"
     if actual.get("confidence") != expected.get("confidence"):
-        return f"Inspect evidence and confidence labeling for {layer}; do not update baselines until the confidence shift is explained."
-    return f"Review {layer} expected baseline values and re-run diagnostics after confirming the change is intentional."
+        return "BASELINE_UPDATE_REQUIRED"
+    return "RERUN_REQUIRED"
+
+
+def _likely_cause_classification(layer: str, status: str, regression: str | None, expected: dict[str, Any], actual: dict[str, Any], drift_fields: list[str]) -> str:
+    if status == "PASS":
+        return "NO_ACTION_REQUIRED"
+    if actual.get("score") is None:
+        return "Configuration issue"
+    if layer == "Opportunity Intelligence" or actual.get("opportunity_count") != expected.get("opportunity_count"):
+        return "Scoring formula changed"
+    if regression:
+        return "Code logic changed"
+    if actual.get("missing_count") != expected.get("missing_count"):
+        return "Fixture changed"
+    if actual.get("confidence") != expected.get("confidence") or drift_fields:
+        return "Baseline outdated"
+    return "Input/output contract changed"
+
+
+def _fix_path(fix_type: str, layer: str) -> str:
+    if fix_type == "CODE_FIX_REQUIRED":
+        return f"Update logic for {layer}, keep the existing baseline unchanged, then rerun the diagnostic."
+    if fix_type == "BASELINE_UPDATE_REQUIRED":
+        return f"Update the saved {layer} baseline only after confirming the new output is intentional and member-safe."
+    if fix_type == "CONFIG_FIX_REQUIRED":
+        return f"Fix config, permissions, or environment values needed by {layer}, then rerun the diagnostic."
+    if fix_type == "EXTERNAL_SERVICE_FIX_REQUIRED":
+        return f"Restore the external service used by {layer}, then rerun the diagnostic."
+    if fix_type == "RERUN_REQUIRED":
+        return f"Rerun diagnostic after upstream fixes so {layer} can be verified against the baseline."
+    return "No action required; keep monitoring future diagnostic runs."
+
+
+def _verification_step(layer: str, expected: dict[str, Any]) -> str:
+    return f"Rerun diagnostic and confirm {layer} returns expected score {expected.get('score')}, recommendation count {expected.get('recommendations')}, priority {expected.get('priority')}, and confidence {expected.get('confidence')}."
+
+
+def _suggested_action(layer: str, status: str, regression: str | None, expected: dict[str, Any], actual: dict[str, Any]) -> str:
+    return _fix_path(_diagnostic_fix_type(layer, status, regression, expected, actual), layer)
 
 
 def _compare(layer: str, actual: dict[str, Any], elapsed: float, output: dict[str, Any]) -> dict[str, Any]:
@@ -629,16 +693,22 @@ def _compare(layer: str, actual: dict[str, Any], elapsed: float, output: dict[st
         drift_fields.append(f"priority expected {expected.get('priority')} actual {actual.get('priority')}")
     drift_summary = "; ".join(drift_fields)
     reason = _layer_reason(layer, expected, actual, diffs)
-    likely = (
-        "Leadership scoring algorithm changed."
-        if layer in {"Member Intelligence", "Society Intelligence"} and regression
-        else f"Baseline drift detected in deterministic fixture output: {drift_summary}."
-        if regression or drift_fields
-        else "No unexpected change detected."
-    )
+    cause = _likely_cause_classification(layer, status, regression, expected, actual, drift_fields)
+    fix_type = _diagnostic_fix_type(layer, status, regression, expected, actual)
+    fix_path = _fix_path(fix_type, layer)
+    likely = f"{cause}: {drift_summary or 'all tracked deterministic indicators match the saved baseline'}."
     category = _diagnostic_category(status, regression, expected, actual, drift_fields)
-    display_status = "Connected with baseline drift" if category in {"baseline_drift", "scoring_regression"} else status
-    return {"layer": layer, "status": status, "health_status": status, "display_status": display_status, "diagnostic_category": category, "regression": regression, "regression_level": regression or "None", "expected": expected, "actual": actual, "score_delta": diffs.get("score", 0), "difference_summary": diffs, "confidence_difference": {"expected": expected.get("confidence"), "actual": actual.get("confidence")}, "confidence_score": None, "supporting_evidence": [], "missing_evidence_difference": actual.get("missing_count") - expected.get("missing_count", 0), "priority_difference": {"expected": expected.get("priority"), "actual": actual.get("priority")}, "execution_time_ms": round(elapsed, 2), "debug_payload": output.get("debug") or {"sample_keys": sorted(output.keys())[:12]}, "explanation": f"{layer} {status}: expected score {expected.get('score')} and actual score {actual.get('score')} ({_score_delta_label(diffs.get('score', 0))}). {likely}", "plain_language_reason": reason, "why_this_changed": reason, "suggested_admin_action": _suggested_action(layer, status, regression, expected, actual), "likely_cause": likely}
+    display_status = "Connected with actionable drift" if category in {"baseline_drift", "scoring_regression"} else status
+    diagnostic_resolution = {
+        "what_is_wrong": reason,
+        "why_it_happened": cause,
+        "how_to_fix": fix_path,
+        "fix_type": fix_type,
+        "owner": OWNER_BY_LAYER.get(layer, "AI COO"),
+        "verification_step": _verification_step(layer, expected),
+        "drift_fields": drift_fields,
+    }
+    return {"layer": layer, "status": status, "health_status": status, "display_status": display_status, "diagnostic_category": category, "regression": regression, "regression_level": regression or "None", "expected": expected, "actual": actual, "score_delta": diffs.get("score", 0), "difference_summary": diffs, "confidence_difference": {"expected": expected.get("confidence"), "actual": actual.get("confidence")}, "confidence_score": None, "supporting_evidence": [], "missing_evidence_difference": actual.get("missing_count") - expected.get("missing_count", 0), "priority_difference": {"expected": expected.get("priority"), "actual": actual.get("priority")}, "execution_time_ms": round(elapsed, 2), "debug_payload": output.get("debug") or {"sample_keys": sorted(output.keys())[:12]}, "explanation": f"{layer} {status}: expected score {expected.get('score')} and actual score {actual.get('score')} ({_score_delta_label(diffs.get('score', 0))}). {likely}", "plain_language_reason": reason, "why_this_changed": reason, "suggested_admin_action": fix_path, "likely_cause": likely, "diagnostic_resolution": diagnostic_resolution, "fix_type": fix_type, "owner": diagnostic_resolution["owner"], "verification_step": diagnostic_resolution["verification_step"]}
 
 
 
@@ -657,6 +727,50 @@ def _diagnostic_category(status: str, regression: str | None, expected: dict[str
         return "expected_improvement"
     return "safe_pass"
 
+def build_diagnostic_learning_memory(layers: list[dict[str, Any]], previous: dict[str, Any] | None = None, current_health: int | None = None) -> dict[str, Any]:
+    previous_layers = {layer.get("layer"): layer for layer in (previous or {}).get("layers", []) if isinstance(layer, dict)}
+    previous_health = (previous or {}).get("overall_health_percent")
+    entries = []
+    for layer in layers:
+        resolution = layer.get("diagnostic_resolution") or {}
+        previous_layer = previous_layers.get(layer.get("layer"), {})
+        warning_disappeared = previous_layer.get("status") != "PASS" and layer.get("status") == "PASS" if previous_layer else False
+        entries.append({
+            "layer": layer.get("layer"),
+            "issue_detected": resolution.get("what_is_wrong") or layer.get("plain_language_reason"),
+            "suspected_cause": resolution.get("why_it_happened") or layer.get("likely_cause"),
+            "recommended_fix": resolution.get("how_to_fix") or layer.get("suggested_admin_action"),
+            "fix_type": resolution.get("fix_type") or layer.get("fix_type"),
+            "owner": resolution.get("owner") or layer.get("owner"),
+            "rerun_improved_health": "unknown_until_next_run" if previous_health is None or current_health is None else current_health > previous_health,
+            "warning_disappeared": warning_disappeared,
+            "recommendation_was_correct": "awaiting_verification" if layer.get("status") != "PASS" else True,
+        })
+    recurring = []
+    if previous:
+        prev_problem_layers = {l.get("layer") for l in previous.get("layers", []) if isinstance(l, dict) and l.get("status") != "PASS"}
+        recurring = [layer.get("layer") for layer in layers if layer.get("status") != "PASS" and layer.get("layer") in prev_problem_layers]
+    drift_counts: dict[str, int] = {}
+    for run in (_DIAGNOSTIC_HISTORY[-20:] + ([previous] if previous else [])):
+        if not isinstance(run, dict):
+            continue
+        for layer in run.get("layers", []):
+            if isinstance(layer, dict) and layer.get("status") != "PASS":
+                name = layer.get("layer") or "Unknown"
+                drift_counts[name] = drift_counts.get(name, 0) + 1
+    dangerous = [entry["layer"] for entry in entries if entry.get("fix_type") in {"CODE_FIX_REQUIRED", "CONFIG_FIX_REQUIRED", "EXTERNAL_SERVICE_FIX_REQUIRED"}]
+    harmless = [entry["layer"] for entry in entries if entry.get("fix_type") in {"NO_ACTION_REQUIRED", "BASELINE_UPDATE_REQUIRED"}]
+    return {
+        "entries": entries,
+        "recurring_warning_patterns": recurring,
+        "layers_that_drift_most_often": sorted(drift_counts, key=drift_counts.get, reverse=True)[:5],
+        "fixes_that_worked_before": [e for e in entries if e.get("warning_disappeared")],
+        "baseline_updates_risk_note": "Baseline updates are treated as verification steps only after logic, fixture, and contract causes are ruled out.",
+        "harmless_warning_candidates": harmless,
+        "dangerous_warning_candidates": dangerous,
+    }
+
+
 def build_stabilization_report(layers: list[dict[str, Any]]) -> dict[str, Any]:
     unresolved = [layer for layer in layers if layer.get("status") != "PASS"]
     first = unresolved[0] if unresolved else None
@@ -674,7 +788,9 @@ def build_stabilization_report(layers: list[dict[str, Any]]) -> dict[str, Any]:
         "warnings_should_disappear_after_fix": warnings_after_fix,
         "warnings_still_legitimate": legitimate,
         "category_counts": {key: len([layer for layer in layers if layer.get("diagnostic_category") == key]) for key in ["connection_failure", "runtime_propagation_failure", "baseline_drift", "scoring_regression", "expected_improvement", "safe_pass"]},
+        "diagnostic_resolution_engine": [(layer.get("diagnostic_resolution") or {}) | {"layer": layer.get("layer"), "status": layer.get("status"), "regression": layer.get("regression")} for layer in unresolved],
         "stabilization_checklist": {
+            "actionable_diagnostics": [(layer.get("diagnostic_resolution") or {}) | {"layer": layer.get("layer"), "status": layer.get("status")} for layer in unresolved],
             "unresolved_intelligence_warnings": [layer.get("layer") for layer in unresolved if layer.get("status") == "WARNING"],
             "resolved_warnings": [layer.get("layer") for layer in layers if layer.get("status") == "PASS"],
             "remaining_true_regressions": [layer.get("layer") for layer in unresolved if layer.get("regression")],
@@ -895,7 +1011,7 @@ def build_ai_forecast_scenarios(run: dict[str, Any], sprint_plan: dict[str, Any]
     risk_reduction = _safe_percent_from_text(sprint_plan.get("risk_reduction_estimate")) or 0
     unresolved = [l for l in run.get("layers", []) if l.get("status") != "PASS"]
     if projected is None or unresolved:
-        sprint_health = "Requires rerun after unresolved diagnostics"
+        sprint_health = f"Projected health cannot be calculated until the {len(unresolved)} unresolved diagnostics are rerun."
     else:
         if risk_reduction > 0:
             projected = max(current, projected)
@@ -954,8 +1070,10 @@ def executive_summary(layers: list[dict[str, Any]], run: dict[str, Any] | None =
     downstream_text = " and ".join(downstream[:3]) if downstream else "no downstream layers"
     if len(downstream) > 3:
         downstream_text += f" and {len(downstream) - 3} more"
+    unresolved_count = len([layer for layer in layers if layer.get("status") != "PASS"])
     recommended = f"review {first} first before updating baselines" if first and first != "no layer" else "continue monitoring"
-    return f"{regression_count} regressions detected. First drift appears in {first}. {downstream_text} appear downstream affected. No production records were modified. Recommended action: {recommended}."
+    rerun_text = f" Projected health cannot be calculated until the {unresolved_count} unresolved diagnostics are rerun." if unresolved_count else " Projected health is available because all diagnostics passed."
+    return f"{regression_count} regressions detected. First drift appears in {first}. {downstream_text} appear downstream affected. No production records were modified. Recommended action: {recommended}.{rerun_text}"
 
 
 def recommended_next_actions(layers: list[dict[str, Any]]) -> list[str]:
@@ -1002,6 +1120,8 @@ def run_full_intelligence_diagnostic(db: Session | None = None) -> dict[str, Any
     previous = _DIAGNOSTIC_HISTORY[-1] if _DIAGNOSTIC_HISTORY else None
     run["last_successful_diagnostic"] = previous["created_at"] if previous and previous["overall_health_percent"] >= 90 else None
     run["comparison_to_previous"] = compare_diagnostics(run, previous)
+    run["learning_memory"] = build_diagnostic_learning_memory(layers, previous, health)
+    run["stabilization_report"]["learning_memory"] = run["learning_memory"]
     for layer in layers:
         layer["confidence_score"] = _confidence_percent(layer)
         layer["supporting_evidence"] = supporting_evidence(layer, run)
