@@ -12,7 +12,7 @@ def test_forecast_math_clamps_sprint_projection_to_current_health_when_risk_redu
 
 
 def test_forecast_shows_rerun_message_instead_of_fake_percent_when_unsafe():
-    assert 'Projected health cannot be calculated until the {len(unresolved)} unresolved diagnostics are rerun.' in SERVICE
+    assert 'Health projection pending: rerun {len(unresolved)} unresolved diagnostics before calculating a completion score.' in SERVICE
     assert "projected is None or unresolved" in SERVICE
 
 
@@ -31,14 +31,14 @@ def test_trend_cards_separate_public_verification_score_from_latency():
     assert '"public_verification_latency_ms"' in SERVICE
     assert '["Public Verification Score", "public_verification_score", "%"]' in MONITOR
     assert '["Public Verification Latency", "public_verification_latency_ms", "ms"]' in MONITOR
-    assert "Public verification score" in MONITOR
+    assert "Public verification result" in MONITOR
     assert "Public verification latency" in MONITOR
 
 
 def test_discord_403_is_separate_configuration_warning():
     assert "def discord_configuration_warnings" in SERVICE
     assert "bot_log_post returned 403 Forbidden" in SERVICE
-    assert "Verify bot permissions for bot_log channel and webhook configuration." in SERVICE
+    assert "grant the Simba bot View Channel and Send Messages" in SERVICE
     assert "SimbaBrain intelligence health" in SERVICE
     assert "Discord Configuration Warnings" in MONITOR
 

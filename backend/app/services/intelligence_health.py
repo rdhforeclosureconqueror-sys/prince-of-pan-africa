@@ -509,7 +509,7 @@ def discord_configuration_warnings(diagnostics: dict[str, Any] | None = None) ->
     warnings = []
     for action in recent:
         if action.get("action") == "bot_log_post" and (action.get("status") == 403 or "403" in str(action.get("error", "")) or "Forbidden" in str(action.get("error", ""))):
-            warnings.append({"system": "Discord", "warning": "bot_log_post returned 403 Forbidden", "recommended_fix": "Verify bot permissions for bot_log channel and webhook configuration.", "separate_from": "SimbaBrain intelligence health"})
+            warnings.append({"system": "Discord", "warning": "bot_log_post returned 403 Forbidden", "recommended_fix": "In Discord, grant the Simba bot View Channel and Send Messages in the bot_log channel, or update the bot_log webhook URL to an active webhook for that channel; then rerun Discord diagnostics.", "separate_from": "SimbaBrain intelligence health"})
     return warnings
 
 
@@ -587,7 +587,7 @@ def _predictive(opp: dict[str, Any]) -> dict[str, Any]:
 def _extract(layer: str, output: dict[str, Any]) -> dict[str, Any]:
     if layer == "Member Intelligence":
         score = 82 if output.get("confidence_level") == "substantial" else 55
-        missing = len(output.get("missing_assessments", [])); recs = len(output.get("considered_roles", []))
+        missing = len(output.get("missing_assessments", [])); recs = len(output.get("recommended_actions", []))
     elif layer == "Society Intelligence":
         score = output["overall_health"]["score"]; missing = len(output.get("missing_information", [])); recs = len(output.get("recommended_next_steps", []))
     elif layer == "Institution Intelligence":
@@ -1140,7 +1140,7 @@ def build_ai_forecast_scenarios(run: dict[str, Any], sprint_plan: dict[str, Any]
     risk_reduction = _safe_percent_from_text(sprint_plan.get("risk_reduction_estimate")) or 0
     unresolved = [l for l in run.get("layers", []) if l.get("status") != "PASS"]
     if projected is None or unresolved:
-        sprint_health = f"Projected health cannot be calculated until the {len(unresolved)} unresolved diagnostics are rerun."
+        sprint_health = f"Health projection pending: rerun {len(unresolved)} unresolved diagnostics before calculating a completion score."
     else:
         if risk_reduction > 0:
             projected = max(current, projected)
@@ -1201,7 +1201,7 @@ def executive_summary(layers: list[dict[str, Any]], run: dict[str, Any] | None =
         downstream_text += f" and {len(downstream) - 3} more"
     unresolved_count = len([layer for layer in layers if layer.get("status") != "PASS"])
     recommended = f"review {first} first before updating baselines" if first and first != "no layer" else "continue monitoring"
-    rerun_text = f" Projected health cannot be calculated until the {unresolved_count} unresolved diagnostics are rerun." if unresolved_count else " Projected health is available because all diagnostics passed."
+    rerun_text = f" Health projection pending until {unresolved_count} unresolved diagnostics are rerun." if unresolved_count else " Projected health is available because all diagnostics passed."
     return f"{regression_count} regressions detected. First drift appears in {first}. {downstream_text} appear downstream affected. No production records were modified. Recommended action: {recommended}.{rerun_text}"
 
 
