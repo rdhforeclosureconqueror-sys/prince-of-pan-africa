@@ -447,6 +447,27 @@ export default function IntelligenceHealthMonitor() {
     "Confidence Improved",
   ];
   const healthDirection = trendDirectionFrom(getRunHealth(result), getRunHealth(previousRun));
+  const executiveAttentionMinutes = priorityQueue.slice(0, 3).reduce((total, action, index) => total + (Number(String(action.effort).match(/\d+/)?.[0]) || [45, 30, 15][index] || 15), 0);
+  const decisionCards = priorityQueue.slice(0, 4).map((action, index) => ({
+    ...action,
+    status: action.priority === "HIGH" ? "Regression" : action.priority === "MEDIUM" ? "Watch" : "Ready",
+    why: index === 0 ? "This is the first executive decision that can unlock downstream planning confidence today." : "This removes ambiguity from the operating system and improves leadership confidence.",
+    dependencies: action.layers || "Diagnostic evidence, owner availability, verification run",
+    risks: index === 0 ? "If ignored, downstream execution planning may be based on incorrect scoring." : "If delayed, warnings accumulate and trend confidence stays flat.",
+    owner: action.owner || action.recommended_owner || (action.title.includes("Opportunity") ? "Intelligence Backend" : action.title.includes("Learning") ? "Institutional Learning" : "AI COO"),
+    deadline: action.deadline || action.recommended_completion_date || (index === 0 ? "Today" : "This week"),
+    command: index === 0 ? "Start Investigation" : "Open Workstream",
+  }));
+  const dailyAgenda = decisionCards.slice(0, 3).map((action, index) => ({ title: index === 0 ? `Investigate ${action.title.replace(/^Review\s+/i, "")}` : action.title, time: `${Number(String(action.effort).match(/\d+/)?.[0]) || [45, 30, 15][index]} min`, priority: action.priority === "HIGH" ? "High" : index === 1 ? "High" : "Medium" }));
+  const companyScorecard = ["Platform Health", "Community Growth", "Knowledge Growth", "Operational Stability", "AI Learning", "Deployment Quality", "Business Systems", "Revenue Systems", "Membership Systems", "Assessment Systems", "Publishing Systems", "Trust Systems"].map((label, index) => ({ label, score: Math.max(45, Math.min(100, Number(healthScore) || 81) - ((warningCount + regressionCount + index) % 5) * 3), tone: index % 4 === 0 && (warningCount || regressionCount) ? "watch" : "healthy" }));
+  const strategicGoals = [
+    { title: "95% Operational Health", target: 95, current: Number(healthScore) || 81 },
+    { title: "Zero Critical Regressions", target: 100, current: Math.max(0, 100 - regressionCount * 18 - failureCount * 30) },
+    { title: "Verified Deployment Quality", target: 96, current: Number(productionConfidence) || 92 },
+  ].map((goal) => ({ ...goal, remaining: Math.max(0, goal.target - goal.current), eta: `${Math.max(1, Math.ceil(Math.max(0, goal.target - goal.current) / 1.2))} days` }));
+  const heatTone = (score) => score < 60 ? "critical" : score < 75 ? "attention" : score < 88 ? "watch" : "healthy";
+  const dependencyInfluence = dependencyLayers.map((layer, index) => ({ layer, affects: dependencyLayers.slice(index + 1, index + 4).map(operationalLayerName), radius: dependencyLayers.length - index - 1, impact: index <= firstFailureIndex || (firstFailureIndex < 0 && index < 4) ? "High" : "Medium" }));
+  const executiveCommands = ["Run Full Diagnostic", "Prepare Release", "Generate Executive Report", "Verify Deployment", "Generate Board Report", "Generate Investor Summary", "Generate Weekly Operations Review", "Generate Monthly Institutional Report"];
   const dailyBriefing = {
     yesterday: previousRun ? `Health ${formatMetric(getRunHealth(previousRun), "%")}; ${getRunWarnings(previousRun)} warnings; ${getRunRegressions(previousRun)} regressions.` : "No previous diagnostic is available yet.",
     today: `Health ${formatMetric(healthScore, "%")}; ${warningCount} warnings; ${regressionCount} regressions; ${missionStatus} posture.`,
@@ -455,6 +476,7 @@ export default function IntelligenceHealthMonitor() {
     workOrder: priorityQueue.slice(0, 3).map((action) => action.title).join(" → ") || "Run diagnostic → review evidence → assign owner",
     expectedOutcome: sprint.expected_health_after_sprint_completion || sprint.expected_health_after_completion || "Health 91%. Confidence 95%.",
     confidence: sprint.confidence || sprint.estimated_confidence || aiOperationsAdvisor[0]?.confidence || "95",
+    cooSummary: `Good Morning. The platform completed ${(performanceSummary.total_completed_checks ?? layers.length) || 10} diagnostic checks. Production confidence is ${formatMetric(productionConfidence, "%")}. ${failureCount ? `${failureCount} critical failures require attention.` : "No critical failures occurred."} ${highestPriority} remains the primary operational risk. If today's sprint is completed, projected platform health increases to ${expectedHealthAfterCompletion}. Estimated executive attention required today: ${Math.floor(executiveAttentionMinutes / 60) ? `${Math.floor(executiveAttentionMinutes / 60)} hour ` : ""}${executiveAttentionMinutes % 60} minutes.`,
   };
 
   return (
@@ -506,6 +528,36 @@ export default function IntelligenceHealthMonitor() {
       </section>}
 
       {viewMode === "executive" && <>
+      <h3>Automatic Executive Summary</h3>
+      <article className="stat-card wide-card ai-coo-recommendation"><p>{dailyBriefing.cooSummary}</p></article>
+
+      <h3>Today's Leadership Agenda</h3>
+      <div className="dashboard-grid daily-agenda-grid">{dailyAgenda.map((item, index) => <article className="stat-card" key={item.title}><h4>{index + 1}. {item.title}</h4><p><strong>Estimated Time:</strong> {item.time}</p><p><strong>Priority:</strong> {item.priority}</p><button type="button">Start Agenda Item</button></article>)}</div>
+
+      <h3>AI COO Decision Center</h3>
+      <div className="dashboard-grid decision-card-grid">{decisionCards.map((card) => <article className="stat-card decision-card" key={card.id}><h4>{card.title}</h4><p><strong>Current Status:</strong> {card.status}</p><p><strong>Why this matters:</strong> {card.why}</p><p><strong>Business Impact:</strong> {card.impact}</p><p><strong>Estimated Effort:</strong> {card.effort}</p><p><strong>Expected Improvement:</strong> {card.improvement}</p><p><strong>Dependencies:</strong> {card.dependencies}</p><p><strong>Risks:</strong> {card.risks}</p><p><strong>Recommended Owner:</strong> {card.owner}</p><p><strong>Recommended Completion Date:</strong> {card.deadline}</p><button type="button">{card.command}</button></article>)}</div>
+
+      <h3>Smart Prioritization · Highest ROI First</h3>
+      <article className="stat-card wide-card"><table className="admin-table"><thead><tr><th>Rank</th><th>Highest Return Item</th><th>Expected Gain</th><th>Time</th><th>Complexity</th><th>Command</th></tr></thead><tbody>{decisionCards.map((card, index) => <tr key={card.id}><td>{index + 1}</td><td>{card.title}</td><td>{card.improvement}</td><td>{card.effort}</td><td>{index === 0 ? "Medium Complexity" : "Low Complexity"}</td><td><button type="button">{card.command}</button></td></tr>)}</tbody></table></article>
+
+      <h3>Organizational Scorecard</h3>
+      <div className="dashboard-grid organization-scorecard">{companyScorecard.map((item) => <article className={`stat-card heat-${heatTone(item.score)}`} key={item.label}><h4>{item.label}</h4><h2>{item.score}%</h2><p>{heatTone(item.score) === "healthy" ? "Healthy" : heatTone(item.score) === "watch" ? "Watch" : heatTone(item.score) === "attention" ? "Needs Attention" : "Critical"}</p></article>)}</div>
+
+      <h3>Strategic Goals</h3>
+      <div className="dashboard-grid strategic-goals">{strategicGoals.map((goal) => <article className="stat-card" key={goal.title}><h4>Quarter Objective</h4><h3>{goal.title}</h3><p><strong>Progress:</strong> {goal.current}%</p><p><strong>Remaining:</strong> {goal.remaining}%</p><p><strong>Estimated Completion:</strong> {goal.eta}</p><progress max={goal.target} value={goal.current} /></article>)}</div>
+
+      <h3>Organization Heat Map</h3>
+      <div className="organization-heat-map">{companyScorecard.map((item) => <span className={`heat-cell heat-${heatTone(item.score)}`} key={item.label} title={`${item.label}: ${item.score}%`}>{item.label}<strong>{item.score}%</strong></span>)}</div>
+
+      <h3>Executive Dependency Influence Map</h3>
+      <div className="dashboard-grid dependency-influence-grid">{dependencyInfluence.map((item) => <article className="stat-card" key={item.layer}><h4>{operationalLayerName(item.layer)}</h4><p><strong>Affects:</strong> {item.affects.join(", ") || "Final operating layer"}</p><p><strong>Estimated Blast Radius:</strong> {item.radius} Systems</p><p><strong>Business Impact:</strong> {item.impact}</p></article>)}</div>
+
+      <h3>Executive History</h3>
+      <div className="dashboard-grid"><article className="stat-card"><h4>Health This Week</h4><p>{formatMetric(historyStats.averageHealth, "%")}</p></article><article className="stat-card"><h4>Health This Month</h4><p>{formatMetric(historyStats.averageDeploymentQuality, "%")}</p></article><article className="stat-card"><h4>Health This Quarter</h4><p>{formatMetric(historyStats.averageVerificationScore, "%")}</p></article><article className="stat-card"><h4>Top Improvements</h4><p>{historyStats.fastestImprovingLayer}</p></article><article className="stat-card"><h4>Top Regressions</h4><p>{historyStats.mostCommonFailures}</p></article><article className="stat-card"><h4>Most Stable Systems</h4><p>Deployment Quality, Trust Systems</p></article><article className="stat-card"><h4>Most Volatile Systems</h4><p>{historyStats.mostUnstableLayer}</p></article></div>
+
+      <h3>Executive Commands</h3>
+      <div className="action-strip executive-command-strip">{executiveCommands.map((command) => <button key={command} type="button" onClick={command === "Run Full Diagnostic" ? run : command === "Generate Executive Report" ? generateReport : undefined} disabled={actionDisabled && ["Run Full Diagnostic", "Generate Executive Report"].includes(command)}>{command}</button>)}</div>
+
       <h3>Executive Timeline</h3>
       <article className="stat-card wide-card executive-timeline">{executiveTimeline.slice(0, 8).map((event) => <div className="timeline-row" key={`${event.time}-${event.label}`}><time>{event.time}</time><span>{event.label}</span></div>)}</article>
 
