@@ -2187,3 +2187,95 @@ body {
     min-width: 10rem;
   }
 }
+
+.view-mode-toggle {
+  display: inline-flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  padding: 0.35rem;
+  margin: 0.85rem 0 1rem;
+  border: 1px solid rgba(255, 215, 0, 0.2);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.72);
+}
+
+.view-mode-toggle button {
+  border: 0;
+  border-radius: 999px;
+  padding: 0.65rem 1rem;
+  color: #e5e7eb;
+  background: transparent;
+  font-weight: 700;
+}
+
+.view-mode-toggle button.active,
+.view-mode-toggle button[aria-selected="true"] {
+  color: #0f172a;
+  background: linear-gradient(135deg, #facc15, #f97316);
+}
+
+.mission-pipeline .vertical-pipeline {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.mission-pipeline .pipeline-node {
+  width: min(100%, 44rem);
+  margin-inline: auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  text-align: left;
+  position: relative;
+}
+
+.mission-pipeline .pipeline-node:not(:last-child)::after {
+  content: "↓";
+  position: absolute;
+  left: 50%;
+  bottom: -1.05rem;
+  transform: translateX(-50%);
+  color: #facc15;
+  font-weight: 900;
+}
+
+.pipeline-node.first-failure {
+  outline: 3px solid rgba(239, 68, 68, 0.78);
+  box-shadow: 0 0 0 5px rgba(239, 68, 68, 0.18);
+}
+
+.pipeline-node.blast-radius {
+  border-style: dashed;
+  filter: saturate(0.9);
+}
+
+.executive-layer-grid {
+  align-items: stretch;
+}
+
+.executive-layer-card {
+  border-left: 6px solid rgba(250, 204, 21, 0.65);
+}
+
+.executive-layer-card.status-connected { border-left-color: #22c55e; }
+.executive-layer-card.status-warning { border-left-color: #facc15; }
+.executive-layer-card.status-regression { border-left-color: #fb923c; }
+.executive-layer-card.status-disconnected { border-left-color: #ef4444; }
+
+@media (max-width: 700px) {
+  .view-mode-toggle {
+    display: grid;
+    border-radius: 18px;
+  }
+
+  .mission-pipeline .pipeline-node {
+    width: 100%;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .mission-pipeline .pipeline-node small {
+    overflow-wrap: anywhere;
+  }
+}
