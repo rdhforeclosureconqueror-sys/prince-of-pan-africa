@@ -957,12 +957,16 @@ def supporting_evidence(layer: dict[str, Any], run: dict[str, Any] | None = None
 
 
 def ai_operations_advisor(layers: list[dict[str, Any]], run: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    decision = _decision_model(layers)
+    authoritative = decision.get("highest_priority_layer") or decision.get("first_changed_layer")
     priority_rank = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
     actions: list[dict[str, Any]] = []
     for layer in layers:
         status = layer.get("status")
         regression = layer.get("regression")
         priority = "CRITICAL" if status == "FAIL" or regression == "Critical" else "HIGH" if status == "WARNING" or regression else "LOW"
+        if authoritative and layer.get("layer") != authoritative and layer.get("status") != "PASS":
+            priority = "MEDIUM"
         if layer.get("layer") in {"Execution Intelligence", "Institutional Memory", "Institutional Learning"} and priority == "LOW":
             priority = "MEDIUM"
         difficulty = "Low" if priority in {"LOW", "MEDIUM"} else "Medium"
@@ -981,7 +985,7 @@ def ai_operations_advisor(layers: list[dict[str, Any]], run: dict[str, Any] | No
             "confidence": confidence,
             "supporting_evidence": supporting_evidence(layer, run),
         })
-    return sorted(actions, key=lambda item: (priority_rank.get(item["priority"], 9), -item["confidence"]))
+    return sorted(actions, key=lambda item: (0 if item["title"].startswith(str(authoritative)) else 1, priority_rank.get(item["priority"], 9), DIAGNOSTIC_LAYER_ORDER.index(item["title"].rsplit(" ", 1)[0]) if item["title"].rsplit(" ", 1)[0] in DIAGNOSTIC_LAYER_ORDER else 99, -item["confidence"]))
 
 
 def predictive_intelligence(run: dict[str, Any], history: list[dict[str, Any]]) -> dict[str, Any]:
@@ -1151,7 +1155,13 @@ def build_ai_forecast_scenarios(run: dict[str, Any], sprint_plan: dict[str, Any]
     ]
 
 def ai_chief_operating_officer(run: dict[str, Any], advisor: list[dict[str, Any]]) -> dict[str, Any]:
+    decision = _decision_model(run.get("layers", []))
+    authoritative_layer = decision.get("highest_priority_layer") or decision.get("first_changed_layer")
     initiatives = synthesize_ai_coo_initiatives(run.get("layers", []), advisor)
+    if authoritative_layer:
+        authoritative = next((item for item in initiatives if authoritative_layer in item.get("affected_layers", [])), None)
+        if authoritative:
+            initiatives = [authoritative, *[item for item in initiatives if item is not authoritative]]
     sprint_plan = build_ai_coo_sprint_plan(run, initiatives)
     top = initiatives[0] if initiatives else {}
     why = {
@@ -1161,6 +1171,8 @@ def ai_chief_operating_officer(run: dict[str, Any], advisor: list[dict[str, Any]
         "what_can_wait": "Stable layer cards, raw evidence review, and public report polish can wait until the top initiative is re-run and verified.",
     }
     return {
+        "authoritative_priority_layer": authoritative_layer,
+        "priority_decision_rule": decision.get("decision_rule"),
         "recommendation": f"Focus leadership on {top.get('title', 'the top intelligence initiative')} before changing baselines; projected health is not inflated until diagnostics pass.",
         "why_this_matters": why,
         "initiatives": initiatives,
