@@ -140,7 +140,7 @@ export default function PublicIntelligenceDiagnosticReportPage() {
     <main className="cosmic-section intelligence-health-monitor" aria-labelledby="public-intel-report-title">
       <p className="section-kicker">Public · Read-Only · Sanitized Fixture Diagnostics</p>
       <h1 id="public-intel-report-title">Public Diagnostic Report</h1>
-      <p>{safeText(report.overall_summary, "Overall summary unavailable.")}</p><p>{safeText(report.source_note, "This public report is sanitized and read-only.")}</p>
+      <p>{safeText(report.overall_summary, "Overall summary unavailable.")}</p><p><strong>Latest diagnostic run shows source diagnostic:</strong> {safeText(report.source_diagnostic_id, "diagnostic_id unavailable")} · <strong>Timestamp:</strong> {safeText(report.source_diagnostic_timestamp, "timestamp unavailable")}</p><p>{safeText(report.source_note, "This public report is sanitized and read-only.")}</p>
       <nav className="hero-actions" aria-label="Public diagnostic report formats">
         <a href={reportUrls.json} target="_blank" rel="noopener noreferrer">View JSON</a>
         <a href={reportUrls.markdown} target="_blank" rel="noopener noreferrer">View Markdown</a>
