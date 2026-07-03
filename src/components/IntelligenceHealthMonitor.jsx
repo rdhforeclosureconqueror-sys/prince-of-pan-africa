@@ -171,6 +171,7 @@ const average = (values) => {
   return Math.round(numeric.reduce((sum, value) => sum + value, 0) / numeric.length);
 };
 const formatMetric = (value, unit = "") => value === null || value === undefined || value === "" ? "—" : `${value}${unit}`;
+const formatProductionConfidence = (value) => value === null || value === undefined || value === "" ? "not measured" : `${value}%`;
 const formatList = (value) => asArray(value).length ? asArray(value).join(", ") : "—";
 const trendDirectionFrom = (current, previous, lowerIsBetter = false) => {
   const currentNumber = numberOrNull(current);
@@ -234,7 +235,8 @@ export default function IntelligenceHealthMonitor() {
       if (!mountedRef.current) return [];
       const safeHistory = normalizeHistory(res);
       setHistory(safeHistory);
-      setHistoryError(safeHistory.length ? "" : "Last run could not be loaded");
+      setDiagnosticRunState((current) => current || safeHistory[0] || null);
+      setHistoryError("");
       return safeHistory;
     } catch (err) {
       if (!mountedRef.current) return [];
@@ -306,6 +308,9 @@ export default function IntelligenceHealthMonitor() {
   };
 
   const result = safeObject(diagnosticRunState || history[0]);
+  const hasDiagnosticResult = Boolean(result?.diagnostic_id || result?.created_at || asArray(result?.layers).length);
+  const diagnosticTimestamp = result?.created_at || result?.generated_at || "timestamp not available";
+  const diagnosticId = result?.diagnostic_id || result?.id || "diagnostic_id not available";
   const layers = asArray(result?.layers).filter((layer) => layer && typeof layer === "object");
   const healthTrend = useMemo(() => safeObject(result?.comparison_to_previous || result?.health_trend), [result]);
   const dependencyImpact = safeObject(result?.dependency_impact);
@@ -352,7 +357,7 @@ export default function IntelligenceHealthMonitor() {
   const riskLevel = commandCenter.risk_level || (failureCount ? "High" : regressionCount ? "Elevated" : warningCount ? "Moderate" : "Low");
   const highestPriority = commandCenter.todays_highest_priority || commandCenter.todays_recommendation || aiOperationsAdvisor[0]?.title || recommendedNextActions[0] || "Run a diagnostic and preserve current baselines until evidence is available.";
   const timeToResolution = commandCenter.estimated_time_to_resolution || aiOperationsAdvisor[0]?.estimated_time || aiChiefOperatingOfficer.suggested_sprint?.estimated_completion || "1–2 hours after the highest-priority fix is selected.";
-  const cooRecommendation = commandCenter.ai_coo_recommendation || aiChiefOperatingOfficer.recommendation || `${missionStatus} mission posture with ${healthScore}% overall health. ${highestPriority} should be handled first because it has the greatest leadership impact on the intelligence chain; trend review, public-report polishing, and lower-risk baseline cleanup can wait until the priority queue is resolved and the diagnostic is re-run.`;
+  const cooRecommendation = commandCenter.ai_coo_recommendation || aiChiefOperatingOfficer.recommendation || `Latest diagnostic run shows ${missionStatus} mission posture with ${healthScore}% overall health. ${highestPriority} should be handled first because it has the greatest leadership impact on the intelligence chain; trend review, public-report polishing, and lower-risk baseline cleanup can wait until the priority queue is resolved and verified against diagnostic ${diagnosticId}.`;
   const priorityQueue = (aiOperationsAdvisor.length ? aiOperationsAdvisor : recommendedNextActions.map((action, index) => ({ title: action, priority: index === 0 ? "HIGH" : "MEDIUM" }))).map((action, index) => ({
     id: action.id || `priority-action-${index}`,
     priority: action.priority || (index === 0 ? "HIGH" : "MEDIUM"),
@@ -360,7 +365,7 @@ export default function IntelligenceHealthMonitor() {
     impact: action.impact || action.estimated_impact || "Stabilizes executive confidence and reduces regression exposure.",
     effort: action.estimated_effort || action.estimated_difficulty || action.estimated_time || "Medium",
     layers: asArray(action.affected_intelligence_layers || action.affected_layers).length ? asArray(action.affected_intelligence_layers || action.affected_layers).join(" → ") : dependencyLayers.slice(Math.max(0, index - 1), Math.min(dependencyLayers.length, index + 3)).join(" → "),
-    improvement: action.expected_health_improvement || action.expected_improvement || "Pending rerun after source-of-truth fix",
+    improvement: action.expected_health_improvement || action.expected_improvement || (hasDiagnosticResult ? "Latest diagnostic run shows this action should improve the affected layer after completion." : "Not measured until a diagnostic run exists."),
   }));
   const forecast = safeObject(predictiveIntelligence.ai_forecast || predictiveIntelligence.forecast);
   const initiatives = asArray(aiChiefOperatingOfficer.initiatives);
@@ -437,7 +442,7 @@ export default function IntelligenceHealthMonitor() {
   const topInitiative = initiatives[0]?.title || priorityQueue[0]?.title || "Stabilize Opportunity Intelligence";
   const highestRisk = failureCount ? "Critical intelligence break in the operating chain" : regressionCount ? "Regression drift in executive recommendations" : warningCount ? "Unassigned operational warnings" : "No critical drift detected";
   const highestOpportunity = initiatives[0]?.why_it_matters || priorityQueue[0]?.impact || "Convert diagnostics into leadership-ready initiative execution.";
-  const expectedHealthAfterCompletion = sprint.expected_health_after_sprint_completion || sprint.expected_health_after_completion || forecastScenarios[1]?.projected_health_score || "Health projection pending until the diagnostic source of truth is rerun.";
+  const expectedHealthAfterCompletion = sprint.expected_health_after_sprint_completion || sprint.expected_health_after_completion || forecastScenarios[1]?.projected_health_score || (hasDiagnosticResult ? "Latest diagnostic run shows no projected health value was measured." : "Health projection not measured until a diagnostic run exists.");
   const executiveTimeline = (timeline.length ? timeline : ["Diagnostic Started", "Opportunity Regression Detected", "Root Cause Identified", "Recommendation Generated", "Mission Status Updated", "Executive Report Published"].map((label, index) => ({ time: `09:${String(26 + index).padStart(2, "0")}`, label }))).map((item, index) => ({ time: item.time || item.timestamp || `09:${String(26 + index).padStart(2, "0")}`, label: item.label || item.event || item.title || item.status || `Mission event ${index + 1}` }));
   const ecosystemCommandSystems = asArray(ecosystemIntelligence.subsystems);
   const executiveInitiatives = initiatives.length ? initiatives : priorityQueue.slice(0, 3).map((action, index) => ({
@@ -445,7 +450,7 @@ export default function IntelligenceHealthMonitor() {
     title: index === 0 ? topInitiative : action.title,
     status: index === 0 ? "In Progress" : "Ready",
     why_it_matters: action.impact || "High",
-    expected_health_improvement: action.improvement || "Pending rerun after source-of-truth fix",
+    expected_health_improvement: action.improvement || (hasDiagnosticResult ? "Latest diagnostic run shows this initiative should improve affected checks after completion." : "Not measured until a diagnostic run exists."),
     estimated_effort: action.effort || timeToResolution,
     affected_layers: action.layers?.split(" → ") || ["Decision Support", "Execution Planning"],
     recommended_owner_type_of_work: "AI COO",
@@ -490,15 +495,16 @@ export default function IntelligenceHealthMonitor() {
     highestRisk,
     highestOpportunity,
     workOrder: priorityQueue.slice(0, 3).map((action) => action.title).join(" → ") || "Run diagnostic → review evidence → assign owner",
-    expectedOutcome: sprint.expected_health_after_sprint_completion || sprint.expected_health_after_completion || "Health projection pending until rerun.",
+    expectedOutcome: sprint.expected_health_after_sprint_completion || sprint.expected_health_after_completion || (hasDiagnosticResult ? "Latest diagnostic run shows no projected outcome was measured." : "Health projection not measured until a diagnostic run exists."),
     confidence: sprint.confidence || sprint.estimated_confidence || aiOperationsAdvisor[0]?.confidence || "—",
-    cooSummary: `Good Morning. The platform completed ${(performanceSummary.total_completed_checks ?? layers.length) || 10} diagnostic checks. Production confidence is ${formatMetric(productionConfidence, "%")}. ${failureCount ? `${failureCount} critical failures require attention.` : "No critical failures occurred."} ${String(expectedHealthAfterCompletion).includes("Health projection pending") ? expectedHealthAfterCompletion : `If today's sprint is completed, projected platform health increases to ${expectedHealthAfterCompletion}.`} Estimated executive attention required today: ${Math.floor(executiveAttentionMinutes / 60) ? `${Math.floor(executiveAttentionMinutes / 60)} hour ` : ""}${executiveAttentionMinutes % 60} minutes.`,
+    cooSummary: `Good Morning. The platform completed ${(performanceSummary.total_completed_checks ?? layers.length) || 10} diagnostic checks. Production confidence is ${formatProductionConfidence(productionConfidence)}. ${failureCount ? `${failureCount} critical failures require attention.` : "No critical failures occurred."} ${String(expectedHealthAfterCompletion).includes("not measured") || String(expectedHealthAfterCompletion).includes("Latest diagnostic run shows") ? expectedHealthAfterCompletion : `If today's sprint is completed, projected platform health increases to ${expectedHealthAfterCompletion}.`} Estimated executive attention required today: ${Math.floor(executiveAttentionMinutes / 60) ? `${Math.floor(executiveAttentionMinutes / 60)} hour ` : ""}${executiveAttentionMinutes % 60} minutes.`,
   };
 
   return (
     <section className="cosmic-section intelligence-health-monitor" aria-labelledby="intelligence-health-title">
       <p className="section-kicker">Admin Only · Read-Only Diagnostic</p>
       <h2 id="intelligence-health-title">🧠 SimbaBrain Mission Control</h2>
+      <article className="stat-card wide-card" aria-label="Current Diagnostic Source"><h3>Current Diagnostic Source</h3><p>Latest diagnostic run shows data from <strong>{diagnosticTimestamp}</strong>.</p><p><strong>diagnostic_id:</strong> {diagnosticId}</p><p>{diagnosticRunState ? "Mission Control is using the selected/latest diagnostic payload." : "Loading latest saved diagnostic run from history."}</p></article>
       <p className="admin-subtext">Executive operating center for Simba intelligence: what is happening, why it matters, what leadership should do next, and what happens if no action is taken.</p>
       <div className="view-mode-toggle" role="tablist" aria-label="Dashboard viewing mode"><button type="button" role="tab" aria-selected={viewMode === "executive"} className={viewMode === "executive" ? "active" : ""} onClick={() => setViewMode("executive")}>Executive View</button><button type="button" role="tab" aria-selected={viewMode === "technical"} className={viewMode === "technical" ? "active" : ""} onClick={() => setViewMode("technical")}>Technical View</button></div>
       <div className="hero-actions">
@@ -506,9 +512,10 @@ export default function IntelligenceHealthMonitor() {
         <button className="hero-btn secondary" type="button" onClick={generateReport} disabled={actionDisabled}>{generatingReport ? "Generating Public Report..." : "Generate Public Diagnostic Report"}</button>
       </div>
       {(publicReportState || safePublicReportUrl) && <article className="stat-card"><h3>Public Diagnostic Report</h3><p>This URL is public, read-only, sanitized, fixture-only, and expires at {publicReportState?.expires_at || "the configured expiration time"}.</p>{safePublicReportUrl && <><label htmlFor="public-diagnostic-report-url"><strong>Public diagnostic URL</strong></label><div className="hero-actions"><input id="public-diagnostic-report-url" readOnly value={safePublicReportUrl} onFocus={(event) => event.target.select()} aria-label="Public diagnostic report URL" /><button type="button" onClick={copyPublicReportUrl}>Copy URL</button></div><p><a href={safePublicReportUrl} target="_blank" rel="noopener noreferrer">Open public diagnostic report</a></p><p><strong>Public JSON URL</strong>: <a href={safePublicReportJsonUrl} target="_blank" rel="noopener noreferrer">{safePublicReportJsonUrl}</a></p><p><strong>Public Markdown URL</strong>: <a href={safePublicReportMarkdownUrl} target="_blank" rel="noopener noreferrer">{safePublicReportMarkdownUrl}</a></p><section aria-label="Production Verification"><h4>Production Verification</h4><p role="status">{publicReportVerificationMessage}</p><ul>{PUBLIC_REPORT_VERIFICATION_CHECKS.map((check) => { const result = publicReportVerification?.[check.key] || { status: PUBLIC_REPORT_VERIFICATION_PENDING }; return <li key={check.key}><strong>{check.label}</strong>: {result.status}{result.httpStatus ? ` · HTTP ${result.httpStatus}` : ""}{result.responseTimeMs != null ? ` · ${result.responseTimeMs}ms` : ""}{result.error ? ` · ${result.error}` : ""}</li>; })}</ul></section></>}{publicReportCopyMessage && <p role="status">{publicReportCopyMessage}</p>}<button type="button" onClick={clearPublicReport}>Clear Public Report Link</button></article>}
-      {error && <article className="stat-card admin-error"><h3>Diagnostics unavailable</h3><p>⚠️ {error}</p></article>}
+      {error && !hasDiagnosticResult && <article className="stat-card admin-error"><h3>Diagnostics unavailable</h3><p>⚠️ {error}</p></article>}
+      {error && hasDiagnosticResult && <article className="stat-card admin-error"><h3>New diagnostic could not run</h3><p>⚠️ {error}. Showing latest saved diagnostic run instead.</p></article>}
       {publicReportError && <article className="stat-card admin-error"><h3>Public report could not be generated</h3><p>⚠️ {publicReportError}</p><button type="button" onClick={clearPublicReport}>Clear Public Report Link</button></article>}
-      {historyError && !layers.length && <article className="stat-card"><h3>Last run could not be loaded</h3><p>Diagnostics unavailable</p></article>}
+      {historyError && !hasDiagnosticResult && <article className="stat-card"><h3>Last run could not be loaded</h3><p>Diagnostics unavailable</p></article>}
 
       {viewMode === "executive" && <section className="mission-control executive-mission-control" aria-label="Executive Brief">
         <article className="ai-coo-morning-brief stat-card wide-card">
@@ -518,7 +525,7 @@ export default function IntelligenceHealthMonitor() {
         </article>
         <h3>Executive Focus · Mission Status</h3>
         <div className="executive-focus-grid">
-          {[ ["Overall Health", `${healthScore}%`], ["Production Confidence", formatMetric(productionConfidence, "%")], ["Current Mission", currentMission], ["Current Sprint", currentSprint], ["Top Initiative", topInitiative], ["Highest Risk", highestRisk], ["Highest Opportunity", highestOpportunity], ["Today's Recommendation", highestPriority], ["Expected Health After Completion", expectedHealthAfterCompletion], ["Time to Completion", timeToResolution], ["Confidence", `${dailyBriefing.confidence}%`] ].map(([label, value]) => <article className="focus-tile" key={label}><span>{label}</span><strong>{value}</strong></article>)}
+          {[ ["Overall Health", `${healthScore}%`], ["Production Confidence", formatProductionConfidence(productionConfidence)], ["Current Mission", currentMission], ["Current Sprint", currentSprint], ["Top Initiative", topInitiative], ["Highest Risk", highestRisk], ["Highest Opportunity", highestOpportunity], ["Today's Recommendation", highestPriority], ["Expected Health After Completion", expectedHealthAfterCompletion], ["Time to Completion", timeToResolution], ["Confidence", `${dailyBriefing.confidence}%`] ].map(([label, value]) => <article className="focus-tile" key={label}><span>{label}</span><strong>{value}</strong></article>)}
         </div>
         <div className="dashboard-grid executive-brief-grid">
           <article className={`stat-card state-${missionStatus.toLowerCase().replace(/\s+/g, "-")}`}><h3>Mission Status</h3><h2>{missionStatus}</h2></article>
@@ -531,7 +538,7 @@ export default function IntelligenceHealthMonitor() {
         <div className="executive-kpi-grid">
           {[
             ["Overall Health", `${healthScore}%`, healthTrend.available ? `▲ ${healthTrend.health_trend > 0 ? "+" : ""}${healthTrend.health_trend} this week` : trendCopy(healthDirection), healthDirection],
-            ["Production Confidence", formatMetric(productionConfidence, "%"), browserVerified ? "▲ Verified" : "Stable", browserVerified ? "improved" : "stable"],
+            ["Production Confidence", formatProductionConfidence(productionConfidence), productionConfidence === null ? "Not measured" : browserVerified ? "▲ Verified" : "Latest diagnostic value", productionConfidence === null ? "stable" : browserVerified ? "improved" : "stable"],
             ["Regression Risk", regressionCount ? "Elevated" : "Low", regressionCount ? "▼ Improving after priority sprint" : "▼ Improving", regressionCount ? "worse" : "improved"],
             ["Technical Debt", warningCount > 2 ? "Medium" : "Low", warningCount ? "▼ Decreasing" : "Stable", warningCount ? "improved" : "stable"],
             ["Operational Readiness", formatMetric(operationalReadiness, "%"), "▲ Improving", "improved"],
@@ -615,7 +622,7 @@ export default function IntelligenceHealthMonitor() {
         const nextLayer = dependencyLayers[index + 1];
         const status = executiveStatusFor(match, evidence);
         const action = priorityQueue.find((item) => item.layers.includes(layer)) || priorityQueue[0];
-        return <article className={`stat-card executive-layer-card status-${status.toLowerCase()}`} key={layer}><h4>{executiveStatusIcon(status)} {operationalLayerName(layer)}</h4><p><strong>Status:</strong> {status}</p><p><strong>Why:</strong> {status === "Connected" ? (match?.plain_language_reason || executiveConnectionPhrase(layer, nextLayer)) : isRuntimeVerified(evidence) ? executiveConnectionPhrase(layer, nextLayer) : (match?.explanation || "Information has not been proven to reach the next intelligence layer yet.")}</p><p><strong>Business impact:</strong> {status === "Connected" ? "Leadership can rely on this PASS layer when making decisions." : "Repair this handoff before using downstream recommendations for final decisions."}</p><p><strong>Affected systems:</strong> {dependencyLayers.slice(index + 1, Math.min(dependencyLayers.length, index + 4)).map(operationalLayerName).join(", ") || "Final intelligence destination"}</p><p><strong>Recommended fix:</strong> {match?.suggested_admin_action || action?.title || "Assign an owner, repair the handoff, and rerun Mission Control."}</p><p><strong>Expected improvement:</strong> {action?.improvement || "Pending rerun after source-of-truth fix"}</p><p><strong>Estimated effort:</strong> {action?.effort || timeToResolution}</p><p><strong>Confidence:</strong> {match?.confidence ?? action?.confidence ?? dailyBriefing.confidence}%</p></article>;
+        return <article className={`stat-card executive-layer-card status-${status.toLowerCase()}`} key={layer}><h4>{executiveStatusIcon(status)} {operationalLayerName(layer)}</h4><p><strong>Status:</strong> {status}</p><p><strong>Why:</strong> {status === "Connected" ? (match?.plain_language_reason || executiveConnectionPhrase(layer, nextLayer)) : isRuntimeVerified(evidence) ? executiveConnectionPhrase(layer, nextLayer) : (match?.explanation || "Information has not been proven to reach the next intelligence layer yet.")}</p><p><strong>Business impact:</strong> {status === "Connected" ? "Leadership can rely on this PASS layer when making decisions." : "Repair this handoff before using downstream recommendations for final decisions."}</p><p><strong>Affected systems:</strong> {dependencyLayers.slice(index + 1, Math.min(dependencyLayers.length, index + 4)).map(operationalLayerName).join(", ") || "Final intelligence destination"}</p><p><strong>Recommended fix:</strong> {match?.suggested_admin_action || action?.title || "Assign an owner, repair the handoff, and rerun Mission Control."}</p><p><strong>Expected improvement:</strong> {action?.improvement || (hasDiagnosticResult ? "Latest diagnostic run shows no expected improvement was measured for this layer." : "Not measured until a diagnostic run exists.")}</p><p><strong>Estimated effort:</strong> {action?.effort || timeToResolution}</p><p><strong>Confidence:</strong> {match?.confidence ?? action?.confidence ?? dailyBriefing.confidence}%</p></article>;
       })}</div>
 
       <h3>Executive Trends</h3>
@@ -623,14 +630,14 @@ export default function IntelligenceHealthMonitor() {
 
       <h3>AI Forecast</h3>
       <div className="dashboard-grid" aria-label="AI Forecast">
-        {forecastScenarios.length ? forecastScenarios.map((scenario) => <article className="stat-card" key={scenario.scenario}><h3>{scenario.scenario}</h3><p><strong>Projected health score:</strong> {scenario.projected_health_score}</p><p><strong>Regression risk:</strong> {scenario.regression_risk}</p><p><strong>Technical debt trend:</strong> {scenario.technical_debt_trend}</p><p><strong>Confidence:</strong> {scenario.confidence}%</p><p><strong>Primary reason:</strong> {scenario.primary_reason}</p></article>) : <><article className="stat-card"><h3>If no action is taken</h3><p><strong>Projected health score:</strong> {healthScore}%</p><p><strong>Regression risk:</strong> {forecast.future_regression_likelihood || forecast.regression_likelihood || (regressionCount ? "Moderate" : "Low")}</p><p><strong>Technical debt trend:</strong> {forecast.technical_debt_trend || (warningCount || regressionCount ? "Increasing" : "Stable")}</p><p><strong>Confidence:</strong> {forecast.confidence ?? aiOperationsAdvisor[0]?.confidence ?? "—"}%</p><p><strong>Primary reason:</strong> Current warnings remain unresolved.</p></article><article className="stat-card"><h3>If completed today</h3><p><strong>Health:</strong> {sprint.expected_health_after_sprint_completion || sprint.expected_health_after_completion || "Projection pending rerun"}</p><p><strong>Regression risk:</strong> Reduced</p><p><strong>Production Confidence:</strong> {formatMetric(productionConfidence, "%")}</p><p><strong>Deployment Readiness:</strong> Ready</p><p><strong>Estimated Time Saved:</strong> 3 hours/week</p><p><strong>Confidence:</strong> {sprint.confidence || sprint.estimated_confidence || "—"}%</p><p><strong>Primary reason:</strong> Highest-ROI sprint tasks are completed and re-verified.</p></article></>}
+        {forecastScenarios.length ? forecastScenarios.map((scenario) => <article className="stat-card" key={scenario.scenario}><h3>{scenario.scenario}</h3><p><strong>Projected health score:</strong> {scenario.projected_health_score}</p><p><strong>Regression risk:</strong> {scenario.regression_risk}</p><p><strong>Technical debt trend:</strong> {scenario.technical_debt_trend}</p><p><strong>Confidence:</strong> {scenario.confidence}%</p><p><strong>Primary reason:</strong> {scenario.primary_reason}</p></article>) : <><article className="stat-card"><h3>If no action is taken</h3><p><strong>Projected health score:</strong> {healthScore}%</p><p><strong>Regression risk:</strong> {forecast.future_regression_likelihood || forecast.regression_likelihood || (regressionCount ? "Moderate" : "Low")}</p><p><strong>Technical debt trend:</strong> {forecast.technical_debt_trend || (warningCount || regressionCount ? "Increasing" : "Stable")}</p><p><strong>Confidence:</strong> {forecast.confidence ?? aiOperationsAdvisor[0]?.confidence ?? "—"}%</p><p><strong>Primary reason:</strong> Current warnings remain unresolved.</p></article><article className="stat-card"><h3>If completed today</h3><p><strong>Health:</strong> {sprint.expected_health_after_sprint_completion || sprint.expected_health_after_completion || (hasDiagnosticResult ? "Latest diagnostic run shows no projection was measured." : "Projection not measured until a diagnostic run exists.")}</p><p><strong>Regression risk:</strong> Reduced</p><p><strong>Production Confidence:</strong> {formatProductionConfidence(productionConfidence)}</p><p><strong>Deployment Readiness:</strong> Ready</p><p><strong>Estimated Time Saved:</strong> 3 hours/week</p><p><strong>Confidence:</strong> {sprint.confidence || sprint.estimated_confidence || "—"}%</p><p><strong>Primary reason:</strong> Highest-ROI sprint tasks are completed and re-verified.</p></article></>}
       </div>
 
       <h3>Ecosystem Command Center</h3>
       <div className="ecosystem-command-grid">{ecosystemCommandSystems.map((system) => <article className="stat-card ecosystem-command-card" key={system.subsystem}><h4>{system.subsystem}</h4><p><strong>Health:</strong> {system.health ?? "—"}%</p><p><strong>Trend:</strong> {system.performance || "Stable"}</p><p><strong>Risk:</strong> {asArray(system.warnings).join(", ") || "Low"}</p><p><strong>Recommendation:</strong> {asArray(system.recommendations).join("; ") || "Continue monitoring"}</p><button type="button">Open Dashboard</button></article>)}</div>
 
       <h3>AI COO Sprint Planning</h3>
-      <article className="stat-card wide-card"><h4>Sprint goal</h4><p>{sprint.goal || sprint.sprint_goal || `Restore the intelligence chain to ${failureCount ? "non-critical" : "healthy"} status while protecting public diagnostic confidence.`}</p><h4>Highest ROI tasks</h4><ul>{(asArray(sprint.highest_roi_tasks).length ? asArray(sprint.highest_roi_tasks) : priorityQueue.slice(0, 3).map((action) => action.title)).map((task) => <li key={task}>{task}</li>)}</ul><h4>Recommended implementation order</h4><ol>{(asArray(sprint.recommended_implementation_order).length ? asArray(sprint.recommended_implementation_order) : priorityQueue.slice(0, 4).map((action) => action.title)).map((task) => <li key={task}>{task}</li>)}</ol><p><strong>Risk reduction estimate:</strong> {sprint.risk_reduction_estimate || "25–40% after the top two queue items are verified."}</p><p><strong>Expected health after sprint completion:</strong> {sprint.expected_health_after_sprint_completion || sprint.expected_health_after_completion || sprint.expected_result?.overall_health || "Projection pending rerun."}</p><p><strong>Confidence:</strong> {sprint.confidence || sprint.estimated_confidence || "—"}%</p><p><strong>Estimated time to completion:</strong> {sprint.estimated_time_to_completion || sprint.estimated_completion || "—"}</p></article>
+      <article className="stat-card wide-card"><h4>Sprint goal</h4><p>{sprint.goal || sprint.sprint_goal || `Restore the intelligence chain to ${failureCount ? "non-critical" : "healthy"} status while protecting public diagnostic confidence.`}</p><h4>Highest ROI tasks</h4><ul>{(asArray(sprint.highest_roi_tasks).length ? asArray(sprint.highest_roi_tasks) : priorityQueue.slice(0, 3).map((action) => action.title)).map((task) => <li key={task}>{task}</li>)}</ul><h4>Recommended implementation order</h4><ol>{(asArray(sprint.recommended_implementation_order).length ? asArray(sprint.recommended_implementation_order) : priorityQueue.slice(0, 4).map((action) => action.title)).map((task) => <li key={task}>{task}</li>)}</ol><p><strong>Risk reduction estimate:</strong> {sprint.risk_reduction_estimate || "25–40% after the top two queue items are verified."}</p><p><strong>Expected health after sprint completion:</strong> {sprint.expected_health_after_sprint_completion || sprint.expected_health_after_completion || sprint.expected_result?.overall_health || (hasDiagnosticResult ? "Latest diagnostic run shows no projection was measured." : "Projection not measured until a diagnostic run exists.")}</p><p><strong>Confidence:</strong> {sprint.confidence || sprint.estimated_confidence || "—"}%</p><p><strong>Estimated time to completion:</strong> {sprint.estimated_time_to_completion || sprint.estimated_completion || "—"}</p></article>
 
       </> }
 
@@ -700,7 +707,7 @@ export default function IntelligenceHealthMonitor() {
       <article className="stat-card"><ol>{timeline.length ? timeline.map((event, index) => <li key={`${event.time}-${index}`}><strong>{event.time}</strong> {event.event}</li>) : <li>Run a diagnostic to replay timeline events.</li>}</ol></article>
 
       <h3>AI Insights</h3>{/* AI Summary */}
-      <article className="stat-card"><p>{result?.ai_summary || result?.executive_summary || "Run a diagnostic to generate an natural-language AI Insights summary."}</p></article>
+      <article className="stat-card"><p>{result?.ai_summary || result?.executive_summary || (hasDiagnosticResult ? "Latest diagnostic run shows no natural-language AI Insights summary was measured." : "Run a diagnostic to generate a natural-language AI Insights summary.")}</p></article>
 
       <h3>Layer Status</h3>
       <div className="dashboard-grid">

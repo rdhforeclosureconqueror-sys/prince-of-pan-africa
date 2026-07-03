@@ -1191,8 +1191,8 @@ def build_ai_coo_sprint_plan(run: dict[str, Any], initiatives: list[dict[str, An
         "highest_roi_tasks": deduped_tasks,
         "recommended_implementation_order": deduped_tasks,
         "risk_reduction_estimate": f"{min(75, 20 + len(top) * 15)}%",
-        "expected_health_after_sprint_completion": f"{expected_health}%" if not unresolved else f"Requires rerun after {len(unresolved)} unresolved diagnostics",
-        "expected_health_after_completion": f"{expected_health}%" if not unresolved else f"Requires rerun after {len(unresolved)} unresolved diagnostics",
+        "expected_health_after_sprint_completion": f"{expected_health}%" if not unresolved else f"Latest diagnostic run shows {len(unresolved)} unresolved diagnostics; completion health is not measured yet.",
+        "expected_health_after_completion": f"{expected_health}%" if not unresolved else f"Latest diagnostic run shows {len(unresolved)} unresolved diagnostics; completion health is not measured yet.",
         "confidence": confidence,
         "estimated_time_to_completion": f"{max(1, len(deduped_tasks) * 2)} hours",
         "estimated_completion": f"{max(1, len(deduped_tasks) * 2)} hours",
@@ -1219,14 +1219,14 @@ def build_ai_forecast_scenarios(run: dict[str, Any], sprint_plan: dict[str, Any]
     risk_reduction = _safe_percent_from_text(sprint_plan.get("risk_reduction_estimate")) or 0
     unresolved = [l for l in run.get("layers", []) if l.get("status") != "PASS"]
     if projected is None or unresolved:
-        sprint_health = f"Health projection pending: rerun {len(unresolved)} unresolved diagnostics before calculating a completion score."
+        sprint_health = f"Latest diagnostic run shows {len(unresolved)} unresolved diagnostics; completion health is not measured yet."
     else:
         if risk_reduction > 0:
             projected = max(current, projected)
         sprint_health = f"{min(100, projected)}%"
     return [
         {"scenario": "If no action is taken", "projected_health_score": f"{no_action_health}%", "regression_risk": "Elevated" if regression_count else "Low", "technical_debt_trend": "Increasing", "confidence": 88, "primary_reason": "Repeated layer recommendations remain unresolved and continue to compound downstream."},
-        {"scenario": "If recommended sprint is completed", "projected_health_score": sprint_health, "regression_risk": "Reduced", "technical_debt_trend": "Stabilizing", "confidence": sprint_plan.get("confidence", 92), "primary_reason": "The sprint addresses duplicate recommendations as upstream initiatives instead of isolated layer tasks; unresolved diagnostics must be rerun before a final percentage is displayed."},
+        {"scenario": "If recommended sprint is completed", "projected_health_score": sprint_health, "regression_risk": "Reduced", "technical_debt_trend": "Stabilizing", "confidence": sprint_plan.get("confidence", 92), "primary_reason": "The sprint addresses duplicate recommendations as upstream initiatives instead of isolated layer tasks; the latest diagnostic run must show those diagnostics resolved before a final percentage is displayed."},
     ]
 
 def ai_chief_operating_officer(run: dict[str, Any], advisor: list[dict[str, Any]]) -> dict[str, Any]:
@@ -1243,7 +1243,7 @@ def ai_chief_operating_officer(run: dict[str, Any], advisor: list[dict[str, Any]
         "what_changed": run.get("executive_summary", "Diagnostic output changed against the deterministic intelligence baseline."),
         "why_it_matters": top.get("why_it_matters", "Leadership needs one accountable initiative rather than repeated layer-level recommendations."),
         "what_should_be_fixed_first": top.get("title", "Run a diagnostic and fix the highest-impact regression first."),
-        "what_can_wait": "Stable layer cards, raw evidence review, and public report polish can wait until the top initiative is re-run and verified.",
+        "what_can_wait": "Stable layer cards, raw evidence review, and public report polish can wait until the latest diagnostic run verifies the top initiative.",
     }
     return {
         "authoritative_priority_layer": authoritative_layer,
@@ -1288,7 +1288,7 @@ def executive_summary(layers: list[dict[str, Any]], run: dict[str, Any] | None =
         downstream_text += f" and {len(downstream) - 3} more"
     unresolved_count = len([layer for layer in layers if layer.get("status") != "PASS"])
     recommended = f"review {first} first before updating baselines" if first and first != "no layer" else "continue monitoring"
-    rerun_text = f" Health projection pending until {unresolved_count} unresolved diagnostics are rerun." if unresolved_count else " Projected health is available because all diagnostics passed."
+    rerun_text = f" Latest diagnostic run shows {unresolved_count} unresolved diagnostics; projected health is not measured yet." if unresolved_count else " Latest diagnostic run shows all diagnostics passed, so projected health is available."
     return f"{regression_count} regressions detected. First drift appears in {first}. {downstream_text} appear downstream affected. No production records were modified. Recommended action: {recommended}.{rerun_text}"
 
 
@@ -1454,6 +1454,8 @@ def sanitize_diagnostic_for_public_report(run: dict[str, Any]) -> dict[str, Any]
         },
         "fixture_name": run.get("fixture_name", FIXTURE_NAME),
         "fixture_version": run.get("fixture_version", FIXTURE_VERSION),
+        "source_diagnostic_id": run.get("diagnostic_id"),
+        "source_diagnostic_timestamp": run.get("created_at"),
         "generated_at": generated_at.isoformat(),
         "expires_at": expires_at.isoformat(),
         "report_title": "Intelligence Diagnostic Report",
