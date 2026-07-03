@@ -585,6 +585,7 @@ def _predictive(opp: dict[str, Any]) -> dict[str, Any]:
 
 
 def _extract(layer: str, output: dict[str, Any]) -> dict[str, Any]:
+    opportunity_count: int | None = None
     if layer == "Member Intelligence":
         score = 82 if output.get("confidence_level") == "substantial" else 55
         missing = len(output.get("missing_assessments", [])); recs = len(output.get("recommended_actions", []))
@@ -594,6 +595,7 @@ def _extract(layer: str, output: dict[str, Any]) -> dict[str, Any]:
         score = output["institution_health"]["score"]; missing = len(output.get("missing_evidence", [])); recs = len(output.get("recommendations", []))
     elif layer == "Opportunity Intelligence":
         score = output["overall_priority"]["score"]; missing = len(output.get("missing_evidence", [])); recs = output.get("dashboard", {}).get("recommendations_count", 0)
+        opportunity_count = len(output.get("opportunities", []))
         output = {**output, "confidence": output.get("dashboard", {}).get("confidence", output.get("confidence"))}
     elif layer == "Predictive Intelligence":
         score = output["readiness_score"]; missing = 4; recs = len(output.get("predictions", []))
@@ -609,7 +611,10 @@ def _extract(layer: str, output: dict[str, Any]) -> dict[str, Any]:
         score = 76 if output.get("lessons_learned") else 0; missing = len(output.get("missing_evidence", [])); recs = len(output.get("improvement_recommendations", []))
     confidence = output.get("confidence") or output.get("confidence_level") or ("substantial" if score >= 75 else "developing")
     priority = output.get("overall_priority", {}).get("label") or ("high" if score >= 75 else "medium" if score >= 50 else "low")
-    return {"score": score, "confidence": confidence, "missing_count": missing, "priority": priority, "recommendations": recs, "opportunity_count": len(output.get("opportunities", []))}
+    extracted = {"score": score, "confidence": confidence, "missing_count": missing, "priority": priority, "recommendations": recs}
+    if opportunity_count is not None:
+        extracted["opportunity_count"] = opportunity_count
+    return extracted
 
 
 def _severity(diff: int) -> str | None:
