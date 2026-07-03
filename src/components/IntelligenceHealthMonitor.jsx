@@ -340,7 +340,8 @@ export default function IntelligenceHealthMonitor() {
   const passFailSummary = safeObject(result?.pass_fail_summary);
   const dependencyLayers = ["Member", "Society", "Institution", "Opportunity", "Predictive", "Decision Support", "Execution Planning", "Execution Intelligence", "Institutional Memory", "Institutional Learning"];
   const selectedLayerIndex = Math.max(0, dependencyLayers.indexOf(selectedLayer));
-  const firstFailureIndex = dependencyLayers.findIndex((layer) => { const match = layers.find((item) => (item.layer || "").includes(layer)); const evidence = runtimeEvidenceByLayer.get(layer); return !isRuntimeVerified(evidence) || match?.status === "FAIL" || match?.regression; });
+  const authoritativeFirstFailure = dependencyImpact.first_changed_layer || dependencyImpact.decision_model?.first_changed_layer || "";
+  const firstFailureIndex = authoritativeFirstFailure ? dependencyLayers.findIndex((layer) => authoritativeFirstFailure.includes(layer)) : dependencyLayers.findIndex((layer) => { const match = layers.find((item) => (item.layer || "").includes(layer)); const evidence = runtimeEvidenceByLayer.get(layer); return !isRuntimeVerified(evidence) || match?.status === "FAIL" || match?.regression; });
   const blastRadius = firstFailureIndex >= 0 ? dependencyLayers.slice(firstFailureIndex + 1) : [];
   const healthScore = (result?.overall_health_percent ?? result?.overall_health?.percent) ?? "—";
   const failureCount = asArray(result?.critical_failures).length || asArray(result?.failed_layers).length || (passFailSummary.failed ?? 0);

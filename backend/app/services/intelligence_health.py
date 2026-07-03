@@ -127,12 +127,39 @@ DOWNSTREAM_BY_LAYER = {
     name: DIAGNOSTIC_LAYER_ORDER[index + 1:] for index, name in enumerate(DIAGNOSTIC_LAYER_ORDER)
 }
 
+CORE_DIAGNOSTIC_FIELDS = {"score", "confidence", "recommendations", "priority"}
+LAYER_FIELD_OWNERSHIP = {
+    name: set(CORE_DIAGNOSTIC_FIELDS) for name in DIAGNOSTIC_LAYER_ORDER
+}
+LAYER_FIELD_OWNERSHIP["Member Intelligence"].add("missing_count")
+LAYER_FIELD_OWNERSHIP["Society Intelligence"].add("missing_count")
+LAYER_FIELD_OWNERSHIP["Institution Intelligence"].add("missing_count")
+LAYER_FIELD_OWNERSHIP["Opportunity Intelligence"].update({"missing_count", "opportunity_count"})
+LAYER_FIELD_OWNERSHIP["Decision Support"].add("missing_count")
+LAYER_FIELD_OWNERSHIP["Execution Planning"].add("missing_count")
+LAYER_FIELD_OWNERSHIP["Execution Intelligence"].add("missing_count")
+LAYER_FIELD_OWNERSHIP["Institutional Memory"].add("missing_count")
+LAYER_FIELD_OWNERSHIP["Institutional Learning"].add("missing_count")
+
+
+def _owned_fields(layer: str) -> set[str]:
+    return set(LAYER_FIELD_OWNERSHIP.get(layer, CORE_DIAGNOSTIC_FIELDS))
+
+
+def _layer_owns_field(layer: str, field: str | None) -> bool:
+    return bool(field and field in _owned_fields(layer))
+
 
 def _stable_fingerprint(value: Any) -> str:
     return hashlib.sha256(json.dumps(value, sort_keys=True, default=str).encode("utf-8")).hexdigest()[:16]
 
 def _decision_model(layers: list[dict[str, Any]]) -> dict[str, Any]:
-    impacted = [l for l in layers if l.get("status") != "PASS"]
+    impacted = [
+        l for l in layers
+        if l.get("status") != "PASS" and l.get("diagnostic_category") not in {"downstream_impacted", "blocked_by_upstream", "needs_rerun_after_upstream_fix"}
+    ]
+    if not impacted:
+        impacted = [l for l in layers if l.get("status") != "PASS"]
     first = next((name for name in DIAGNOSTIC_LAYER_ORDER if any(l.get("layer") == name for l in impacted)), None)
     downstream = set(DIAGNOSTIC_LAYER_ORDER[DIAGNOSTIC_LAYER_ORDER.index(first)+1:]) if first in DIAGNOSTIC_LAYER_ORDER else set()
     affected = [l.get("layer") for l in layers if l.get("layer") == first or (l.get("layer") in downstream and l.get("status") != "PASS")]
@@ -147,6 +174,38 @@ def _decision_model(layers: list[dict[str, Any]]) -> dict[str, Any]:
         "downstream_affected_layers": [name for name in affected if name != first],
         "decision_rule": "Earliest non-PASS layer in dependency order owns root cause, highest priority, sprint focus, and downstream impact until rerun proves otherwise.",
     }
+
+
+def apply_dependency_classification(layers: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    first = next(
+        (
+            name for name in DIAGNOSTIC_LAYER_ORDER
+            if any(l.get("layer") == name and l.get("owned_field_mismatches") for l in layers)
+        ),
+        None,
+    )
+    if not first:
+        return layers
+    downstream = set(DOWNSTREAM_BY_LAYER.get(first, []))
+    for layer in layers:
+        name = layer.get("layer")
+        if name in downstream and layer.get("status") != "PASS":
+            layer["upstream_root_cause_layer"] = first
+            layer["downstream_classification"] = "downstream_impacted"
+            if not layer.get("owned_field_mismatches"):
+                layer["diagnostic_category"] = "downstream_impacted"
+                layer["fix_type"] = "RERUN_REQUIRED"
+                layer["suggested_admin_action"] = _fix_path("RERUN_REQUIRED", name)
+                layer["plain_language_reason"] = f"{name} is downstream of unresolved {first} drift and needs rerun after the upstream fix."
+                layer["why_this_changed"] = layer["plain_language_reason"]
+                layer["diagnostic_resolution"]["fix_type"] = "RERUN_REQUIRED"
+                layer["diagnostic_resolution"]["owner"] = OWNER_BY_LAYER.get(first, "AI COO")
+                layer["diagnostic_resolution"]["how_to_fix"] = layer["suggested_admin_action"]
+        elif name != first and layer.get("status") == "PASS" and name in downstream:
+            layer["downstream_classification"] = "needs_rerun_after_upstream_fix"
+        elif name == first:
+            layer["downstream_classification"] = "root_cause"
+    return layers
 
 def _score_integrity(layer: dict[str, Any]) -> dict[str, Any]:
     expected = layer.get("expected", {}); actual = layer.get("actual", {})
@@ -611,7 +670,9 @@ def _extract(layer: str, output: dict[str, Any]) -> dict[str, Any]:
         score = 76 if output.get("lessons_learned") else 0; missing = len(output.get("missing_evidence", [])); recs = len(output.get("improvement_recommendations", []))
     confidence = output.get("confidence") or output.get("confidence_level") or ("substantial" if score >= 75 else "developing")
     priority = output.get("overall_priority", {}).get("label") or ("high" if score >= 75 else "medium" if score >= 50 else "low")
-    extracted = {"score": score, "confidence": confidence, "missing_count": missing, "priority": priority, "recommendations": recs}
+    extracted = {"score": score, "confidence": confidence, "priority": priority, "recommendations": recs}
+    if _layer_owns_field(layer, "missing_count"):
+        extracted["missing_count"] = missing
     if opportunity_count is not None:
         extracted["opportunity_count"] = opportunity_count
     return extracted
@@ -636,13 +697,13 @@ def _layer_reason(layer: str, expected: dict[str, Any], actual: dict[str, Any], 
     score_delta = diffs.get("score", 0)
     direction = "dropped" if score_delta < 0 else "rose" if score_delta > 0 else "remained stable"
     reasons: list[str] = []
-    if actual.get("opportunity_count") != expected.get("opportunity_count") and expected.get("opportunity_count") is not None:
+    if _layer_owns_field(layer, "opportunity_count") and actual.get("opportunity_count") != expected.get("opportunity_count") and expected.get("opportunity_count") is not None:
         reasons.append(f"qualifying opportunities changed from {expected.get('opportunity_count')} to {actual.get('opportunity_count')}")
     if actual.get("recommendations") != expected.get("recommendations"):
         reasons.append(f"recommendations changed from {expected.get('recommendations')} to {actual.get('recommendations')}")
     if actual.get("confidence") != expected.get("confidence"):
         reasons.append(f"confidence changed from {expected.get('confidence')} to {actual.get('confidence')}")
-    if actual.get("missing_count") != expected.get("missing_count"):
+    if _layer_owns_field(layer, "missing_count") and actual.get("missing_count") != expected.get("missing_count"):
         reasons.append(f"missing evidence changed from {expected.get('missing_count')} to {actual.get('missing_count')}")
     if actual.get("priority") != expected.get("priority"):
         reasons.append(f"priority changed from {expected.get('priority')} to {actual.get('priority')}")
@@ -656,7 +717,7 @@ def _diagnostic_fix_type(layer: str, status: str, regression: str | None, expect
         return "NO_ACTION_REQUIRED"
     if actual.get("score") is None:
         return "CONFIG_FIX_REQUIRED"
-    if regression or actual.get("priority") != expected.get("priority"):
+    if regression or (_layer_owns_field(layer, "priority") and actual.get("priority") != expected.get("priority")):
         return "CODE_FIX_REQUIRED"
     if actual.get("confidence") != expected.get("confidence"):
         return "BASELINE_UPDATE_REQUIRED"
@@ -668,11 +729,11 @@ def _likely_cause_classification(layer: str, status: str, regression: str | None
         return "NO_ACTION_REQUIRED"
     if actual.get("score") is None:
         return "Configuration issue"
-    if layer == "Opportunity Intelligence" or actual.get("opportunity_count") != expected.get("opportunity_count"):
+    if _layer_owns_field(layer, "opportunity_count") and actual.get("opportunity_count") != expected.get("opportunity_count"):
         return "Scoring formula changed"
     if regression:
         return "Code logic changed"
-    if actual.get("missing_count") != expected.get("missing_count"):
+    if _layer_owns_field(layer, "missing_count") and actual.get("missing_count") != expected.get("missing_count"):
         return "Fixture changed"
     if actual.get("confidence") != expected.get("confidence") or drift_fields:
         return "Baseline outdated"
@@ -710,15 +771,19 @@ def _repair_fix_type(fix_type: str, category: str) -> str:
     }.get(fix_type, "rerun_required")
 
 
-def _field_mismatches(expected: dict[str, Any], actual: dict[str, Any]) -> list[dict[str, Any]]:
+def _field_mismatches(expected: dict[str, Any], actual: dict[str, Any], layer: str | None = None, owned_only: bool = False) -> list[dict[str, Any]]:
     mismatches = []
-    for field in sorted(set(expected) | set(actual)):
+    fields = set(expected) | set(actual)
+    if layer and owned_only:
+        fields &= _owned_fields(layer)
+    for field in sorted(fields):
         if expected.get(field) != actual.get(field):
             mismatches.append({
                 "field": field,
                 "expected": expected.get(field),
                 "actual": actual.get(field),
                 "mismatch": f"{field}: expected {expected.get(field)!r}, actual {actual.get(field)!r}",
+                "owned_by_layer": _layer_owns_field(layer, field) if layer else None,
             })
     return mismatches
 
@@ -742,9 +807,10 @@ def _business_rule_for(layer: str, field: str | None) -> str:
 def build_repair_brief(layer: dict[str, Any]) -> dict[str, Any]:
     expected = deepcopy(layer.get("expected", {}))
     actual = deepcopy(layer.get("actual", {}))
-    mismatches = _field_mismatches(expected, actual)
-    primary = next((item for item in mismatches if item["field"] == "opportunity_count"), mismatches[0] if mismatches else {"field": "status", "expected": "PASS", "actual": layer.get("status")})
     name = layer.get("layer") or "Unknown Layer"
+    mismatches = _field_mismatches(expected, actual, name)
+    owned_mismatches = _field_mismatches(expected, actual, name, owned_only=True)
+    primary = next((item for item in owned_mismatches if item["field"] == "opportunity_count"), owned_mismatches[0] if owned_mismatches else (mismatches[0] if mismatches else {"field": "status", "expected": "PASS", "actual": layer.get("status"), "owned_by_layer": False}))
     target = LAYER_REPAIR_TARGETS.get(name, {"backend_file": "backend/app/services/intelligence_health.py", "frontend_file": "src/components/IntelligenceHealthMonitor.jsx", "function": "_compare"})
     category = layer.get("diagnostic_category") or "baseline_drift"
     fix_type = _repair_fix_type(layer.get("fix_type", "RERUN_REQUIRED"), category)
@@ -761,6 +827,9 @@ def build_repair_brief(layer: dict[str, Any]) -> dict[str, Any]:
         "actual_value": {primary.get("field"): primary.get("actual")},
         "field_that_drifted": primary.get("field"),
         "field_mismatches": mismatches,
+        "owned_field_mismatches": owned_mismatches,
+        "layer_owns_field": _layer_owns_field(name, primary.get("field")),
+        "likely_issue_type": "rerun-required issue" if layer.get("diagnostic_category") in {"downstream_impacted", "blocked_by_upstream", "needs_rerun_after_upstream_fix"} else "true code issue" if fix_type == "code_change" else "baseline issue" if fix_type == "baseline_update" else "extraction issue" if not _layer_owns_field(name, primary.get("field")) else "rerun-required issue",
         "business_rule_violated": _business_rule_for(name, primary.get("field")),
         "likely_backend_file": target["backend_file"],
         "likely_frontend_file": target["frontend_file"] if category == "frontend_display" or target.get("frontend_file") else None,
@@ -769,7 +838,7 @@ def build_repair_brief(layer: dict[str, Any]) -> dict[str, Any]:
         "safe_baseline_update": safe_baseline_update,
         "do_not_change_notes": do_not,
         "recommended_fix_steps": [
-            f"Inspect {target['backend_file']}::{target['function']} for the {primary.get('field')} mismatch.",
+            f"Inspect {target['backend_file']}::{target['function']} for the {primary.get('field')} mismatch; layer owns field: {_layer_owns_field(name, primary.get('field'))}.",
             layer.get("suggested_admin_action") or "Repair the upstream diagnostic cause, then rerun Mission Control.",
             "Rerun the full intelligence diagnostic before projecting restored health.",
         ],
@@ -816,14 +885,16 @@ def _suggested_action(layer: str, status: str, regression: str | None, expected:
 
 def _compare(layer: str, actual: dict[str, Any], elapsed: float, output: dict[str, Any]) -> dict[str, Any]:
     expected = EXPECTED_BASELINE[layer]
-    diffs = {k: actual.get(k) - expected.get(k) for k in expected if isinstance(expected.get(k), int) and isinstance(actual.get(k), int)}
+    owned_fields = _owned_fields(layer)
+    comparable_fields = set(expected) & set(actual) & owned_fields
+    diffs = {k: actual.get(k) - expected.get(k) for k in comparable_fields if isinstance(expected.get(k), int) and isinstance(actual.get(k), int)}
     regression = _severity(diffs.get("score", 0))
-    status = "FAIL" if regression == "Critical" else "WARNING" if regression or actual.get("confidence") != expected.get("confidence") else "PASS"
+    status = "FAIL" if regression == "Critical" else "WARNING" if regression or (_layer_owns_field(layer, "confidence") and actual.get("confidence") != expected.get("confidence")) else "PASS"
     if status == "PASS" and any(v != 0 for v in diffs.values()): status = "WARNING"
     drift_fields = [f"{key} expected {expected.get(key)} actual {actual.get(key)}" for key, diff in diffs.items() if diff != 0]
-    if actual.get("confidence") != expected.get("confidence"):
+    if _layer_owns_field(layer, "confidence") and actual.get("confidence") != expected.get("confidence"):
         drift_fields.append(f"confidence expected {expected.get('confidence')} actual {actual.get('confidence')}")
-    if actual.get("priority") != expected.get("priority"):
+    if _layer_owns_field(layer, "priority") and actual.get("priority") != expected.get("priority"):
         drift_fields.append(f"priority expected {expected.get('priority')} actual {actual.get('priority')}")
     drift_summary = "; ".join(drift_fields)
     reason = _layer_reason(layer, expected, actual, diffs)
@@ -842,7 +913,8 @@ def _compare(layer: str, actual: dict[str, Any], elapsed: float, output: dict[st
         "verification_step": _verification_step(layer, expected),
         "drift_fields": drift_fields,
     }
-    return {"layer": layer, "status": status, "health_status": status, "display_status": display_status, "diagnostic_category": category, "regression": regression, "regression_level": regression or "None", "expected": expected, "actual": actual, "score_delta": diffs.get("score", 0), "difference_summary": diffs, "confidence_difference": {"expected": expected.get("confidence"), "actual": actual.get("confidence")}, "confidence_score": None, "supporting_evidence": [], "missing_evidence_difference": actual.get("missing_count") - expected.get("missing_count", 0), "priority_difference": {"expected": expected.get("priority"), "actual": actual.get("priority")}, "execution_time_ms": round(elapsed, 2), "debug_payload": output.get("debug") or {"sample_keys": sorted(output.keys())[:12]}, "explanation": f"{layer} {status}: expected score {expected.get('score')} and actual score {actual.get('score')} ({_score_delta_label(diffs.get('score', 0))}). {likely}", "plain_language_reason": reason, "why_this_changed": reason, "suggested_admin_action": fix_path, "likely_cause": likely, "diagnostic_resolution": diagnostic_resolution, "fix_type": fix_type, "owner": diagnostic_resolution["owner"], "verification_step": diagnostic_resolution["verification_step"]}
+    missing_difference = actual.get("missing_count", expected.get("missing_count", 0)) - expected.get("missing_count", 0) if _layer_owns_field(layer, "missing_count") else 0
+    return {"layer": layer, "status": status, "health_status": status, "display_status": display_status, "diagnostic_category": category, "regression": regression, "regression_level": regression or "None", "expected": expected, "actual": actual, "owned_fields": sorted(owned_fields), "owned_field_mismatches": _field_mismatches(expected, actual, layer, owned_only=True), "score_delta": diffs.get("score", 0), "difference_summary": diffs, "confidence_difference": {"expected": expected.get("confidence"), "actual": actual.get("confidence")}, "confidence_score": None, "supporting_evidence": [], "missing_evidence_difference": missing_difference, "priority_difference": {"expected": expected.get("priority"), "actual": actual.get("priority")}, "execution_time_ms": round(elapsed, 2), "debug_payload": output.get("debug") or {"sample_keys": sorted(output.keys())[:12]}, "explanation": f"{layer} {status}: expected score {expected.get('score')} and actual score {actual.get('score')} ({_score_delta_label(diffs.get('score', 0))}). {likely}", "plain_language_reason": reason, "why_this_changed": reason, "suggested_admin_action": fix_path, "likely_cause": likely, "diagnostic_resolution": diagnostic_resolution, "fix_type": fix_type, "owner": diagnostic_resolution["owner"], "verification_step": diagnostic_resolution["verification_step"]}
 
 
 
@@ -1249,6 +1321,7 @@ def run_full_intelligence_diagnostic(db: Session | None = None) -> dict[str, Any
         for name, fn in calls:
             t = time.perf_counter(); output = fn(); elapsed = (time.perf_counter() - t) * 1000; outputs[name] = output
             layers.append(_compare(name, _extract(name, output), elapsed, output))
+        layers = apply_dependency_classification(layers)
     finally:
         event.remove(db.bind, "before_cursor_execute", guard); db.close()
     total = round((time.perf_counter() - start) * 1000, 2)
@@ -1303,9 +1376,11 @@ def run_full_intelligence_diagnostic(db: Session | None = None) -> dict[str, Any
 
 
 def _root_cause(layers: list[dict[str, Any]]) -> list[str]:
-    changed = [l for l in layers if l["status"] != "PASS"]
-    if not changed: return ["All layers matched the deterministic baseline; no root cause chain needed."]
-    first = changed[0]
+    decision = _decision_model(layers)
+    first_name = decision.get("first_changed_layer")
+    if not first_name:
+        return ["All layers matched the deterministic baseline; no root cause chain needed."]
+    first = next((l for l in layers if l.get("layer") == first_name), None) or {}
     return [f"{first['layer']} changed first in the ordered stack.", f"{first['layer']} changed because: {first['likely_cause']}", "Downstream changes should be reviewed in dependency order: Member → Society → Institution → Opportunity → Predictive → Decision → Execution Planning → Execution Intelligence → Institutional Memory → Institutional Learning."]
 
 
