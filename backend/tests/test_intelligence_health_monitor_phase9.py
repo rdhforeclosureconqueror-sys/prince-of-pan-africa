@@ -39,6 +39,11 @@ class IntelligenceHealthMonitorPhase9StaticTests(unittest.TestCase):
         for token in ["Minor", "Moderate", "Critical", "difference_summary", "confidence_difference", "missing_evidence_difference", "priority_difference", "root_cause_analysis", "diagnostic_history", "compare_diagnostics", "slowest_layer", "fastest_layer", "largest_payload_layer"]:
             self.assertIn(token, SERVICE)
 
+    def test_opportunity_count_is_not_extracted_for_non_opportunity_layers(self):
+        self.assertIn("opportunity_count: int | None = None", SERVICE)
+        self.assertIn('if layer == "Opportunity Intelligence"', SERVICE)
+        self.assertIn('extracted["opportunity_count"] = opportunity_count', SERVICE)
+
     def test_frontend_sections_cover_health_dashboard_requirements(self):
         for text in ["Overall Health", "Layer Status", "Regression Summary", "Critical Failures", "Performance Metrics", "Root Cause Analysis", "Diagnostic History", "Compare Previous Run", "Health Trend", "Debug Output"]:
             self.assertIn(text, MONITOR)
