@@ -132,8 +132,6 @@ LAYER_FIELD_OWNERSHIP = {
     name: set(CORE_DIAGNOSTIC_FIELDS) for name in DIAGNOSTIC_LAYER_ORDER
 }
 LAYER_FIELD_OWNERSHIP["Member Intelligence"].add("missing_count")
-LAYER_FIELD_OWNERSHIP["Society Intelligence"].add("missing_count")
-LAYER_FIELD_OWNERSHIP["Institution Intelligence"].add("missing_count")
 LAYER_FIELD_OWNERSHIP["Opportunity Intelligence"].update({"missing_count", "opportunity_count"})
 LAYER_FIELD_OWNERSHIP["Decision Support"].add("missing_count")
 LAYER_FIELD_OWNERSHIP["Execution Planning"].add("missing_count")
