@@ -7,6 +7,8 @@ const checks = [
   ['Runtime verification requires downstream consumption', component.includes('downstream_consumption_observed') && /const isRuntimeVerified = \(evidence\).*downstream_consumption_observed/s.test(component)],
   ['Executive View cannot report Connected without runtime evidence', /if \(!isRuntimeVerified\(evidence\)\) return/.test(component) && !/return "Connected";\n};\n\nexport default/.test(component)],
   ['Pipeline highlights upstream, downstream, first failure, and blast radius', ['upstream', 'downstream', 'first-failure', 'blast-radius', 'firstFailureIndex', 'blastRadius'].every((token) => component.includes(token))],
+  ['Mission Control health surfaces avoid placeholder health percentages', !/(45%|47%|71%|73%|75%|77%|78%|80%|90%\+|91%|92%|94%)/.test(component)],
+  ['Ecosystem Command Center only renders diagnostic subsystems', /const ecosystemCommandSystems = asArray\(ecosystemIntelligence\.subsystems\);/.test(component) && !component.includes('Math.max(72, Number(healthScore)')],
   ['Mobile responsiveness covers tables and pipeline components', css.includes('@media (max-width: 700px)') && css.includes('.runtime-evidence-table') && css.includes('.mission-pipeline .pipeline-node')],
 ];
 let failed = false;

@@ -343,7 +343,8 @@ export default function IntelligenceHealthMonitor() {
   const authoritativeFirstFailure = dependencyImpact.first_changed_layer || dependencyImpact.decision_model?.first_changed_layer || "";
   const firstFailureIndex = authoritativeFirstFailure ? dependencyLayers.findIndex((layer) => authoritativeFirstFailure.includes(layer)) : dependencyLayers.findIndex((layer) => { const match = layers.find((item) => (item.layer || "").includes(layer)); const evidence = runtimeEvidenceByLayer.get(layer); return !isRuntimeVerified(evidence) || match?.status === "FAIL" || match?.regression; });
   const blastRadius = firstFailureIndex >= 0 ? dependencyLayers.slice(firstFailureIndex + 1) : [];
-  const healthScore = (result?.overall_health_percent ?? result?.overall_health?.percent) ?? "—";
+  const numericHealthScore = numberOrNull(result?.overall_health_percent ?? result?.overall_health?.percent);
+  const healthScore = numericHealthScore ?? "—";
   const failureCount = asArray(result?.critical_failures).length || asArray(result?.failed_layers).length || (passFailSummary.failed ?? 0);
   const regressionCount = result?.regression_count ?? result?.regression_summary?.count ?? 0;
   const warningCount = asArray(result?.warnings).length || (passFailSummary.warnings ?? 0);
@@ -359,7 +360,7 @@ export default function IntelligenceHealthMonitor() {
     impact: action.impact || action.estimated_impact || "Stabilizes executive confidence and reduces regression exposure.",
     effort: action.estimated_effort || action.estimated_difficulty || action.estimated_time || "Medium",
     layers: asArray(action.affected_intelligence_layers || action.affected_layers).length ? asArray(action.affected_intelligence_layers || action.affected_layers).join(" → ") : dependencyLayers.slice(Math.max(0, index - 1), Math.min(dependencyLayers.length, index + 3)).join(" → "),
-    improvement: action.expected_health_improvement || action.expected_improvement || `+${Math.max(2, 8 - index * 2)} health points`,
+    improvement: action.expected_health_improvement || action.expected_improvement || "Pending rerun after source-of-truth fix",
   }));
   const forecast = safeObject(predictiveIntelligence.ai_forecast || predictiveIntelligence.forecast);
   const initiatives = asArray(aiChiefOperatingOfficer.initiatives);
@@ -422,31 +423,29 @@ export default function IntelligenceHealthMonitor() {
   };
   const readinessScores = [
     ["Deployment Readiness", commandCenter.deployment_readiness ?? historyStats.averageDeploymentQuality ?? healthScore],
-    ["Release Readiness", commandCenter.release_readiness ?? Math.max(0, Number(healthScore) - warningCount * 2 - regressionCount * 5 || 0)],
-    ["Operational Readiness", commandCenter.operational_readiness ?? Math.max(0, Number(healthScore) - failureCount * 10 || 0)],
+    ["Release Readiness", commandCenter.release_readiness ?? (numericHealthScore === null ? null : Math.max(0, numericHealthScore - warningCount * 2 - regressionCount * 5))],
+    ["Operational Readiness", commandCenter.operational_readiness ?? (numericHealthScore === null ? null : Math.max(0, numericHealthScore - failureCount * 10))],
     ["Institutional Readiness", commandCenter.institutional_readiness ?? historyStats.averageHealth ?? healthScore],
-    ["Production Confidence", commandCenter.production_confidence ?? historyStats.averageVerificationScore ?? (browserVerified ? 100 : 70)],
+    ["Production Confidence", commandCenter.production_confidence ?? historyStats.averageVerificationScore ?? (browserVerified ? numericHealthScore : null)],
   ];
   const actionButtons = ["Review", "Investigate", "View Evidence", "Open Layer", "Compare Previous Run", "Create Sprint Task", "Assign Owner", "Mark Resolved", "Run Diagnostic Again"];
-  const productionConfidence = commandCenter.production_confidence ?? historyStats.averageVerificationScore ?? (browserVerified ? 100 : 92);
-  const operationalReadiness = commandCenter.operational_readiness ?? Math.max(0, Number(healthScore) - failureCount * 10 || 89);
+  const productionConfidence = commandCenter.production_confidence ?? historyStats.averageVerificationScore ?? (browserVerified ? numericHealthScore : null);
+  const operationalReadiness = commandCenter.operational_readiness ?? (numericHealthScore === null ? null : Math.max(0, numericHealthScore - failureCount * 10));
   const institutionalReadiness = commandCenter.institutional_readiness ?? historyStats.averageHealth ?? healthScore;
   const currentMission = commandCenter.current_mission || "Operate the Simba ecosystem with verified intelligence, clear priorities, and safe deployment evidence.";
   const currentSprint = sprint.goal || sprint.sprint_goal || "Stabilize executive decision intelligence and publish verified mission evidence.";
   const topInitiative = initiatives[0]?.title || priorityQueue[0]?.title || "Stabilize Opportunity Intelligence";
   const highestRisk = failureCount ? "Critical intelligence break in the operating chain" : regressionCount ? "Regression drift in executive recommendations" : warningCount ? "Unassigned operational warnings" : "No critical drift detected";
   const highestOpportunity = initiatives[0]?.why_it_matters || priorityQueue[0]?.impact || "Convert diagnostics into leadership-ready initiative execution.";
-  const expectedHealthAfterCompletion = sprint.expected_health_after_sprint_completion || sprint.expected_health_after_completion || forecastScenarios[1]?.projected_health_score || "91%";
+  const expectedHealthAfterCompletion = sprint.expected_health_after_sprint_completion || sprint.expected_health_after_completion || forecastScenarios[1]?.projected_health_score || "Health projection pending until the diagnostic source of truth is rerun.";
   const executiveTimeline = (timeline.length ? timeline : ["Diagnostic Started", "Opportunity Regression Detected", "Root Cause Identified", "Recommendation Generated", "Mission Status Updated", "Executive Report Published"].map((label, index) => ({ time: `09:${String(26 + index).padStart(2, "0")}`, label }))).map((item, index) => ({ time: item.time || item.timestamp || `09:${String(26 + index).padStart(2, "0")}`, label: item.label || item.event || item.title || item.status || `Mission event ${index + 1}` }));
-  const ecosystemCommandSystems = (asArray(ecosystemIntelligence.subsystems).length ? asArray(ecosystemIntelligence.subsystems) : [
-    "Mutual Aid Society", "Garvey", "PocketPT", "Library", "Audiobooks", "Assessments", "Membership", "Payments", "Authentication", "Community", "Builder Tools",
-  ].map((subsystem, index) => ({ subsystem, health: Math.max(72, Number(healthScore) || 84) - (index % 4) * 2, performance: index % 3 === 0 ? "Stable" : "Improving", warnings: index % 5 === 0 ? ["Monitor weekly drift"] : [], recommendations: [index % 3 === 0 ? "Keep observing runtime evidence." : "Prepare drill-down dashboard."] })));
+  const ecosystemCommandSystems = asArray(ecosystemIntelligence.subsystems);
   const executiveInitiatives = initiatives.length ? initiatives : priorityQueue.slice(0, 3).map((action, index) => ({
     id: action.id,
     title: index === 0 ? topInitiative : action.title,
     status: index === 0 ? "In Progress" : "Ready",
     why_it_matters: action.impact || "High",
-    expected_health_improvement: action.improvement || "+18%",
+    expected_health_improvement: action.improvement || "Pending rerun after source-of-truth fix",
     estimated_effort: action.effort || timeToResolution,
     affected_layers: action.layers?.split(" → ") || ["Decision Support", "Execution Planning"],
     recommended_owner_type_of_work: "AI COO",
@@ -471,11 +470,16 @@ export default function IntelligenceHealthMonitor() {
     command: index === 0 ? "Start Investigation" : "Open Workstream",
   }));
   const dailyAgenda = decisionCards.slice(0, 3).map((action, index) => ({ title: index === 0 ? `Investigate ${action.title.replace(/^Review\s+/i, "")}` : action.title, time: `${Number(String(action.effort).match(/\d+/)?.[0]) || [45, 30, 15][index]} min`, priority: action.priority === "HIGH" ? "High" : index === 1 ? "High" : "Medium" }));
-  const companyScorecard = ["Platform Health", "Community Growth", "Knowledge Growth", "Operational Stability", "AI Learning", "Deployment Quality", "Business Systems", "Revenue Systems", "Membership Systems", "Assessment Systems", "Publishing Systems", "Trust Systems"].map((label, index) => ({ label, score: Math.max(45, Math.min(100, Number(healthScore) || 81) - ((warningCount + regressionCount + index) % 5) * 3), tone: index % 4 === 0 && (warningCount || regressionCount) ? "watch" : "healthy" }));
+  const layerScoreAverage = average(layers.map((layer) => safeObject(layer.actual).score));
+  const companyScorecard = ["Platform Health", "Community Growth", "Knowledge Growth", "Operational Stability", "AI Learning", "Deployment Quality", "Business Systems", "Revenue Systems", "Membership Systems", "Assessment Systems", "Publishing Systems", "Trust Systems"].map((label, index) => {
+    const sourceScore = label === "Platform Health" ? numericHealthScore : layerScoreAverage;
+    const score = sourceScore === null ? null : Math.max(0, Math.min(100, sourceScore - ((warningCount + regressionCount + index) % 5) * 3));
+    return { label, score, tone: index % 4 === 0 && (warningCount || regressionCount) ? "watch" : "healthy" };
+  });
   const strategicGoals = [
-    { title: "95% Operational Health", target: 95, current: Number(healthScore) || 81 },
+    { title: "95% Operational Health", target: 95, current: numericHealthScore ?? 0 },
     { title: "Zero Critical Regressions", target: 100, current: Math.max(0, 100 - regressionCount * 18 - failureCount * 30) },
-    { title: "Verified Deployment Quality", target: 96, current: Number(productionConfidence) || 92 },
+    { title: "Verified Deployment Quality", target: 96, current: numberOrNull(productionConfidence) ?? 0 },
   ].map((goal) => ({ ...goal, remaining: Math.max(0, goal.target - goal.current), eta: `${Math.max(1, Math.ceil(Math.max(0, goal.target - goal.current) / 1.2))} days` }));
   const heatTone = (score) => score < 60 ? "critical" : score < 75 ? "attention" : score < 88 ? "watch" : "healthy";
   const dependencyInfluence = dependencyLayers.map((layer, index) => ({ layer, affects: dependencyLayers.slice(index + 1, index + 4).map(operationalLayerName), radius: dependencyLayers.length - index - 1, impact: index <= firstFailureIndex || (firstFailureIndex < 0 && index < 4) ? "High" : "Medium" }));
@@ -486,8 +490,8 @@ export default function IntelligenceHealthMonitor() {
     highestRisk,
     highestOpportunity,
     workOrder: priorityQueue.slice(0, 3).map((action) => action.title).join(" → ") || "Run diagnostic → review evidence → assign owner",
-    expectedOutcome: sprint.expected_health_after_sprint_completion || sprint.expected_health_after_completion || "Health 91%. Confidence 95%.",
-    confidence: sprint.confidence || sprint.estimated_confidence || aiOperationsAdvisor[0]?.confidence || "95",
+    expectedOutcome: sprint.expected_health_after_sprint_completion || sprint.expected_health_after_completion || "Health projection pending until rerun.",
+    confidence: sprint.confidence || sprint.estimated_confidence || aiOperationsAdvisor[0]?.confidence || "—",
     cooSummary: `Good Morning. The platform completed ${(performanceSummary.total_completed_checks ?? layers.length) || 10} diagnostic checks. Production confidence is ${formatMetric(productionConfidence, "%")}. ${failureCount ? `${failureCount} critical failures require attention.` : "No critical failures occurred."} ${String(expectedHealthAfterCompletion).includes("Health projection pending") ? expectedHealthAfterCompletion : `If today's sprint is completed, projected platform health increases to ${expectedHealthAfterCompletion}.`} Estimated executive attention required today: ${Math.floor(executiveAttentionMinutes / 60) ? `${Math.floor(executiveAttentionMinutes / 60)} hour ` : ""}${executiveAttentionMinutes % 60} minutes.`,
   };
 
@@ -554,13 +558,13 @@ export default function IntelligenceHealthMonitor() {
       <article className="stat-card wide-card"><table className="admin-table"><thead><tr><th>Rank</th><th>Highest Return Item</th><th>Expected Gain</th><th>Time</th><th>Complexity</th><th>Command</th></tr></thead><tbody>{decisionCards.map((card, index) => <tr key={card.id}><td>{index + 1}</td><td>{card.title}</td><td>{card.improvement}</td><td>{card.effort}</td><td>{index === 0 ? "Medium Complexity" : "Low Complexity"}</td><td><button type="button">{card.command}</button></td></tr>)}</tbody></table></article>
 
       <h3>Organizational Scorecard</h3>
-      <div className="dashboard-grid organization-scorecard">{companyScorecard.map((item) => <article className={`stat-card heat-${heatTone(item.score)}`} key={item.label}><h4>{item.label}</h4><h2>{item.score}%</h2><p>{heatTone(item.score) === "healthy" ? "Healthy" : heatTone(item.score) === "watch" ? "Watch" : heatTone(item.score) === "attention" ? "Needs Attention" : "Critical"}</p></article>)}</div>
+      <div className="dashboard-grid organization-scorecard">{companyScorecard.map((item) => <article className={`stat-card heat-${heatTone(item.score)}`} key={item.label}><h4>{item.label}</h4><h2>{formatMetric(item.score, "%")}</h2><p>{item.score === null ? "Awaiting diagnostic" : heatTone(item.score) === "healthy" ? "Healthy" : heatTone(item.score) === "watch" ? "Watch" : heatTone(item.score) === "attention" ? "Needs Attention" : "Critical"}</p></article>)}</div>
 
       <h3>Strategic Goals</h3>
       <div className="dashboard-grid strategic-goals">{strategicGoals.map((goal) => <article className="stat-card" key={goal.title}><h4>Quarter Objective</h4><h3>{goal.title}</h3><p><strong>Progress:</strong> {goal.current}%</p><p><strong>Remaining:</strong> {goal.remaining}%</p><p><strong>Estimated Completion:</strong> {goal.eta}</p><progress max={goal.target} value={goal.current} /></article>)}</div>
 
       <h3>Organization Heat Map</h3>
-      <div className="organization-heat-map">{companyScorecard.map((item) => <span className={`heat-cell heat-${heatTone(item.score)}`} key={item.label} title={`${item.label}: ${item.score}%`}>{item.label}<strong>{item.score}%</strong></span>)}</div>
+      <div className="organization-heat-map">{companyScorecard.map((item) => <span className={`heat-cell heat-${heatTone(item.score)}`} key={item.label} title={`${item.label}: ${formatMetric(item.score, "%")}`}>{item.label}<strong>{formatMetric(item.score, "%")}</strong></span>)}</div>
 
       <h3>Executive Dependency Influence Map</h3>
       <div className="dashboard-grid dependency-influence-grid">{dependencyInfluence.map((item) => <article className="stat-card" key={item.layer}><h4>{operationalLayerName(item.layer)}</h4><p><strong>Affects:</strong> {item.affects.join(", ") || "Final operating layer"}</p><p><strong>Estimated Blast Radius:</strong> {item.radius} Systems</p><p><strong>Business Impact:</strong> {item.impact}</p></article>)}</div>
@@ -611,7 +615,7 @@ export default function IntelligenceHealthMonitor() {
         const nextLayer = dependencyLayers[index + 1];
         const status = executiveStatusFor(match, evidence);
         const action = priorityQueue.find((item) => item.layers.includes(layer)) || priorityQueue[0];
-        return <article className={`stat-card executive-layer-card status-${status.toLowerCase()}`} key={layer}><h4>{executiveStatusIcon(status)} {operationalLayerName(layer)}</h4><p><strong>Status:</strong> {status}</p><p><strong>Why:</strong> {status === "Connected" ? (match?.plain_language_reason || executiveConnectionPhrase(layer, nextLayer)) : isRuntimeVerified(evidence) ? executiveConnectionPhrase(layer, nextLayer) : (match?.explanation || "Information has not been proven to reach the next intelligence layer yet.")}</p><p><strong>Business impact:</strong> {status === "Connected" ? "Leadership can rely on this PASS layer when making decisions." : "Repair this handoff before using downstream recommendations for final decisions."}</p><p><strong>Affected systems:</strong> {dependencyLayers.slice(index + 1, Math.min(dependencyLayers.length, index + 4)).map(operationalLayerName).join(", ") || "Final intelligence destination"}</p><p><strong>Recommended fix:</strong> {match?.suggested_admin_action || action?.title || "Assign an owner, repair the handoff, and rerun Mission Control."}</p><p><strong>Expected improvement:</strong> {action?.improvement || "+2–6 health points"}</p><p><strong>Estimated effort:</strong> {action?.effort || timeToResolution}</p><p><strong>Confidence:</strong> {match?.confidence ?? action?.confidence ?? dailyBriefing.confidence}%</p></article>;
+        return <article className={`stat-card executive-layer-card status-${status.toLowerCase()}`} key={layer}><h4>{executiveStatusIcon(status)} {operationalLayerName(layer)}</h4><p><strong>Status:</strong> {status}</p><p><strong>Why:</strong> {status === "Connected" ? (match?.plain_language_reason || executiveConnectionPhrase(layer, nextLayer)) : isRuntimeVerified(evidence) ? executiveConnectionPhrase(layer, nextLayer) : (match?.explanation || "Information has not been proven to reach the next intelligence layer yet.")}</p><p><strong>Business impact:</strong> {status === "Connected" ? "Leadership can rely on this PASS layer when making decisions." : "Repair this handoff before using downstream recommendations for final decisions."}</p><p><strong>Affected systems:</strong> {dependencyLayers.slice(index + 1, Math.min(dependencyLayers.length, index + 4)).map(operationalLayerName).join(", ") || "Final intelligence destination"}</p><p><strong>Recommended fix:</strong> {match?.suggested_admin_action || action?.title || "Assign an owner, repair the handoff, and rerun Mission Control."}</p><p><strong>Expected improvement:</strong> {action?.improvement || "Pending rerun after source-of-truth fix"}</p><p><strong>Estimated effort:</strong> {action?.effort || timeToResolution}</p><p><strong>Confidence:</strong> {match?.confidence ?? action?.confidence ?? dailyBriefing.confidence}%</p></article>;
       })}</div>
 
       <h3>Executive Trends</h3>
@@ -619,14 +623,14 @@ export default function IntelligenceHealthMonitor() {
 
       <h3>AI Forecast</h3>
       <div className="dashboard-grid" aria-label="AI Forecast">
-        {forecastScenarios.length ? forecastScenarios.map((scenario) => <article className="stat-card" key={scenario.scenario}><h3>{scenario.scenario}</h3><p><strong>Projected health score:</strong> {scenario.projected_health_score}</p><p><strong>Regression risk:</strong> {scenario.regression_risk}</p><p><strong>Technical debt trend:</strong> {scenario.technical_debt_trend}</p><p><strong>Confidence:</strong> {scenario.confidence}%</p><p><strong>Primary reason:</strong> {scenario.primary_reason}</p></article>) : <><article className="stat-card"><h3>If no action is taken</h3><p><strong>Projected health score:</strong> {healthScore}%</p><p><strong>Regression risk:</strong> {forecast.future_regression_likelihood || forecast.regression_likelihood || (regressionCount ? "Moderate" : "Low")}</p><p><strong>Technical debt trend:</strong> {forecast.technical_debt_trend || (warningCount || regressionCount ? "Increasing" : "Stable")}</p><p><strong>Confidence:</strong> {forecast.confidence ?? aiOperationsAdvisor[0]?.confidence ?? "—"}%</p><p><strong>Primary reason:</strong> Current warnings remain unresolved.</p></article><article className="stat-card"><h3>If completed today</h3><p><strong>Health:</strong> {sprint.expected_health_after_sprint_completion || sprint.expected_health_after_completion || "90%+"}</p><p><strong>Regression risk:</strong> Reduced</p><p><strong>Production Confidence:</strong> 94%</p><p><strong>Deployment Readiness:</strong> Ready</p><p><strong>Estimated Time Saved:</strong> 3 hours/week</p><p><strong>Confidence:</strong> {sprint.confidence || sprint.estimated_confidence || "—"}%</p><p><strong>Primary reason:</strong> Highest-ROI sprint tasks are completed and re-verified.</p></article></>}
+        {forecastScenarios.length ? forecastScenarios.map((scenario) => <article className="stat-card" key={scenario.scenario}><h3>{scenario.scenario}</h3><p><strong>Projected health score:</strong> {scenario.projected_health_score}</p><p><strong>Regression risk:</strong> {scenario.regression_risk}</p><p><strong>Technical debt trend:</strong> {scenario.technical_debt_trend}</p><p><strong>Confidence:</strong> {scenario.confidence}%</p><p><strong>Primary reason:</strong> {scenario.primary_reason}</p></article>) : <><article className="stat-card"><h3>If no action is taken</h3><p><strong>Projected health score:</strong> {healthScore}%</p><p><strong>Regression risk:</strong> {forecast.future_regression_likelihood || forecast.regression_likelihood || (regressionCount ? "Moderate" : "Low")}</p><p><strong>Technical debt trend:</strong> {forecast.technical_debt_trend || (warningCount || regressionCount ? "Increasing" : "Stable")}</p><p><strong>Confidence:</strong> {forecast.confidence ?? aiOperationsAdvisor[0]?.confidence ?? "—"}%</p><p><strong>Primary reason:</strong> Current warnings remain unresolved.</p></article><article className="stat-card"><h3>If completed today</h3><p><strong>Health:</strong> {sprint.expected_health_after_sprint_completion || sprint.expected_health_after_completion || "Projection pending rerun"}</p><p><strong>Regression risk:</strong> Reduced</p><p><strong>Production Confidence:</strong> {formatMetric(productionConfidence, "%")}</p><p><strong>Deployment Readiness:</strong> Ready</p><p><strong>Estimated Time Saved:</strong> 3 hours/week</p><p><strong>Confidence:</strong> {sprint.confidence || sprint.estimated_confidence || "—"}%</p><p><strong>Primary reason:</strong> Highest-ROI sprint tasks are completed and re-verified.</p></article></>}
       </div>
 
       <h3>Ecosystem Command Center</h3>
       <div className="ecosystem-command-grid">{ecosystemCommandSystems.map((system) => <article className="stat-card ecosystem-command-card" key={system.subsystem}><h4>{system.subsystem}</h4><p><strong>Health:</strong> {system.health ?? "—"}%</p><p><strong>Trend:</strong> {system.performance || "Stable"}</p><p><strong>Risk:</strong> {asArray(system.warnings).join(", ") || "Low"}</p><p><strong>Recommendation:</strong> {asArray(system.recommendations).join("; ") || "Continue monitoring"}</p><button type="button">Open Dashboard</button></article>)}</div>
 
       <h3>AI COO Sprint Planning</h3>
-      <article className="stat-card wide-card"><h4>Sprint goal</h4><p>{sprint.goal || sprint.sprint_goal || `Restore the intelligence chain to ${failureCount ? "non-critical" : "healthy"} status while protecting public diagnostic confidence.`}</p><h4>Highest ROI tasks</h4><ul>{(asArray(sprint.highest_roi_tasks).length ? asArray(sprint.highest_roi_tasks) : priorityQueue.slice(0, 3).map((action) => action.title)).map((task) => <li key={task}>{task}</li>)}</ul><h4>Recommended implementation order</h4><ol>{(asArray(sprint.recommended_implementation_order).length ? asArray(sprint.recommended_implementation_order) : priorityQueue.slice(0, 4).map((action) => action.title)).map((task) => <li key={task}>{task}</li>)}</ol><p><strong>Risk reduction estimate:</strong> {sprint.risk_reduction_estimate || "25–40% after the top two queue items are verified."}</p><p><strong>Expected health after sprint completion:</strong> {sprint.expected_health_after_sprint_completion || sprint.expected_health_after_completion || sprint.expected_result?.overall_health || "90%+ with no critical failures."}</p><p><strong>Confidence:</strong> {sprint.confidence || sprint.estimated_confidence || "—"}%</p><p><strong>Estimated time to completion:</strong> {sprint.estimated_time_to_completion || sprint.estimated_completion || "—"}</p></article>
+      <article className="stat-card wide-card"><h4>Sprint goal</h4><p>{sprint.goal || sprint.sprint_goal || `Restore the intelligence chain to ${failureCount ? "non-critical" : "healthy"} status while protecting public diagnostic confidence.`}</p><h4>Highest ROI tasks</h4><ul>{(asArray(sprint.highest_roi_tasks).length ? asArray(sprint.highest_roi_tasks) : priorityQueue.slice(0, 3).map((action) => action.title)).map((task) => <li key={task}>{task}</li>)}</ul><h4>Recommended implementation order</h4><ol>{(asArray(sprint.recommended_implementation_order).length ? asArray(sprint.recommended_implementation_order) : priorityQueue.slice(0, 4).map((action) => action.title)).map((task) => <li key={task}>{task}</li>)}</ol><p><strong>Risk reduction estimate:</strong> {sprint.risk_reduction_estimate || "25–40% after the top two queue items are verified."}</p><p><strong>Expected health after sprint completion:</strong> {sprint.expected_health_after_sprint_completion || sprint.expected_health_after_completion || sprint.expected_result?.overall_health || "Projection pending rerun."}</p><p><strong>Confidence:</strong> {sprint.confidence || sprint.estimated_confidence || "—"}%</p><p><strong>Estimated time to completion:</strong> {sprint.estimated_time_to_completion || sprint.estimated_completion || "—"}</p></article>
 
       </> }
 
@@ -678,7 +682,7 @@ export default function IntelligenceHealthMonitor() {
       <article className="stat-card"><h2>Institutional Health Score {ecosystemIntelligence.institutional_health_score ?? "—"}%</h2><div className="dashboard-grid">{asArray(ecosystemIntelligence.subsystems).map((subsystem) => <section className="stat-card" key={subsystem.subsystem}><h4>{subsystem.subsystem}</h4><p>Health {subsystem.health}% · Performance {subsystem.performance}</p><p>Warnings: {asArray(subsystem.warnings).join(", ") || "None"}</p><p>Recommendations: {asArray(subsystem.recommendations).join("; ") || "Continue monitoring"}</p></section>)}</div></article>
 
       <h3>AI Chief Operating Officer</h3>
-      <article className="stat-card"><h4>Suggested Sprint</h4><p>Estimated completion {aiChiefOperatingOfficer.suggested_sprint?.estimated_completion || "2 hours"}</p><ul>{asArray(aiChiefOperatingOfficer.suggested_sprint?.tasks).map((task) => <li key={task}>{task}</li>)}</ul><pre className="data-note">{JSON.stringify(aiChiefOperatingOfficer.suggested_sprint?.expected_result || {}, null, 2)}</pre><p>Estimated confidence {aiChiefOperatingOfficer.suggested_sprint?.estimated_confidence ?? "—"}%</p></article>
+      <article className="stat-card"><h4>Suggested Sprint</h4><p>Estimated completion {aiChiefOperatingOfficer.suggested_sprint?.estimated_completion || "—"}</p><ul>{asArray(aiChiefOperatingOfficer.suggested_sprint?.tasks).map((task) => <li key={task}>{task}</li>)}</ul><pre className="data-note">{JSON.stringify(aiChiefOperatingOfficer.suggested_sprint?.expected_result || {}, null, 2)}</pre><p>Estimated confidence {aiChiefOperatingOfficer.suggested_sprint?.estimated_confidence ?? "—"}%</p></article>
 
       <h3>Executive Performance Summary</h3>
       <div className="dashboard-grid">
