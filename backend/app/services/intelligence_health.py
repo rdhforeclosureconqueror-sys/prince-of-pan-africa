@@ -1191,8 +1191,8 @@ def build_ai_coo_sprint_plan(run: dict[str, Any], initiatives: list[dict[str, An
         "highest_roi_tasks": deduped_tasks,
         "recommended_implementation_order": deduped_tasks,
         "risk_reduction_estimate": f"{min(75, 20 + len(top) * 15)}%",
-        "expected_health_after_sprint_completion": f"{expected_health}%" if not unresolved else f"Latest diagnostic run shows {len(unresolved)} unresolved diagnostics; completion health is not measured yet.",
-        "expected_health_after_completion": f"{expected_health}%" if not unresolved else f"Latest diagnostic run shows {len(unresolved)} unresolved diagnostics; completion health is not measured yet.",
+        "expected_health_after_sprint_completion": f"{expected_health}%" if not unresolved else "Completion health is not measured yet.",
+        "expected_health_after_completion": f"{expected_health}%" if not unresolved else "Completion health is not measured yet.",
         "confidence": confidence,
         "estimated_time_to_completion": f"{max(1, len(deduped_tasks) * 2)} hours",
         "estimated_completion": f"{max(1, len(deduped_tasks) * 2)} hours",
@@ -1219,7 +1219,7 @@ def build_ai_forecast_scenarios(run: dict[str, Any], sprint_plan: dict[str, Any]
     risk_reduction = _safe_percent_from_text(sprint_plan.get("risk_reduction_estimate")) or 0
     unresolved = [l for l in run.get("layers", []) if l.get("status") != "PASS"]
     if projected is None or unresolved:
-        sprint_health = f"Latest diagnostic run shows {len(unresolved)} unresolved diagnostics; completion health is not measured yet."
+        sprint_health = "Completion health is not measured yet."
     else:
         if risk_reduction > 0:
             projected = max(current, projected)
@@ -1288,7 +1288,7 @@ def executive_summary(layers: list[dict[str, Any]], run: dict[str, Any] | None =
         downstream_text += f" and {len(downstream) - 3} more"
     unresolved_count = len([layer for layer in layers if layer.get("status") != "PASS"])
     recommended = f"review {first} first before updating baselines" if first and first != "no layer" else "continue monitoring"
-    rerun_text = f" Latest diagnostic run shows {unresolved_count} unresolved diagnostics; projected health is not measured yet." if unresolved_count else " Latest diagnostic run shows all diagnostics passed, so projected health is available."
+    rerun_text = " Projection unavailable until unresolved diagnostics pass." if unresolved_count else " Projected health is available because all diagnostics passed."
     return f"{regression_count} regressions detected. First drift appears in {first}. {downstream_text} appear downstream affected. No production records were modified. Recommended action: {recommended}.{rerun_text}"
 
 
