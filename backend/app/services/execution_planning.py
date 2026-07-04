@@ -113,7 +113,7 @@ def _plan(decision: dict[str, Any]) -> dict[str, Any]:
         "missing_evidence": decision.get("missing_evidence", []),
         "assumptions": decision.get("assumptions", []),
         "manual_review_requirements": ["Human leaders must approve before any execution.", "No automated assignments or workflows are authorized by this plan."],
-        "readiness_score": max(0, min(100, round(mean([overall, 100 - effort, 100 - min(70, len(decision.get("missing_evidence", [])) * 15)])))),
+        "readiness_score": max(0, min(100, overall)),
         "requires_manual_review": True,
         "no_execution_performed": True,
     }
