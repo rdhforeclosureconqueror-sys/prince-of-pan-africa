@@ -24,12 +24,13 @@ def _score(name: str, value: int, why: str) -> dict[str, Any]:
     return {"score": max(0, min(100, round(value))), "why": why}
 
 
-def _decision(*, did: str, title: str, decision_type: str, source: dict[str, Any], impact: int, urgency: int, effort: int, risk_reduction: int, community_benefit: int, institution_benefit: int, long_term_value: int, evidence: list[str], missing: list[str] | None = None, assumptions: list[str] | None = None, tradeoffs: list[str] | None = None, dependencies: list[str] | None = None, outcomes: list[str] | None = None, related: dict[str, list[Any]] | None = None) -> dict[str, Any]:
+def _decision(*, did: str, title: str, decision_type: str, source: dict[str, Any], impact: int, urgency: int, effort: int, risk_reduction: int, community_benefit: int, institution_benefit: int, long_term_value: int, evidence: list[str], missing: list[str] | None = None, scoring_missing: list[str] | None = None, assumptions: list[str] | None = None, tradeoffs: list[str] | None = None, dependencies: list[str] | None = None, outcomes: list[str] | None = None, related: dict[str, list[Any]] | None = None) -> dict[str, Any]:
     missing = missing or []
+    scoring_missing = missing if scoring_missing is None else scoring_missing
     parts = {
         "impact": impact,
         "urgency": urgency,
-        "confidence": 80 if evidence and not missing else 55 if evidence else 30,
+        "confidence": 80 if evidence and not scoring_missing else 55 if evidence else 30,
         "effort_inverse": 100 - effort,
         "risk_reduction": risk_reduction,
         "community_benefit": community_benefit,
@@ -40,7 +41,7 @@ def _decision(*, did: str, title: str, decision_type: str, source: dict[str, Any
     score_explanations = {
         "impact": _score("Impact", impact, f"Impact is {impact} because the source recommendation priority/health signal is {source.get('priority_score', source.get('score', impact))} and affects {decision_type} planning."),
         "urgency": _score("Urgency", urgency, f"Urgency is {urgency} because lower readiness, blockers, missing roles, or risk indicators increase near-term attention."),
-        "confidence": _score("Confidence", parts["confidence"], f"Confidence uses evidence count {len(evidence)} and missing evidence count {len(missing)}; missing evidence lowers the score."),
+        "confidence": _score("Confidence", parts["confidence"], f"Confidence uses evidence count {len(evidence)} and missing evidence count {len(scoring_missing)}; missing evidence lowers the score."),
         "effort": _score("Effort", effort, f"Effort is {effort}; lower effort raises quick-win priority but does not replace human review."),
         "risk_reduction": _score("Risk Reduction", risk_reduction, f"Risk reduction is {risk_reduction} based on whether the decision addresses trust, role, workflow, operational, or strategic fragility."),
         "community_benefit": _score("Community Benefit", community_benefit, f"Community benefit is {community_benefit} based on likely member, volunteer, trust, education, or recognition value."),
@@ -56,7 +57,7 @@ def _decision(*, did: str, title: str, decision_type: str, source: dict[str, Any
         "impact_score": impact,
         "effort_score": effort,
         "urgency": urgency,
-        "confidence": _confidence(parts["confidence"], evidence, missing),
+        "confidence": _confidence(parts["confidence"], evidence, scoring_missing),
         "evidence": evidence,
         "missing_evidence": missing,
         "assumptions": assumptions or ["All intelligence inputs are read-only generated outputs.", "Human leaders will validate context before choosing any action."],
@@ -99,7 +100,7 @@ def _from_opportunity(o: dict[str, Any], *, owned_missing: set[str] | None = Non
         community_benefit=80 if dtype in {"members", "resources", "society", "leadership"} else 60,
         institution_benefit=85 if dtype in {"institution", "business", "containers", "leadership"} else 55,
         long_term_value=85 if dtype in {"institution", "leadership", "society", "business"} else 65,
-        evidence=o.get("evidence", []), missing=_normalized_missing(o.get("missing_evidence", []), owned_missing),
+        evidence=o.get("evidence", []), missing=_normalized_missing(o.get("missing_evidence", []), owned_missing), scoring_missing=o.get("missing_evidence", []),
         assumptions=["Recommendation is derived from Opportunity Intelligence, which reuses lower intelligence layers.", "No new persistence or task workflow is created."],
         tradeoffs=[f"Prioritizing {o['title']} may defer other {dtype} recommendations.", "Human review is required before any operational action."],
         dependencies=["Existing intelligence evidence", "Manual leader discussion"],
