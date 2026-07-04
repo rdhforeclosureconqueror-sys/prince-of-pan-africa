@@ -95,6 +95,19 @@ def _from_opportunity(o: dict[str, Any]) -> dict[str, Any]:
     )
 
 
+def _overall_confidence(decisions: list[dict[str, Any]]) -> str:
+    if not decisions:
+        return "limited"
+    missing_count = len({m for d in decisions for m in d.get("missing_evidence", [])})
+    evidence_count = sum(1 for d in decisions if d.get("evidence"))
+    value = round(mean([
+        min(100, len(decisions) * 8),
+        min(100, evidence_count * 10),
+        100 - min(80, missing_count * 5),
+    ]))
+    return "substantial" if value >= 75 else "developing" if value >= 45 else "limited"
+
+
 def generate_decision_support(db: Session, *, society_id: int | None = None, include_debug: bool = False) -> dict[str, Any]:
     opp = generate_opportunity_intelligence(db, society_id=society_id, include_debug=include_debug)
     decisions = [_from_opportunity(o) for o in opp.get("opportunities", [])]
@@ -110,4 +123,4 @@ def generate_decision_support(db: Session, *, society_id: int | None = None, inc
         "leadership_decisions": by_type["leadership"], "institution_decisions": by_type["institution"], "container_decisions": by_type["containers"] + [d for d in decisions if "container" in d["title"].lower()], "business_decisions": by_type["business"], "resource_allocation": by_type["resources"],
         "strategic_roadmap": decisions[:15],
     }
-    return {"ok": True, "layer": "Decision Support", "read_only": True, "warnings": [READ_ONLY_WARNING, "Prioritizes decisions only; human leaders make final decisions."], "intelligence_inputs": ["Member Intelligence", "Society Intelligence", "Institution Intelligence", "Opportunity Intelligence", "Predictive Intelligence (if present in existing outputs)"], "recommendations": decisions, "dashboard": dashboard, "debug": {"opportunity_intelligence": opp} if include_debug else None}
+    return {"ok": True, "layer": "Decision Support", "read_only": True, "confidence": _overall_confidence(decisions), "warnings": [READ_ONLY_WARNING, "Prioritizes decisions only; human leaders make final decisions."], "intelligence_inputs": ["Member Intelligence", "Society Intelligence", "Institution Intelligence", "Opportunity Intelligence", "Predictive Intelligence (if present in existing outputs)"], "recommendations": decisions, "dashboard": dashboard, "debug": {"opportunity_intelligence": opp} if include_debug else None}
