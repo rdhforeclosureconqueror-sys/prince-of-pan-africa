@@ -1,5 +1,6 @@
 from app.services.intelligence_health import (
     _compare,
+    _predictive,
     _extract,
     _field_mismatches,
     _decision_model,
@@ -28,6 +29,17 @@ def test_missing_count_is_only_compared_for_layers_that_own_missing_evidence():
     assert all(m["field"] != "missing_count" for m in predictive["owned_field_mismatches"])
     society = _compare("Society Intelligence", {"score": 60, "confidence": "substantial", "recommendations": 6, "priority": "medium", "missing_count": 5}, 1.0, {})
     assert any(m["field"] == "missing_count" for m in society["owned_field_mismatches"])
+
+
+def test_predictive_priority_matches_advisory_baseline_when_readiness_is_high():
+    output = _predictive({"overall_priority": {"score": 74}, "opportunities": [{}] * 12})
+    extracted = _extract("Predictive Intelligence", output)
+    comparison = _compare("Predictive Intelligence", extracted, 1.0, output)
+
+    assert extracted["score"] == 79
+    assert extracted["priority"] == "medium"
+    assert comparison["status"] == "PASS"
+    assert comparison["owned_field_mismatches"] == []
 
 
 def test_first_point_of_failure_uses_dependency_graph_rule():
