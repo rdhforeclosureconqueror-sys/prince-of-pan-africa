@@ -89,7 +89,20 @@ def generate_society_intelligence(db: Session, *, society_id: int, include_debug
     scores["member_growth"] = _score("Member Growth", round(mean([_pct(len(memberships), 10), _pct(len(profile_users), len(memberships) or 1), _pct(len(member_profiles)+len(assessments), len(memberships) or 1)])), [f"{len(memberships)} active members", f"{len(profile_users)} profiles", f"{len(member_profiles)+len(assessments)} member profile/assessment records"], "Average of active membership toward First Ten, institutional profiles, and growth/assessment evidence.", _confidence(sum(1 for x in [memberships, profile_users, member_profiles or assessments] if x), 3), [])
     scores["volunteer_capacity"] = _score("Volunteer Capacity", round(mean([_pct(len([p for p in profiles if p.availability]), len(profiles) or 1), _pct(len([p for p in profiles if p.primary_contribution]), len(profiles) or 1), _avg_first_ten(first_ten, ["skill_capacity_score"])])), [f"{len([p for p in profiles if p.availability])} profiles include availability", f"{len([p for p in profiles if p.primary_contribution])} profiles include contribution", "First Ten skill capacity included when present"], "Average of availability, contribution clarity, and First Ten skill capacity.", _confidence(sum(1 for x in [profiles, first_ten] if x), 2), ["Institutional profile availability"] if not profiles else [])
     core = [scores[k]["score"] for k in ["trust_score", "participation_score", "leadership_coverage", "assessment_completion", "role_coverage", "knowledge_coverage", "business_readiness", "institution_readiness"]]
-    scores["society_health_score"] = _score("Society Health Score", round(mean(core)), [f"Averaged {len(core)} explained domain scores"], "Mean of trust, participation, leadership, assessment, role, knowledge, business, and institution readiness scores.", _confidence(len(sources), 12), [])
+    raw_society_health = round(mean(core))
+    leadership_limited_health = min(raw_society_health, scores["leadership_coverage"]["score"]) if missing_roles else raw_society_health
+    scores["society_health_score"] = _score(
+        "Society Health Score",
+        leadership_limited_health,
+        [
+            f"Averaged {len(core)} explained domain scores",
+            f"Raw society health before critical-role gate: {raw_society_health}",
+            f"Critical-role leadership gate: {scores['leadership_coverage']['score']} with missing roles: {', '.join(missing_roles) or 'none'}",
+        ],
+        "Mean of trust, participation, leadership, assessment, role, knowledge, business, and institution readiness scores, capped by critical-role leadership coverage until all required roles are covered.",
+        _confidence(len(sources), 12),
+        [],
+    )
 
     risks = [f"Missing critical role: {r}" for r in missing_roles] + [s["name"] + " lacks evidence" for s in scores.values() if s["confidence"] == "limited"]
     strengths = [s["name"] + f" is {s['score']} because {s['why']}" for s in scores.values() if s["score"] >= 70]
