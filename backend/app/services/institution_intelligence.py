@@ -71,6 +71,7 @@ def generate_institution_intelligence(db: Session, *, institution_id: int, inclu
     risk_level = "high" if scores["institution_health"]["score"] < 45 else "moderate" if scores["institution_health"]["score"] < 70 else "low"
     growth_potential = _composite("Growth Potential", [s["member_growth"], scores["business_readiness"], scores["operational_readiness"]], "Mean of member growth, business readiness, and operational readiness from existing evidence.")
     missing = sorted({m for score in scores.values() for m in score.get("missing_evidence", [])})
+    recommended_next_actions = _recommendations(scores, society["missing_roles"])
     result = {
         "ok": True,
         "institution_id": institution_id,
@@ -85,7 +86,8 @@ def generate_institution_intelligence(db: Session, *, institution_id: int, inclu
         "growth_potential": growth_potential,
         "institution_strengths": [x.replace("Society", "Institution") for x in society["top_strengths"]],
         "institution_weaknesses": society["top_risks"],
-        "recommended_next_actions": _recommendations(scores, society["missing_roles"]),
+        "recommended_next_actions": recommended_next_actions,
+        "recommendations": recommended_next_actions,
         "warnings": ["Read-only generated model: it does not write records, execute workflows, create scheduled jobs, or begin Adaptive Kanban."] + society["warnings"],
         "confidence": society["confidence"],
         "evidence": society["evidence_sources"],
