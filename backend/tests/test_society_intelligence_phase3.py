@@ -105,6 +105,20 @@ class SocietyIntelligencePhase3Tests(unittest.TestCase):
         finally:
             db.close()
 
+
+    def test_recommendations_include_deterministic_society_repair_metadata(self):
+        data = self.generate()
+        recommendations = data["recommended_next_steps"]
+
+        self.assertGreaterEqual(len(recommendations), 6)
+        self.assertEqual(recommendations[0]["id"], "society-risk-1")
+        self.assertEqual(recommendations[0]["type"], "society_repair")
+        self.assertEqual(recommendations[0]["priority"], "medium")
+        self.assertEqual(recommendations[0]["action"], "Address Missing critical role: Treasurer")
+        self.assertIn("scored evidence", recommendations[0]["why"])
+        self.assertEqual(recommendations[0]["evidence"], ["Missing critical role: Treasurer"])
+        self.assertTrue(all("id" in recommendation and "type" in recommendation for recommendation in recommendations))
+
     def test_route_admin_debug_only(self):
         import app.main as main_module
         importlib.reload(main_module)
