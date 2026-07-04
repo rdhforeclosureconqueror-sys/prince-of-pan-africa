@@ -60,6 +60,18 @@ class OpportunityIntelligencePhase5Tests(unittest.TestCase):
         data = self.generate(); types = {o["type"] for o in data["opportunities"]}
         for typ in ["volunteer", "mentorship", "business", "institution", "recognition"]: self.assertIn(typ, types)
         self.assertNotEqual(before, data["overall_priority"]["score"])
+
+    def test_deterministic_health_fixture_score_and_missing_count_remain_stable(self):
+        import app.services.intelligence_health as health_module
+        db = health_module._isolated_session()
+        try:
+            ids = health_module._seed_fixture(db)
+            data = self.opp.generate_opportunity_intelligence(db, society_id=ids["society_id"], include_debug=True)
+        finally:
+            db.close()
+        self.assertEqual(data["overall_priority"]["score"], 74)
+        self.assertEqual(len(data["missing_evidence"]), 4)
+
     def test_read_only_no_writes_no_workflows_and_api_admin_debug_permissions(self):
         writes=[]
         def guard(conn, cursor, statement, parameters, context, executemany):
