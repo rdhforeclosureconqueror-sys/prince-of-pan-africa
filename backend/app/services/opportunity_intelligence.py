@@ -12,6 +12,7 @@ from app.services.society_intelligence import CRITICAL_ROLES, generate_society_i
 
 EXPANDED_ROLES = ["Treasurer", "Secretary", "Historian", "Membership Chair", "Education Chair", "Finance Chair", *CRITICAL_ROLES]
 READ_ONLY_WARNING = "Read-only generated model: Opportunity Intelligence does not write records, execute workflows, create appointments, assign members, schedule appointments, create tasks, or send notifications."
+OPPORTUNITY_ROLE_READINESS_GAPS = ["Expanded opportunity role coverage", "Manual recruitment readiness evidence"]
 
 
 def _confidence_label(score: int) -> str:
@@ -78,8 +79,10 @@ def generate_opportunity_intelligence(db: Session, *, society_id: int | None = N
         role_names = {m.role for m in memberships if m.role}
         missing_roles = [r for r in EXPANDED_ROLES if r not in role_names and r not in si.get("missing_roles", [])] + si.get("missing_roles", [])
         missing_roles = list(dict.fromkeys(missing_roles))
+        if missing_roles:
+            missing_all.update(OPPORTUNITY_ROLE_READINESS_GAPS)
         for role in missing_roles:
-            opportunities.append(_opp(oid=f"society-{society.id}-missing-role-{role.lower().replace(' ', '-')}", title=f"Recruit or confirm {role}", typ="role", parts={"impact": 85, "confidence": scores["role_coverage"]["score"], "readiness": 100 - scores["role_coverage"]["score"], "effort": 45}, action=f"Manually review candidates and recruit a {role}; do not appoint automatically.", reason=f"Role coverage evidence indicates {role} is not covered.", evidence=scores["role_coverage"].get("evidence", []), missing=[role], roles=[role], societies=[society.id]))
+            opportunities.append(_opp(oid=f"society-{society.id}-missing-role-{role.lower().replace(' ', '-')}", title=f"Recruit or confirm {role}", typ="role", parts={"impact": 85, "confidence": scores["role_coverage"]["score"], "readiness": 100 - scores["role_coverage"]["score"], "effort": 95}, action=f"Manually review candidates and recruit a {role}; do not appoint automatically.", reason=f"Role coverage evidence indicates {role} is not covered.", evidence=scores["role_coverage"].get("evidence", []), missing=[role], roles=[role], societies=[society.id]))
         if si.get("missing_roles") and scores["leadership_coverage"]["score"] < 100:
             candidate_ids = [p.user_id for p in profiles if p.primary_contribution or p.current_projects_json]
             opportunities.append(_opp(oid=f"society-{society.id}-leadership-candidates", title="Review leadership candidates for vacant roles", typ="leadership", parts={"impact": 90, "confidence": scores["leadership_coverage"]["score"], "trust": scores["trust_score"]["score"], "assessment_completion": scores["assessment_completion"]["score"], "effort": 55}, action="Manually review high-trust members against vacant leadership roles.", reason="Leadership roles are vacant and member/profile evidence exists for human candidate review.", evidence=scores["leadership_coverage"].get("evidence", []) + scores["trust_score"].get("evidence", []), missing=si.get("missing_roles", []), members=candidate_ids, roles=si.get("missing_roles", []), societies=[society.id]))
