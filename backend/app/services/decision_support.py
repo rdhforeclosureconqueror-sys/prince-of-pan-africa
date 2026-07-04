@@ -72,7 +72,20 @@ def _decision(*, did: str, title: str, decision_type: str, source: dict[str, Any
     }
 
 
-def _from_opportunity(o: dict[str, Any]) -> dict[str, Any]:
+def _normalized_missing(missing: list[str], owned_missing: set[str] | None) -> list[str]:
+    if owned_missing is None:
+        return missing
+    return [m for m in missing if m in owned_missing]
+
+
+def _add_uncovered_missing(decisions: list[dict[str, Any]], owned_missing: set[str]) -> None:
+    covered = {m for d in decisions for m in d.get("missing_evidence", [])}
+    uncovered = sorted(owned_missing - covered)
+    if decisions and uncovered:
+        decisions[0]["missing_evidence"] = list(dict.fromkeys(decisions[0].get("missing_evidence", []) + uncovered))
+
+
+def _from_opportunity(o: dict[str, Any], *, owned_missing: set[str] | None = None) -> dict[str, Any]:
     typemap = {"role": "leadership", "leadership": "leadership", "assessment": "members", "volunteer": "resources", "mentorship": "resources", "business": "business", "institution": "institution", "society_growth": "society", "trust": "risks", "education": "resources", "recognition": "members"}
     dtype = typemap.get(o.get("type"), "society")
     effort = int(o.get("effort", 50))
@@ -86,7 +99,7 @@ def _from_opportunity(o: dict[str, Any]) -> dict[str, Any]:
         community_benefit=80 if dtype in {"members", "resources", "society", "leadership"} else 60,
         institution_benefit=85 if dtype in {"institution", "business", "containers", "leadership"} else 55,
         long_term_value=85 if dtype in {"institution", "leadership", "society", "business"} else 65,
-        evidence=o.get("evidence", []), missing=o.get("missing_evidence", []),
+        evidence=o.get("evidence", []), missing=_normalized_missing(o.get("missing_evidence", []), owned_missing),
         assumptions=["Recommendation is derived from Opportunity Intelligence, which reuses lower intelligence layers.", "No new persistence or task workflow is created."],
         tradeoffs=[f"Prioritizing {o['title']} may defer other {dtype} recommendations.", "Human review is required before any operational action."],
         dependencies=["Existing intelligence evidence", "Manual leader discussion"],
@@ -110,7 +123,9 @@ def _overall_confidence(decisions: list[dict[str, Any]]) -> str:
 
 def generate_decision_support(db: Session, *, society_id: int | None = None, include_debug: bool = False) -> dict[str, Any]:
     opp = generate_opportunity_intelligence(db, society_id=society_id, include_debug=include_debug)
-    decisions = [_from_opportunity(o) for o in opp.get("opportunities", [])]
+    owned_missing = set(opp.get("missing_evidence", []))
+    decisions = [_from_opportunity(o, owned_missing=owned_missing) for o in opp.get("opportunities", [])]
+    _add_uncovered_missing(decisions, owned_missing)
     decisions.sort(key=lambda d: (-d["scores"]["overall_priority"]["score"], d["effort_score"], d["decision_type"], d["id"]))
     by_type = {t: [d for d in decisions if d["decision_type"] == t] for t in DECISION_TYPES}
     dashboard = {
