@@ -34,6 +34,7 @@ def _composite(name: str, parts: list[dict[str, Any]], explanation: str) -> dict
 def _recommendations(scores: dict[str, Any], missing_roles: list[str]) -> list[dict[str, str]]:
     recs: list[dict[str, str]] = []
     mapping = [
+        ("institution_health", "Stabilize institution health", "Institution Health is below target while critical readiness gaps remain."),
         ("leadership_health", "Fill missing leadership", "Leadership Health is below target or missing critical roles."),
         ("assessment_coverage", "Complete assessments", "Assessment Coverage is below target, so confidence in member-role fit is lower."),
         ("participation_health", "Increase participation", "Participation Health needs more active member, meeting, profile, or Trust Board participation evidence."),
@@ -68,6 +69,12 @@ def generate_institution_intelligence(db: Session, *, institution_id: int, inclu
     }
     core = [scores[k] for k in ["leadership_health", "participation_health", "trust_health", "knowledge_health", "financial_readiness", "operational_readiness", "business_readiness", "volunteer_capacity", "role_coverage", "assessment_coverage", "container_completion"]]
     scores["institution_health"] = _composite("Institution Health", core, "Mean of explained Institution Intelligence domains, each derived from Society Intelligence and Member Intelligence evidence.")
+    if society["missing_roles"]:
+        financial_gate = scores["financial_readiness"]["score"]
+        if scores["institution_health"]["score"] > financial_gate:
+            scores["institution_health"]["score"] = financial_gate
+            scores["institution_health"]["why"] += f"; Critical-role gaps keep institution health capped at Financial Readiness ({financial_gate}) until leadership coverage is complete."
+            scores["institution_health"]["calculation"] += " Critical-role gaps cap Institution Health at Financial Readiness so the institution baseline does not overstate readiness."
     risk_level = "high" if scores["institution_health"]["score"] < 45 else "moderate" if scores["institution_health"]["score"] < 70 else "low"
     growth_potential = _composite("Growth Potential", [s["member_growth"], scores["business_readiness"], scores["operational_readiness"]], "Mean of member growth, business readiness, and operational readiness from existing evidence.")
     missing = sorted({m for score in scores.values() for m in score.get("missing_evidence", [])})
