@@ -638,7 +638,7 @@ def _isolated_session() -> Session:
 def _predictive(opp: dict[str, Any]) -> dict[str, Any]:
     count = len(opp.get("opportunities", [])); priority = opp.get("overall_priority", {}).get("score", 0)
     readiness = min(100, round(mean([priority, 91, max(0, 100 - count)])))
-    return {"ok": True, "layer": "Predictive Intelligence", "read_only": True, "readiness_score": readiness, "confidence": "substantial", "predictions": ["Leadership coverage remains stable", "Opportunity backlog needs weekly review", "Execution readiness is high"], "warnings": ["Deterministic fixture prediction only; no workflow or output persisted."], "debug": {"opportunity_count": count, "priority": priority}}
+    return {"ok": True, "layer": "Predictive Intelligence", "read_only": True, "readiness_score": readiness, "overall_priority": {"score": readiness, "label": "medium", "why": "Predictive readiness is advisory and remains medium priority until validated against live downstream outcomes."}, "confidence": "substantial", "predictions": ["Leadership coverage remains stable", "Opportunity backlog needs weekly review", "Execution readiness is high"], "warnings": ["Deterministic fixture prediction only; no workflow or output persisted."], "debug": {"opportunity_count": count, "priority": priority}}
 
 
 def _extract(layer: str, output: dict[str, Any]) -> dict[str, Any]:
