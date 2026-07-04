@@ -69,6 +69,22 @@ class DecisionSupportPhase7Tests(unittest.TestCase):
         db = self.dbm.SessionLocal()
         try: self.assertEqual(db.query(self.models.SocietyTrustTask).count(), 0)
         finally: db.close()
+
+    def test_deterministic_health_fixture_score_matches_preserved_baseline(self):
+        import app.services.intelligence_health as health_module
+        db = health_module._isolated_session()
+        try:
+            ids = health_module._seed_fixture(db)
+            data = self.decision.generate_decision_support(db, society_id=ids["society_id"], include_debug=True)
+            extracted = health_module._extract("Decision Support", data)
+        finally:
+            db.close()
+        self.assertEqual(extracted["score"], health_module.EXPECTED_BASELINE["Decision Support"]["score"])
+        self.assertEqual(extracted["confidence"], health_module.EXPECTED_BASELINE["Decision Support"]["confidence"])
+        self.assertEqual(extracted["missing_count"], health_module.EXPECTED_BASELINE["Decision Support"]["missing_count"])
+        self.assertEqual(extracted["priority"], health_module.EXPECTED_BASELINE["Decision Support"]["priority"])
+        self.assertEqual(extracted["recommendations"], health_module.EXPECTED_BASELINE["Decision Support"]["recommendations"])
+
     def test_api_admin_debug_permissions_and_dashboard_static_rendering(self):
         import app.main as main_module; importlib.reload(main_module)
         from app.session import build_session_cookie_value
