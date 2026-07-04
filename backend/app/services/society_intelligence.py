@@ -104,10 +104,24 @@ def generate_society_intelligence(db: Session, *, society_id: int, include_debug
         [],
     )
 
-    risks = [f"Missing critical role: {r}" for r in missing_roles] + [s["name"] + " lacks evidence" for s in scores.values() if s["confidence"] == "limited"]
+    risks = [f"Missing critical role: {r}" for r in missing_roles]
+    risks += [f"{s['name']} below target at {s['score']}" for s in scores.values() if s["name"] != "Society Health Score" and s["score"] < 75]
+    risks += [f"{s['name']} lacks evidence" for s in scores.values() if s["confidence"] == "limited"]
+    if scores["society_health_score"]["score"] < 75:
+        risks.append(f"Society Health Score below target at {scores['society_health_score']['score']}")
     strengths = [s["name"] + f" is {s['score']} because {s['why']}" for s in scores.values() if s["score"] >= 70]
     missing = sorted({m for s in scores.values() for m in s["missing_evidence"]})
-    recommended = [{"action": f"Address {r}", "why": f"Society Intelligence found this risk from existing evidence: {r}. This is a recommendation only; no workflow or appointment is created."} for r in risks[:6]] or [{"action": "Keep strengthening documented practice", "why": "Current evidence shows no urgent gap above threshold; continue completing assessments, roles, profiles, and Trust Board work."}]
+    recommended = [
+        {
+            "id": f"society-risk-{idx}",
+            "type": "society_repair",
+            "priority": "medium",
+            "action": f"Address {risk}",
+            "why": f"Society Intelligence selected this recommendation from scored evidence: {risk}. This is a recommendation only; no workflow or appointment is created.",
+            "evidence": [risk],
+        }
+        for idx, risk in enumerate(dict.fromkeys(risks).keys(), start=1)
+    ][:6] or [{"id": "society-keep-strengthening-documented-practice", "type": "society_monitoring", "priority": "low", "action": "Keep strengthening documented practice", "why": "Current evidence shows no urgent gap above threshold; continue completing assessments, roles, profiles, and Trust Board work.", "evidence": ["No Society Intelligence risk crossed the recommendation threshold."]}]
     result = {"ok": True, "society_id": society_id, "society_name": society.name, "society_type": society.type, "scores": scores, "overall_health": scores["society_health_score"], "top_risks": risks[:8], "top_strengths": strengths[:8], "missing_roles": missing_roles, "recommended_next_steps": recommended, "confidence": _confidence(len(sources), 12), "evidence_sources": sources, "warnings": ["Read-only generated model: it does not write records, create appointments, or execute workflows."] + (["Missing evidence lowers confidence: " + ", ".join(missing)] if missing else []), "missing_information": missing, "software_boundary": "Society Intelligence reads existing evidence only. Member Intelligence remains the source of truth for individuals.", "debug": None}
     if include_debug:
         result["debug"] = {"raw_society_intelligence_json": {k: v for k, v in result.items() if k != "debug"}, "score_calculations": scores, "evidence_sources": sources, "confidence_calculation": "Confidence is based on how many expected evidence families are present.", "fallback_reasons": [w for w in result["warnings"] if "Missing" in w], "missing_evidence": missing}
