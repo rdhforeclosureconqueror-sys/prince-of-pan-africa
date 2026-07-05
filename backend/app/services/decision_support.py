@@ -93,7 +93,7 @@ def _from_opportunity(o: dict[str, Any], *, owned_missing: set[str] | None = Non
     priority = int(o.get("priority_score", 50))
     impact = int(o.get("impact", priority))
     urgency = max(20, min(100, round(mean([priority, 100 - int(o.get("confidence", 50)) if isinstance(o.get("confidence"), int) else priority]))))
-    return _decision(
+    decision = _decision(
         did=f"decision-{o['id']}", title=o["title"], decision_type=dtype, source=o,
         impact=impact, urgency=urgency, effort=effort,
         risk_reduction=85 if dtype == "risks" or o.get("type") in {"role", "leadership", "trust"} else 55,
@@ -107,6 +107,13 @@ def _from_opportunity(o: dict[str, Any], *, owned_missing: set[str] | None = Non
         outcomes=[o.get("recommended_action", "Manual review outcome"), "Better strategic focus without automated execution."],
         related={"members": o.get("related_members", []), "roles": o.get("related_roles", []), "containers": o.get("related_containers", []), "societies": o.get("related_societies", []), "institutions": o.get("related_institutions", [])},
     )
+    decision["priority"] = _label(priority)
+    decision["scores"]["overall_priority"] = _score(
+        "Overall Priority",
+        priority,
+        "Decision Support preserves the source recommendation priority as its explicit overall_priority contract; component scores explain the tradeoffs but do not replace the upstream recommendation priority used by diagnostics.",
+    )
+    return decision
 
 
 def _overall_confidence(decisions: list[dict[str, Any]]) -> str:
