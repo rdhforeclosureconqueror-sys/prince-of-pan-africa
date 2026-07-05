@@ -657,7 +657,11 @@ def _extract(layer: str, output: dict[str, Any]) -> dict[str, Any]:
     elif layer == "Predictive Intelligence":
         score = output["readiness_score"]; missing = 4; recs = len(output.get("predictions", []))
     elif layer == "Decision Support":
-        recs = len(output.get("recommendations", [])); score = round(mean([r["scores"]["overall_priority"]["score"] for r in output.get("recommendations", [])])) if recs else 0; missing = len({m for r in output.get("recommendations", []) for m in r.get("missing_evidence", [])})
+        recommendations = output.get("recommendations", [])
+        top_priorities = output.get("dashboard", {}).get("top_10_priorities") or recommendations[:10]
+        recs = len(recommendations)
+        score = round(mean([r["scores"]["overall_priority"]["score"] for r in top_priorities])) if top_priorities else 0
+        missing = len({m for r in recommendations for m in r.get("missing_evidence", [])})
     elif layer == "Execution Planning":
         plans = output.get("execution_plans", []); recs = len(plans); score = round(mean([p.get("readiness_score", 0) for p in plans])) if plans else 0; missing = len({m for p in plans for m in p.get("missing_evidence", [])})
     elif layer == "Execution Intelligence":
