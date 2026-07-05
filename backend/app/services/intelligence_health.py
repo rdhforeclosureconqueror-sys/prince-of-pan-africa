@@ -658,10 +658,15 @@ def _extract(layer: str, output: dict[str, Any]) -> dict[str, Any]:
         score = output["readiness_score"]; missing = 4; recs = len(output.get("predictions", []))
     elif layer == "Decision Support":
         recommendations = output.get("recommendations", [])
-        top_priorities = output.get("dashboard", {}).get("top_10_priorities") or recommendations[:10]
-        recs = len(recommendations)
-        score = round(mean([r["scores"]["overall_priority"]["score"] for r in top_priorities])) if top_priorities else 0
-        missing = len({m for r in recommendations for m in r.get("missing_evidence", [])})
+        diagnostic = output.get("diagnostic") if isinstance(output.get("diagnostic"), dict) else {}
+        recs = diagnostic.get("recommendation_count", len(recommendations))
+        score = diagnostic.get("score")
+        if score is None:
+            score = round(mean([r["scores"]["overall_priority"]["score"] for r in recommendations])) if recommendations else 0
+        missing = diagnostic.get("missing_count")
+        if missing is None:
+            missing = len({m for r in recommendations for m in r.get("missing_evidence", [])})
+        output = {**output, "confidence": diagnostic.get("confidence", output.get("confidence")), "overall_priority": {"label": diagnostic.get("priority") or output.get("overall_priority", {}).get("label")}}
     elif layer == "Execution Planning":
         plans = output.get("execution_plans", []); recs = len(plans); score = round(mean([p.get("readiness_score", 0) for p in plans])) if plans else 0; missing = len({m for p in plans for m in p.get("missing_evidence", [])})
     elif layer == "Execution Intelligence":

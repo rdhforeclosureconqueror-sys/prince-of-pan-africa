@@ -122,6 +122,19 @@ def _overall_confidence(decisions: list[dict[str, Any]]) -> str:
     return "substantial" if value >= 75 else "developing" if value >= 45 else "limited"
 
 
+def _diagnostic_aggregate(decisions: list[dict[str, Any]]) -> dict[str, Any]:
+    scores = [d["scores"]["overall_priority"]["score"] for d in decisions]
+    score = round(mean(scores)) if scores else 0
+    missing_count = len({m for d in decisions for m in d.get("missing_evidence", [])})
+    return {
+        "score": score,
+        "confidence": _overall_confidence(decisions),
+        "missing_count": missing_count,
+        "priority": "high" if score >= 75 else "medium" if score >= 50 else "low",
+        "recommendation_count": len(decisions),
+        "score_source": "average_all_recommendation_overall_priority_scores",
+    }
+
 def generate_decision_support(db: Session, *, society_id: int | None = None, include_debug: bool = False) -> dict[str, Any]:
     opp = generate_opportunity_intelligence(db, society_id=society_id, include_debug=include_debug)
     owned_missing = set(opp.get("missing_evidence", []))
@@ -139,4 +152,5 @@ def generate_decision_support(db: Session, *, society_id: int | None = None, inc
         "leadership_decisions": by_type["leadership"], "institution_decisions": by_type["institution"], "container_decisions": by_type["containers"] + [d for d in decisions if "container" in d["title"].lower()], "business_decisions": by_type["business"], "resource_allocation": by_type["resources"],
         "strategic_roadmap": decisions[:15],
     }
-    return {"ok": True, "layer": "Decision Support", "read_only": True, "confidence": _overall_confidence(decisions), "warnings": [READ_ONLY_WARNING, "Prioritizes decisions only; human leaders make final decisions."], "intelligence_inputs": ["Member Intelligence", "Society Intelligence", "Institution Intelligence", "Opportunity Intelligence", "Predictive Intelligence (if present in existing outputs)"], "recommendations": decisions, "dashboard": dashboard, "debug": {"opportunity_intelligence": opp} if include_debug else None}
+    diagnostic = _diagnostic_aggregate(decisions)
+    return {"ok": True, "layer": "Decision Support", "read_only": True, "confidence": diagnostic["confidence"], "diagnostic": diagnostic, "warnings": [READ_ONLY_WARNING, "Prioritizes decisions only; human leaders make final decisions."], "intelligence_inputs": ["Member Intelligence", "Society Intelligence", "Institution Intelligence", "Opportunity Intelligence", "Predictive Intelligence (if present in existing outputs)"], "recommendations": decisions, "dashboard": dashboard, "debug": {"opportunity_intelligence": opp} if include_debug else None}

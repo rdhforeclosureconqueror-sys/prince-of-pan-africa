@@ -76,9 +76,16 @@ class DecisionSupportPhase7Tests(unittest.TestCase):
         try:
             ids = health_module._seed_fixture(db)
             data = self.decision.generate_decision_support(db, society_id=ids["society_id"], include_debug=True)
+            all_scores = [r["scores"]["overall_priority"]["score"] for r in data["recommendations"]]
+            top_10_scores = [r["scores"]["overall_priority"]["score"] for r in data["dashboard"]["top_10_priorities"]]
             extracted = health_module._extract("Decision Support", data)
         finally:
             db.close()
+        self.assertEqual(len(data["recommendations"]), health_module.EXPECTED_BASELINE["Decision Support"]["recommendations"])
+        self.assertEqual(len(data["dashboard"]["top_10_priorities"]), 10)
+        self.assertEqual(round(sum(all_scores) / len(all_scores)), health_module.EXPECTED_BASELINE["Decision Support"]["score"])
+        self.assertNotEqual(round(sum(top_10_scores) / len(top_10_scores)), health_module.EXPECTED_BASELINE["Decision Support"]["score"])
+        self.assertEqual(data["diagnostic"]["score_source"], "average_all_recommendation_overall_priority_scores")
         self.assertEqual(extracted["score"], health_module.EXPECTED_BASELINE["Decision Support"]["score"])
         self.assertEqual(extracted["confidence"], health_module.EXPECTED_BASELINE["Decision Support"]["confidence"])
         self.assertEqual(extracted["missing_count"], health_module.EXPECTED_BASELINE["Decision Support"]["missing_count"])
