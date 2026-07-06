@@ -153,6 +153,7 @@ def _stable_fingerprint(value: Any) -> str:
 
 def _decision_model(layers: list[dict[str, Any]]) -> dict[str, Any]:
     trace_candidates = []
+    regression_count = len([layer for layer in layers if layer.get("regression")])
     excluded_categories = {"downstream_impacted", "blocked_by_upstream", "needs_rerun_after_upstream_fix"}
     for name in DIAGNOSTIC_LAYER_ORDER:
         layer = next((l for l in layers if l.get("layer") == name), {})
@@ -186,12 +187,12 @@ def _decision_model(layers: list[dict[str, Any]]) -> dict[str, Any]:
         })
     impacted = [
         l for l in layers
-        if l.get("status") != "PASS" and l.get("diagnostic_category") not in excluded_categories
+        if regression_count and l.get("regression") and l.get("status") != "PASS" and l.get("diagnostic_category") not in excluded_categories
     ]
     fallback_used = False
-    if not impacted:
+    if regression_count and not impacted:
         fallback_used = True
-        impacted = [l for l in layers if l.get("status") != "PASS"]
+        impacted = [l for l in layers if l.get("regression") and l.get("status") != "PASS"]
     first = next((name for name in DIAGNOSTIC_LAYER_ORDER if any(l.get("layer") == name for l in impacted)), None)
     downstream = set(DIAGNOSTIC_LAYER_ORDER[DIAGNOSTIC_LAYER_ORDER.index(first)+1:]) if first in DIAGNOSTIC_LAYER_ORDER else set()
     affected = [l.get("layer") for l in layers if l.get("layer") == first or (l.get("layer") in downstream and l.get("status") != "PASS")]
@@ -204,19 +205,22 @@ def _decision_model(layers: list[dict[str, Any]]) -> dict[str, Any]:
         "highest_priority_layer": (highest or {}).get("layer"),
         "affected_layers": affected,
         "downstream_affected_layers": [name for name in affected if name != first],
-        "decision_rule": "Earliest non-PASS layer in dependency order owns root cause, highest priority, sprint focus, and downstream impact until rerun proves otherwise.",
+        "decision_rule": "Zero-regression runs do not select a root-cause layer; when regressions exist, the earliest regressed layer in dependency order owns root cause, highest priority, sprint focus, and downstream impact until rerun proves otherwise.",
         "root_cause_selection_trace": {
             "candidate_layers": trace_candidates,
             "excluded_downstream_categories": sorted(excluded_categories),
             "primary_filter": "status != 'PASS' and diagnostic_category not in excluded_downstream_categories",
             "fallback_filter": "status != 'PASS'",
             "fallback_used": fallback_used,
-            "selected_layer": first,
+            "selected_layer": first if regression_count else None,
             "selection_boolean_or_comparison": "next(name for name in DIAGNOSTIC_LAYER_ORDER if any(layer.layer == name for layer in impacted))",
             "selected_because": (
-                f"{first} is the earliest DIAGNOSTIC_LAYER_ORDER entry whose impacted candidate passed "
-                f"the {'fallback' if fallback_used else 'primary'} filter."
-                if first else "No impacted candidates passed either filter."
+                "No active regression selected; warning-only runs are queued for operational verification."
+                if not regression_count else (
+                    f"{first} is the earliest DIAGNOSTIC_LAYER_ORDER entry whose regressed candidate passed "
+                    f"the {'fallback' if fallback_used else 'primary'} filter."
+                    if first else "No impacted candidates passed either filter."
+                )
             ),
             "selected_layer_mismatches": (next((l.get("owned_field_mismatches") for l in layers if l.get("layer") == first), []) or []) if first else [],
             "selected_layer_mismatch_exists": bool((next((l.get("owned_field_mismatches") for l in layers if l.get("layer") == first), []) or []) if first else []),
@@ -1164,13 +1168,13 @@ def _initiative_title(key: str, layers: list[str]) -> str:
     if key == "opportunity-intelligence-stability":
         return "Stabilize Opportunity Intelligence"
     primary = layers[0].replace(" Intelligence", "") if layers else "Intelligence"
-    return f"Stabilize {primary} diagnostic drift"
+    return f"Verify {primary} operational warning"
 
 
 def _initiative_root_cause(key: str, layers: list[str]) -> str:
     if key == "opportunity-intelligence-stability":
-        return "Opportunity scoring drift is affecting downstream decision and execution layers."
-    return f"Repeated diagnostic drift is appearing across {', '.join(layers[:3]) or 'the intelligence chain'}."
+        return "Opportunity scoring warning requires operational verification before release readiness."
+    return f"Operational warnings remain queued across {', '.join(layers[:3]) or 'the intelligence chain'}."
 
 
 def _initiative_owner(key: str, layers: list[str]) -> str:
@@ -1221,7 +1225,7 @@ def synthesize_ai_coo_initiatives(layers: list[dict[str, Any]], advisor: list[di
             "id": f"initiative-{index}-{key}",
             "title": _initiative_title(key, affected),
             "root_cause": _initiative_root_cause(key, affected),
-            "why_it_matters": "Consolidating repeated layer warnings prevents leadership from chasing duplicate recommendations and focuses work on the upstream cause.",
+            "why_it_matters": "Consolidating warning verification prevents leadership from treating operational cleanup as active regression repair.",
             "affected_layers": affected,
             "expected_health_improvement": f"+{low} to +{high} points",
             "expected_health_improvement_low": low,
@@ -1289,13 +1293,14 @@ def build_ai_forecast_scenarios(run: dict[str, Any], sprint_plan: dict[str, Any]
             projected = max(current, projected)
         sprint_health = f"{min(100, projected)}%"
     return [
-        {"scenario": "If no action is taken", "projected_health_score": f"{no_action_health}%", "regression_risk": "Elevated" if regression_count else "Low", "technical_debt_trend": "Increasing", "confidence": 88, "primary_reason": "Repeated layer recommendations remain unresolved and continue to compound downstream."},
+        {"scenario": "If no action is taken", "projected_health_score": f"{no_action_health}%", "regression_risk": "Elevated" if regression_count else "Low", "technical_debt_trend": "Increasing", "confidence": 88, "primary_reason": "Operational warnings remain unresolved and should be verified before release readiness is approved." if not regression_count else "Repeated layer recommendations remain unresolved and continue to compound downstream."},
         {"scenario": "If recommended sprint is completed", "projected_health_score": sprint_health, "regression_risk": "Reduced", "technical_debt_trend": "Stabilizing", "confidence": sprint_plan.get("confidence", 92), "primary_reason": "The sprint addresses duplicate recommendations as upstream initiatives instead of isolated layer tasks; the latest diagnostic run must show those diagnostics resolved before a final percentage is displayed."},
     ]
 
 def ai_chief_operating_officer(run: dict[str, Any], advisor: list[dict[str, Any]]) -> dict[str, Any]:
     decision = _decision_model(run.get("layers", []))
-    authoritative_layer = decision.get("highest_priority_layer") or decision.get("first_changed_layer")
+    regression_count = int(run.get("regression_count") or 0)
+    authoritative_layer = (decision.get("highest_priority_layer") or decision.get("first_changed_layer")) if regression_count else None
     initiatives = synthesize_ai_coo_initiatives(run.get("layers", []), advisor)
     if authoritative_layer:
         authoritative = next((item for item in initiatives if authoritative_layer in item.get("affected_layers", [])), None)
@@ -1303,16 +1308,26 @@ def ai_chief_operating_officer(run: dict[str, Any], advisor: list[dict[str, Any]
             initiatives = [authoritative, *[item for item in initiatives if item is not authoritative]]
     sprint_plan = build_ai_coo_sprint_plan(run, initiatives)
     top = initiatives[0] if initiatives else {}
-    why = {
-        "what_changed": run.get("executive_summary", "Diagnostic output changed against the deterministic intelligence baseline."),
-        "why_it_matters": top.get("why_it_matters", "Leadership needs one accountable initiative rather than repeated layer-level recommendations."),
-        "what_should_be_fixed_first": top.get("title", "Run a diagnostic and fix the highest-impact regression first."),
-        "what_can_wait": "Stable layer cards, raw evidence review, and public report polish can wait until the latest diagnostic run verifies the top initiative.",
-    }
+    if regression_count:
+        why = {
+            "what_changed": run.get("executive_summary", "Diagnostic output changed against the deterministic intelligence baseline."),
+            "why_it_matters": top.get("why_it_matters", "Leadership needs one accountable initiative rather than repeated layer-level recommendations."),
+            "what_should_be_fixed_first": top.get("title", "Run a diagnostic and fix the highest-impact regression first."),
+            "what_can_wait": "Stable layer cards, raw evidence review, and public report polish can wait until the latest diagnostic run verifies the top initiative.",
+        }
+        recommendation = f"Focus leadership on {top.get('title', 'the top intelligence initiative')} before changing baselines; projected health is not inflated until diagnostics pass."
+    else:
+        why = {
+            "what_changed": run.get("executive_summary", "0 regressions detected. Operational warnings remain queued for release-readiness verification."),
+            "why_it_matters": "Health, warning, and regression signals agree: no root-cause layer is selected, but warnings still need verification before release readiness.",
+            "what_should_be_fixed_first": "Clear remaining operational warnings",
+            "what_can_wait": "Baseline updates and regression repair work can wait because no active regression is selected.",
+        }
+        recommendation = "Clear remaining operational warnings and verify release readiness; do not select a root-cause layer or change baselines for this warning-only run."
     return {
         "authoritative_priority_layer": authoritative_layer,
         "priority_decision_rule": decision.get("decision_rule"),
-        "recommendation": f"Focus leadership on {top.get('title', 'the top intelligence initiative')} before changing baselines; projected health is not inflated until diagnostics pass.",
+        "recommendation": recommendation,
         "why_this_matters": why,
         "initiatives": initiatives,
         "sprint_planning": sprint_plan,
@@ -1345,6 +1360,9 @@ def dependency_impact(layers: list[dict[str, Any]]) -> dict[str, Any]:
 def executive_summary(layers: list[dict[str, Any]], run: dict[str, Any] | None = None) -> str:
     impact = dependency_impact(layers)
     regression_count = len([layer for layer in layers if layer.get("regression")])
+    if regression_count == 0:
+        warning_count = len([layer for layer in layers if layer.get("status") == "WARNING"])
+        return f"0 regressions detected. {warning_count} operational warnings remain for verification. No root-cause layer is selected, no downstream regression impact is active, and production records were not modified. Recommended action: clear remaining operational warnings before release readiness."
     first = impact.get("first_changed_layer") or "no layer"
     downstream = impact.get("downstream_affected_layers") or []
     downstream_text = " and ".join(downstream[:3]) if downstream else "no downstream layers"
@@ -1388,6 +1406,12 @@ def run_full_intelligence_diagnostic(db: Session | None = None) -> dict[str, Any
         event.remove(db.bind, "before_cursor_execute", guard); db.close()
     total = round((time.perf_counter() - start) * 1000, 2)
     regressions = [l for l in layers if l["regression"]]
+    if not regressions:
+        for layer in layers:
+            if layer.get("status") == "WARNING" and layer.get("display_status") == "Connected with actionable drift":
+                layer["display_status"] = "Operational warning verification"
+                layer["plain_language_reason"] = "Operational warning requires verification before release readiness; no active regression is selected."
+                layer["why_this_changed"] = layer["plain_language_reason"]
     failures = [l for l in layers if l["status"] == "FAIL"]
     health = max(0, round(100 - len(failures) * 18 - len(regressions) * 8 - len([l for l in layers if l["status"] == "WARNING"]) * 3))
     status_counts = _status_counts(layers)

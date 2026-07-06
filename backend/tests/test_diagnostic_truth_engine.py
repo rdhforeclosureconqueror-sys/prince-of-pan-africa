@@ -5,7 +5,9 @@ from app.services.intelligence_health import (
     _field_mismatches,
     _decision_model,
     apply_dependency_classification,
+    build_ai_forecast_scenarios,
     build_repair_brief,
+    ai_chief_operating_officer,
     dependency_impact,
     executive_summary,
 )
@@ -87,7 +89,7 @@ def test_decision_support_extract_accepts_legacy_diagnostic_recommendations_alia
 def test_first_point_of_failure_uses_dependency_graph_rule():
     layers = [
         {"layer": "Member Intelligence", "status": "PASS", "regression": None},
-        {"layer": "Society Intelligence", "status": "WARNING", "regression": None, "owned_field_mismatches": [{"field": "missing_count"}]},
+        {"layer": "Society Intelligence", "status": "WARNING", "regression": "Minor", "owned_field_mismatches": [{"field": "missing_count"}]},
         {"layer": "Opportunity Intelligence", "status": "WARNING", "regression": "Minor", "diagnostic_category": "downstream_impacted", "owned_field_mismatches": []},
     ]
     assert _decision_model(layers)["first_changed_layer"] == "Society Intelligence"
@@ -104,7 +106,8 @@ def test_root_cause_selection_trace_prints_each_candidate_and_mismatch_reason():
 
     trace = _decision_model(layers)["root_cause_selection_trace"]
 
-    assert trace["selected_layer"] == "Decision Support"
+    assert trace["selected_layer"] is None
+    assert trace["selected_because"] == "No active regression selected; warning-only runs are queued for operational verification."
     assert trace["selection_boolean_or_comparison"] == "next(name for name in DIAGNOSTIC_LAYER_ORDER if any(layer.layer == name for layer in impacted))"
     assert [candidate["layer"] for candidate in trace["candidate_layers"]] == [
         "Member Intelligence",
@@ -121,8 +124,30 @@ def test_root_cause_selection_trace_prints_each_candidate_and_mismatch_reason():
     selected = next(candidate for candidate in trace["candidate_layers"] if candidate["layer"] == "Decision Support")
     downstream = next(candidate for candidate in trace["candidate_layers"] if candidate["layer"] == "Execution Planning")
     assert selected["pass_fail_values"]["combined_result"] is True
-    assert trace["selected_layer_mismatches"] == [{"field": "recommendations", "expected": 12, "actual": 11}]
+    assert trace["selected_layer_mismatches"] == []
     assert downstream["pass_fail_values"]["diagnostic_category not excluded"] is False
+
+
+def test_zero_regression_narrative_does_not_select_root_cause_or_stale_drift_language():
+    layers = [
+        {"layer": "Decision Support", "status": "WARNING", "regression": None, "diagnostic_category": "baseline_drift", "display_status": "Connected with actionable drift", "owned_field_mismatches": [{"field": "recommendations", "expected": 12, "actual": 11}], "suggested_admin_action": "Verify Decision Support warning"},
+        {"layer": "Execution Planning", "status": "WARNING", "regression": None, "diagnostic_category": "baseline_drift", "display_status": "Connected with actionable drift", "owned_field_mismatches": [{"field": "priority", "expected": "medium", "actual": "high"}], "suggested_admin_action": "Verify Execution Planning warning"},
+        {"layer": "Execution Intelligence", "status": "WARNING", "regression": None, "diagnostic_category": "baseline_drift", "display_status": "Connected with actionable drift", "owned_field_mismatches": [{"field": "missing_count", "expected": 0, "actual": 1}], "suggested_admin_action": "Verify Execution Intelligence warning"},
+    ]
+    summary = executive_summary(layers)
+    decision = _decision_model(layers)
+    coo = ai_chief_operating_officer({"overall_health_percent": 91, "regression_count": 0, "layers": layers, "executive_summary": summary}, [])
+    forecast = build_ai_forecast_scenarios({"overall_health_percent": 91, "regression_count": 0, "layers": layers}, {"expected_health_after_sprint_completion": "Completion health is not measured yet.", "confidence": 94})
+
+    combined = " ".join([summary, decision["root_cause_selection_trace"]["selected_because"], coo["recommendation"], coo["why_this_matters"]["what_should_be_fixed_first"], forecast[0]["primary_reason"]])
+
+    assert decision["first_changed_layer"] is None
+    assert decision["root_cause_selection_trace"]["selected_layer"] is None
+    assert "0 regressions detected" in summary
+    assert "Clear remaining operational warnings" in coo["why_this_matters"]["what_should_be_fixed_first"]
+    assert "Operational warnings remain unresolved" in forecast[0]["primary_reason"]
+    for stale in ["First drift appears", "downstream affected", "fix Decision Support first", "Stabilize Decision Support diagnostic drift", "compound downstream"]:
+        assert stale not in combined
 
 
 def test_downstream_warnings_are_classified_not_independent_when_no_owned_mismatch():
