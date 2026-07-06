@@ -102,3 +102,49 @@ def test_discord_config_gate_is_separate_from_simbabrain_health():
     assert "Discord webhook/config health is separate from SimbaBrain intelligence health" in MONITOR
     assert "discord_configuration_warnings" in SERVICE
     assert "ecosystem_intelligence(layers)" in SERVICE
+
+
+def test_operational_warning_verification_items_cover_three_open_intelligence_warnings():
+    for layer in ["Decision Support", "Execution Planning", "Execution Intelligence"]:
+        assert f'"{layer}": {{' in SERVICE
+    for text in [
+        "latest_diagnostic_ran",
+        "upstream_payload_required",
+        "downstream_payload_expected",
+        "runtime_evidence_required",
+        "baseline_expected_values",
+        "baseline_actual_values",
+        "baseline_mismatch_review",
+        "no_regression_confirmation",
+        "production_record_safety",
+        "mark_verified_rule",
+        "owner",
+        "evidence_required",
+        "expected_cleared_state",
+        "baseline_review_required",
+        "rerun_required",
+        "code_change_required",
+        "next_action",
+    ]:
+        assert text in SERVICE
+
+
+def test_mission_control_warning_buttons_are_evidence_guided_and_not_fake_passes():
+    for text in [
+        "Latest diagnostic ran",
+        "Expected upstream payload",
+        "Expected downstream payload",
+        "Runtime evidence required",
+        "Baseline mismatch review",
+        "No-regression proof",
+        "Production record safety",
+        "Mark Verified rule",
+        "Launch Verification",
+        "View Evidence",
+        "Compare Baseline",
+        "Mark Verified",
+        "disabled title={item.mark_verified_rule",
+    ]:
+        assert text in MONITOR
+    assert 'onClick={run}' in MONITOR
+    assert 'onClick={showRootCauseEvidence}' in MONITOR

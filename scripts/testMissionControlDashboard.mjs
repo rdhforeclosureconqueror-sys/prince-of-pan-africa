@@ -32,6 +32,9 @@ const checks = [
   ['Institution impact summaries cover systems, members, deployment, revenue, knowledge, community, and institution', component.includes('const impactForWorkItem =') && component.includes('systemsAffected') && component.includes('membersAffected') && component.includes('deploymentImpact') && component.includes('revenueImpact') && component.includes('knowledgeImpact') && component.includes('communityImpact') && component.includes('institutionImpact')],
   ['Executive narrative reads like an adaptive COO briefing', component.includes('operationally stable') && component.includes('Executive attention should focus on') && component.includes('Business systems remain') && component.includes('deployment gates require additional evidence')],
   ['Executive timeline tracks operations stages while preserving historical labels', component.includes('const executiveOperationsTimeline = ["Diagnostic", "Verification", "Evidence", "Executive Review", "Release Approval", "Deployment"]') && component.includes('Historical: {event.historicalLabel}')],
+  ['Warning Verification Center exposes operational proof fields for all 3 warnings', ['Decision Support', 'Execution Planning', 'Execution Intelligence', 'Latest diagnostic ran', 'Expected upstream payload', 'Expected downstream payload', 'Runtime evidence required', 'Baseline mismatch review', 'No-regression proof', 'Production record safety', 'Mark Verified rule'].every((token) => component.includes(token))],
+  ['Verification actions guide evidence and cannot fake resolve warnings', component.includes('Launch Verification') && component.includes('View Evidence') && component.includes('Compare Baseline') && component.includes('Mark Verified') && component.includes('disabled title={item.mark_verified_rule') && /onClick=\{run\}/.test(component) && /onClick=\{showRootCauseEvidence\}/.test(component)],
+
 ];
 let failed = false;
 for (const [name, pass] of checks) {
