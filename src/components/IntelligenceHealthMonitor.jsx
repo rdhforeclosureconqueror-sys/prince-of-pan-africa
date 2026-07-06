@@ -208,10 +208,11 @@ const statusIcon = (layer) => {
 const isRuntimeVerified = (evidence) => Boolean(evidence && (evidence.runtime_status === "VERIFIED" || evidence.live_runtime_propagation_observed) && evidence.downstream_consumption_observed);
 const operationalLayerName = (name = "Intelligence") => `${String(name).replace(/ Intelligence$/i, "")} Intelligence`;
 const executiveConnectionPhrase = (layer, nextLayer) => nextLayer ? `${operationalLayerName(layer)} is successfully feeding ${operationalLayerName(nextLayer)}.` : `${operationalLayerName(layer)} is reaching its final operating destination.`;
-const executiveStatusFor = (layer, evidence) => {
+const executiveStatusFor = (layer, evidence, zeroRegressionMode = false) => {
   if (layer?.status === "PASS" && !layer?.regression) return "Connected";
+  if (zeroRegressionMode && layer?.status === "WARNING") return "Warning verification";
   if (!isRuntimeVerified(evidence)) return layer?.status === "FAIL" ? "Disconnected" : layer?.display_status || (layer?.regression ? "Regression" : "Warning");
-  if (layer?.display_status) return layer.display_status;
+  if (layer?.display_status) return zeroRegressionMode ? "Warning verification" : layer.display_status;
   if (layer?.regression) return "Regression";
   if (layer?.status === "WARNING") return "Warning";
   return "Connected";
@@ -415,8 +416,13 @@ export default function IntelligenceHealthMonitor() {
   ] : basePriorityQueue;
   const forecast = safeObject(predictiveIntelligence.ai_forecast || predictiveIntelligence.forecast);
   const initiatives = asArray(aiChiefOperatingOfficer.initiatives);
-  const whyThisMatters = safeObject(aiChiefOperatingOfficer.why_this_matters);
-  const forecastScenarios = asArray(aiChiefOperatingOfficer.forecast_scenarios);
+  const whyThisMatters = !hasActiveRegression ? {
+    what_changed: `0 regressions detected. ${warningCount} operational warning${warningCount === 1 ? "" : "s"} remain for verification.`,
+    why_it_matters: "Mission Control health, warning, and root-cause signals agree: no root-cause layer is selected, and release readiness depends on clearing operational warnings.",
+    what_should_be_fixed_first: warningCount ? "Clear remaining operational warnings" : "Verify release readiness",
+    what_can_wait: "Regression repair and baseline updates can wait because no active regression is selected.",
+  } : safeObject(aiChiefOperatingOfficer.why_this_matters);
+  const forecastScenarios = asArray(aiChiefOperatingOfficer.forecast_scenarios).map((scenario) => !hasActiveRegression ? { ...scenario, regression_risk: scenario.regression_risk || "Low", primary_reason: scenario.primary_reason === "Repeated layer recommendations remain unresolved and continue to compound downstream." ? "Operational warnings remain unresolved and should be verified before release readiness is approved." : (scenario.primary_reason || "Operational warnings remain unresolved and should be verified before release readiness is approved.") } : scenario);
   const sprint = safeObject(aiChiefOperatingOfficer.sprint_planning || aiChiefOperatingOfficer.suggested_sprint);
   const trendMetrics = [
     ["Overall Health Score", "overall_health_score", "%"],
@@ -650,14 +656,14 @@ export default function IntelligenceHealthMonitor() {
         <div className="dependency-chain vertical-pipeline">{dependencyLayers.map((layer, index) => {
           const match = layers.find((item) => (item.layer || "").includes(layer));
           const evidence = runtimeEvidenceByLayer.get(layer);
-          const businessStatus = executiveStatusFor(match, evidence);
-          const state = businessStatus === "Disconnected" ? "failure" : businessStatus === "Regression" ? "regression" : businessStatus === "Warning" ? "warning" : "healthy";
-          const relation = index < selectedLayerIndex ? "upstream" : index > selectedLayerIndex ? "downstream" : "selected";
+          const businessStatus = executiveStatusFor(match, evidence, !hasActiveRegression);
+          const state = businessStatus === "Disconnected" ? "failure" : businessStatus === "Regression" ? "regression" : String(businessStatus).includes("Warning") ? "warning" : "healthy";
+          const relation = hasActiveRegression ? (index < selectedLayerIndex ? "upstream" : index > selectedLayerIndex ? "downstream" : "selected") : "verification";
           const isFirstFailure = index === firstFailureIndex;
           const inBlastRadius = firstFailureIndex >= 0 && index > firstFailureIndex;
           return <button type="button" key={layer} className={`dependency-node pipeline-node ${state} ${relation} ${isFirstFailure ? "first-failure" : ""} ${inBlastRadius ? "blast-radius" : ""}`} onClick={() => setSelectedLayer(layer)} aria-pressed={selectedLayer === layer}><span>{executiveStatusIcon(businessStatus)} {operationalLayerName(layer)}</span><small>{businessStatus}{hasActiveRegression && isFirstFailure ? " · first point of failure" : hasActiveRegression && inBlastRadius ? " · blast radius" : ""}</small></button>;
         })}</div>
-        <p><strong>Selected layer:</strong> {operationalLayerName(selectedLayer)}. Upstream dependencies are highlighted before it; downstream dependencies are highlighted after it.</p>
+        <p><strong>Selected layer:</strong> {hasActiveRegression ? operationalLayerName(selectedLayer) : "No active regression selected"}. {hasActiveRegression ? "Upstream dependencies are highlighted before it; downstream dependencies are highlighted after it." : "Operational warnings are highlighted for verification; no root-cause or downstream regression path is selected."}</p>
         <p><strong>Root cause:</strong> {hasActiveRegression && rootCauseLayer ? `${operationalLayerName(rootCauseLayer)} is the first point of failure.` : "No active regression selected."}</p>
         <p><strong>Downstream impact:</strong> {rootCauseSummary} {blastRadius.length ? `Affected systems: ${blastRadius.map(operationalLayerName).join(" → ")}.` : ""}</p>
       </article>
@@ -667,7 +673,7 @@ export default function IntelligenceHealthMonitor() {
         const match = layers.find((item) => (item.layer || "").includes(layer));
         const evidence = runtimeEvidenceByLayer.get(layer);
         const nextLayer = dependencyLayers[index + 1];
-        const status = executiveStatusFor(match, evidence);
+        const status = executiveStatusFor(match, evidence, !hasActiveRegression);
         const action = priorityQueue.find((item) => item.layers.includes(layer)) || priorityQueue[0];
         return <article className={`stat-card executive-layer-card status-${status.toLowerCase()}`} key={layer}><h4>{executiveStatusIcon(status)} {operationalLayerName(layer)}</h4><p><strong>Role:</strong> {hasActiveRegression && index === firstFailureIndex ? "Root cause / first point of failure" : hasActiveRegression && index > firstFailureIndex && firstFailureIndex >= 0 ? "Affected downstream impact" : status === "Connected" ? "Verified operating layer" : "Warning verification"}</p><p><strong>Status:</strong> {status}</p><p><strong>Why:</strong> {status === "Connected" ? (match?.plain_language_reason || executiveConnectionPhrase(layer, nextLayer)) : isRuntimeVerified(evidence) ? executiveConnectionPhrase(layer, nextLayer) : (match?.explanation || "Information has not been proven to reach the next intelligence layer yet.")}</p><p><strong>Business impact:</strong> {status === "Connected" ? "Leadership can rely on this PASS layer when making decisions." : hasActiveRegression ? "Repair this handoff before using downstream recommendations for final decisions." : "Verify or rerun this warning before approving release readiness."}</p><p><strong>Affected systems:</strong> {dependencyLayers.slice(index + 1, Math.min(dependencyLayers.length, index + 4)).map(operationalLayerName).join(", ") || "Final intelligence destination"}</p><p><strong>Recommended fix:</strong> {hasActiveRegression ? (match?.suggested_admin_action || action?.title || "Assign an owner, repair the handoff, and rerun Mission Control.") : (status === "Connected" ? "Continue monitoring verified runtime evidence." : "Verify the warning, rerun diagnostics, or review the baseline evidence before release.")}</p><p><strong>Expected improvement:</strong> {executiveDiagnosticCopy(action?.improvement, hasDiagnosticResult ? "Improvement will be calculated after verification." : "Not measured until a diagnostic run exists.")}</p><p><strong>Estimated effort:</strong> {action?.effort || timeToResolution}</p><p><strong>Confidence:</strong> {match?.confidence ?? action?.confidence ?? dailyBriefing.confidence}%</p></article>;
       })}</div>
