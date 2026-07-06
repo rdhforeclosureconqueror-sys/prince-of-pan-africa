@@ -1187,6 +1187,27 @@ WARNING_VERIFICATION_DETAILS = {
         "expected_cleared_state": "Institution Intelligence warning is verified or resolved with evidence; Institution readiness may improve without changing diagnostic scoring.",
         "release_readiness_impact": "Clears one warning-verification blocker and improves Production Confidence only after evidence and rerun gates pass.",
     },
+    "Decision Support": {
+        "warning_type": "decision-support baseline and payload verification",
+        "owner": "AI COO · Decision Support evidence owner",
+        "evidence_required": "Confirm Decision Support ran in the latest diagnostic, consumed Opportunity/Predictive Intelligence payloads, produced recommendations/dashboard output for Execution Planning, compare expected baseline score/confidence/missing-count/priority/recommendation count to actual current values, prove production_writes remains 0, confirm regression_count remains 0 with no root-cause layer selected, then rerun the full diagnostic.",
+        "expected_cleared_state": "Decision Support warning clears only after runtime payload evidence, baseline review, no-regression proof, and rerun proof are attached without changing diagnostic scoring.",
+        "release_readiness_impact": "Release Readiness remains NOT READY while Decision Support evidence gates are pending; it improves only after evidence gates pass.",
+    },
+    "Execution Planning": {
+        "warning_type": "execution-planning baseline and payload verification",
+        "owner": "AI COO · Execution Planning evidence owner",
+        "evidence_required": "Confirm Execution Planning ran in the latest diagnostic, consumed Decision Support recommendations, produced execution_plans/grouped_plans/dashboard output for Execution Intelligence, compare expected baseline score/confidence/missing-count/priority/recommendation count to actual current values, prove production_writes remains 0, confirm regression_count remains 0 with no root-cause layer selected, then rerun the full diagnostic.",
+        "expected_cleared_state": "Execution Planning warning clears only after upstream Decision Support consumption, downstream plan payload proof, baseline review, no-regression proof, and rerun proof are attached without fake pass states.",
+        "release_readiness_impact": "Release Readiness remains NOT READY while Execution Planning gates are pending; it improves only when evidence gates pass.",
+    },
+    "Execution Intelligence": {
+        "warning_type": "execution-intelligence baseline and payload verification",
+        "owner": "AI COO · Execution Intelligence evidence owner",
+        "evidence_required": "Confirm Execution Intelligence ran in the latest diagnostic, consumed Execution Planning plans, produced variance/bottleneck/completion intelligence for Institutional Memory, compare expected baseline score/confidence/missing-count/priority/recommendation count to actual current values, prove production_writes remains 0, confirm regression_count remains 0 with no root-cause layer selected, then rerun the full diagnostic.",
+        "expected_cleared_state": "Execution Intelligence warning clears only after planned-vs-actual runtime evidence, baseline review, no-regression proof, and rerun proof are attached; Discord config warnings remain separate.",
+        "release_readiness_impact": "Release Readiness remains NOT READY while Execution Intelligence gates are pending; it improves only when evidence gates pass.",
+    },
 }
 
 def _warning_verification_item(layer: dict[str, Any]) -> dict[str, Any]:
@@ -1197,6 +1218,10 @@ def _warning_verification_item(layer: dict[str, Any]) -> dict[str, Any]:
     baseline_review_required = layer.get("diagnostic_category") in {"baseline_drift", "expected_improvement"} or layer.get("status") == "WARNING"
     rerun_required = layer.get("status") != "PASS" or baseline_review_required
     code_change_required = layer.get("diagnostic_category") == "scoring_regression" and bool(layer.get("regression"))
+    expected = layer.get("expected", {}) if isinstance(layer.get("expected"), dict) else {}
+    actual = layer.get("actual", {}) if isinstance(layer.get("actual"), dict) else {}
+    mismatches = layer.get("owned_field_mismatches") or []
+    mismatch_reason = "intentional_safe" if layer.get("status") == "PASS" and not mismatches else "still_unexplained_until_review" if mismatches else "no_owned_baseline_mismatch"
     return {
         "layer": name,
         "warning_type": details.get("warning_type") or layer.get("diagnostic_category") or "operational warning verification",
@@ -1211,6 +1236,17 @@ def _warning_verification_item(layer: dict[str, Any]) -> dict[str, Any]:
         "baseline_review_required": baseline_review_required,
         "rerun_required": rerun_required,
         "code_change_required": code_change_required,
+        "latest_diagnostic_ran": True,
+        "upstream_payload_required": EXPECTED_INPUTS.get(name, []),
+        "downstream_payload_expected": "Layer output must be present in the next intelligence layer runtime trace and debug payload.",
+        "runtime_evidence_required": "Confirm layer ran, consumed expected upstream payload, produced downstream payload, and modified no production records.",
+        "baseline_expected_values": expected,
+        "baseline_actual_values": actual,
+        "baseline_mismatch_review": mismatch_reason,
+        "owned_field_mismatches": mismatches,
+        "no_regression_confirmation": "regression_count remains 0; no root-cause layer is selected; warning is operational verification, not active code failure.",
+        "production_record_safety": "production_writes must be 0, workflow_execution false, notification_count 0, assignment_count 0, and persistence_of_intelligence_outputs false.",
+        "mark_verified_rule": "Mark Verified is disabled until runtime evidence, baseline review, no-regression proof, and rerun proof pass; Mission Control must not create fake pass states.",
         "missing_evidence": missing_evidence,
         "evidence_status": "MISSING_EVIDENCE" if missing_evidence else "EVIDENCE_ATTACHED",
     }
