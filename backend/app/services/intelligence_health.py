@@ -1156,6 +1156,95 @@ def ecosystem_intelligence(layers: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 
+
+WARNING_VERIFICATION_ACTIONS = [
+    "Review runtime evidence",
+    "Compare baseline",
+    "Confirm no regression",
+    "Rerun diagnostic",
+    "Mark warning verified only if evidence passes",
+]
+
+WARNING_VERIFICATION_DETAILS = {
+    "Member Intelligence": {
+        "warning_type": "member-baseline evidence verification",
+        "owner": "Member Intelligence owner · runtime evidence and baseline review",
+        "evidence_required": "Fixture member intelligence output, expected baseline score/confidence/missing-count comparison, runtime propagation evidence, and a clean rerun showing no regression.",
+        "expected_cleared_state": "Member Intelligence returns PASS or a documented verified warning with baseline evidence attached; release readiness warning gate can move toward PASS.",
+        "release_readiness_impact": "Clears one warning-verification blocker and improves Release Readiness only after evidence passes.",
+    },
+    "Society Intelligence": {
+        "warning_type": "society-baseline evidence verification",
+        "owner": "Society Intelligence owner · society runtime and baseline review",
+        "evidence_required": "Fixture society intelligence output, baseline score/confidence/recommendation comparison, runtime society propagation evidence, and a clean rerun showing no regression.",
+        "expected_cleared_state": "Society Intelligence warning is verified against runtime evidence and baseline comparison; no downstream regression is selected.",
+        "release_readiness_impact": "Clears one warning-verification blocker and raises release confidence after the baseline review gate passes.",
+    },
+    "Institution Intelligence": {
+        "warning_type": "institution-baseline evidence verification",
+        "owner": "Institution Intelligence owner · institution model and baseline review",
+        "evidence_required": "Fixture institution intelligence output, institution baseline score/confidence/role-gap comparison, runtime institution propagation evidence, and a clean rerun showing no regression.",
+        "expected_cleared_state": "Institution Intelligence warning is verified or resolved with evidence; Institution readiness may improve without changing diagnostic scoring.",
+        "release_readiness_impact": "Clears one warning-verification blocker and improves Production Confidence only after evidence and rerun gates pass.",
+    },
+}
+
+def _warning_verification_item(layer: dict[str, Any]) -> dict[str, Any]:
+    name = layer.get("layer") or "Unassigned warning"
+    details = WARNING_VERIFICATION_DETAILS.get(name, {})
+    evidence = details.get("evidence_required") or "Runtime diagnostic evidence, expected-vs-actual baseline comparison, no-regression confirmation, and a clean rerun are required before this warning can be marked verified."
+    missing_evidence = not bool(layer.get("supporting_evidence"))
+    baseline_review_required = layer.get("diagnostic_category") in {"baseline_drift", "expected_improvement"} or layer.get("status") == "WARNING"
+    rerun_required = layer.get("status") != "PASS" or baseline_review_required
+    code_change_required = layer.get("diagnostic_category") == "scoring_regression" and bool(layer.get("regression"))
+    return {
+        "layer": name,
+        "warning_type": details.get("warning_type") or layer.get("diagnostic_category") or "operational warning verification",
+        "current_status": layer.get("display_status") or layer.get("status") or "WARNING",
+        "why_it_is_still_a_warning": layer.get("plain_language_reason") or layer.get("explanation") or "Warning evidence is incomplete; Mission Control will not treat it as release-ready until verification passes.",
+        "evidence_required_to_clear": evidence,
+        "verification_action": list(WARNING_VERIFICATION_ACTIONS),
+        "next_action": "Review runtime evidence → Compare baseline → Confirm no regression → Rerun diagnostic → Mark warning verified only if evidence passes",
+        "owner": details.get("owner") or layer.get("owner") or OWNER_BY_LAYER.get(name) or "Platform intelligence owner · evidence review",
+        "expected_cleared_state": details.get("expected_cleared_state") or f"{name} warning is verified with evidence and is no longer blocking release readiness.",
+        "release_readiness_impact": details.get("release_readiness_impact") or "Release Readiness remains below ready until this warning gate clears.",
+        "baseline_review_required": baseline_review_required,
+        "rerun_required": rerun_required,
+        "code_change_required": code_change_required,
+        "missing_evidence": missing_evidence,
+        "evidence_status": "MISSING_EVIDENCE" if missing_evidence else "EVIDENCE_ATTACHED",
+    }
+
+def build_warning_verification_center(run: dict[str, Any]) -> dict[str, Any]:
+    warnings = [layer for layer in run.get("layers", []) if layer.get("status") == "WARNING"]
+    items = [_warning_verification_item(layer) for layer in warnings]
+    gates_clear = bool(items) and all(not item["missing_evidence"] and not item["baseline_review_required"] and not item["rerun_required"] for item in items)
+    return {
+        "summary": f"{len(items)} operational warnings require verification before release readiness approval.",
+        "items": items,
+        "specific_actions": list(WARNING_VERIFICATION_ACTIONS),
+        "gates_clear": gates_clear,
+        "readiness_effect": "Release readiness remains NOT READY until every warning has owner, evidence, baseline comparison, no-regression confirmation, and rerun proof.",
+        "missing_evidence_count": len([item for item in items if item["missing_evidence"]]),
+    }
+
+def build_release_readiness_checklist(run: dict[str, Any]) -> list[dict[str, Any]]:
+    warnings = run.get("warning_verification_center", {}).get("items", [])
+    discord_warnings = run.get("discord_configuration_warnings", [])
+    runtime_verified = (run.get("runtime_propagation") or {}).get("status") == "VERIFIED"
+    public_report_ready = bool(run.get("report_token") or run.get("public_report_token"))
+    read_only = run.get("production_writes") == 0 and not run.get("workflow_execution")
+    return [
+        {"gate": "Regression Gate", "status": "PASS" if int(run.get("regression_count") or 0) == 0 else "FAIL", "evidence": "regression_count is zero and no root-cause layer is selected."},
+        {"gate": "Runtime Evidence Gate", "status": "PASS" if runtime_verified else "PENDING", "evidence": "Runtime propagation evidence must verify required fixture objects and layers."},
+        {"gate": "Warning Verification Gate", "status": "PASS" if warnings and all(not item.get("missing_evidence") for item in warnings) else "PENDING", "evidence": "Each warning must have owner, evidence requirement, baseline comparison, no-regression confirmation, rerun proof, and next action."},
+        {"gate": "Baseline Review Gate", "status": "PASS" if warnings and all(not item.get("baseline_review_required") for item in warnings) else "PENDING", "evidence": "Baselines are not changed unless evidence proves intentional obsolescence."},
+        {"gate": "Public Report Gate", "status": "PASS" if public_report_ready else "PENDING", "evidence": "Public diagnostic report must be generated and verified separately."},
+        {"gate": "Read-only Safety Gate", "status": "PASS" if read_only else "FAIL", "evidence": "Dashboard diagnostic remains read-only with zero production writes and no workflow execution."},
+        {"gate": "Deployment Evidence Gate", "status": "PASS" if runtime_verified and read_only else "PENDING", "evidence": "Deployment evidence requires verified runtime propagation and read-only safety."},
+        {"gate": "Discord Config Gate", "status": "PASS" if not discord_warnings else "PENDING", "evidence": "Discord webhook/config health is tracked as operational integration health, separate from SimbaBrain intelligence health."},
+    ]
+
 def _normalize_recommendation(text: str | None) -> str:
     cleaned = re.sub(r"\s+", " ", str(text or "").strip().lower())
     cleaned = cleaned.rstrip(".")
@@ -1287,7 +1376,7 @@ def build_ai_forecast_scenarios(run: dict[str, Any], sprint_plan: dict[str, Any]
     risk_reduction = _safe_percent_from_text(sprint_plan.get("risk_reduction_estimate")) or 0
     unresolved = [l for l in run.get("layers", []) if l.get("status") != "PASS"]
     if projected is None or unresolved:
-        sprint_health = "Completion health is not measured yet."
+        sprint_health = f"Health projection pending: rerun {len(unresolved)} unresolved diagnostics before calculating a completion score."
     else:
         if risk_reduction > 0:
             projected = max(current, projected)
@@ -1482,6 +1571,8 @@ def run_full_intelligence_diagnostic(db: Session | None = None) -> dict[str, Any
     run["ai_chief_operating_officer"] = ai_chief_operating_officer(run, run["ai_operations_advisor"])
     run["command_center"] = {**build_executive_metrics(run), "todays_recommendation": run["ai_operations_advisor"][0]["suggested_fix"] if run["ai_operations_advisor"] else "No administrator action required."}
     run["discord_configuration_warnings"] = discord_configuration_warnings()
+    run["warning_verification_center"] = build_warning_verification_center(run)
+    run["release_readiness_checklist"] = build_release_readiness_checklist(run)
     run["repair_briefs"] = build_repair_briefs(layers, run["discord_configuration_warnings"])
     repair_by_layer = {brief.get("layer_name"): brief for brief in run["repair_briefs"]}
     for layer in layers:
