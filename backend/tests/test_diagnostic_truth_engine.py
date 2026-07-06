@@ -42,6 +42,48 @@ def test_predictive_priority_matches_advisory_baseline_when_readiness_is_high():
     assert comparison["owned_field_mismatches"] == []
 
 
+def test_decision_support_extract_prefers_diagnostic_contract_fields():
+    output = {
+        "confidence": "developing",
+        "diagnostic": {
+            "score": 74,
+            "confidence": "substantial",
+            "missing_count": 4,
+            "priority": "medium",
+            "recommendation_count": 12,
+        },
+        "overall_priority": {"label": "high"},
+        "recommendations": [
+            {"scores": {"overall_priority": {"score": 100}}, "missing_evidence": ["fallback-only"]}
+        ],
+    }
+
+    extracted = _extract("Decision Support", output)
+
+    assert extracted == {
+        "score": 74,
+        "confidence": "substantial",
+        "priority": "medium",
+        "recommendations": 12,
+        "missing_count": 4,
+    }
+
+
+def test_decision_support_extract_accepts_legacy_diagnostic_recommendations_alias():
+    extracted = _extract("Decision Support", {
+        "diagnostic": {
+            "score": 74,
+            "confidence": "substantial",
+            "missing_count": 4,
+            "priority": "medium",
+            "recommendations": 12,
+        },
+        "recommendations": [],
+    })
+
+    assert extracted["recommendations"] == 12
+
+
 def test_first_point_of_failure_uses_dependency_graph_rule():
     layers = [
         {"layer": "Member Intelligence", "status": "PASS", "regression": None},
