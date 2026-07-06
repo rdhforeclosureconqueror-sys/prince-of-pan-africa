@@ -140,6 +140,7 @@ def _diagnostic_aggregate(decisions: list[dict[str, Any]]) -> dict[str, Any]:
         "priority": "high" if score >= 75 else "medium" if score >= 50 else "low",
         "recommendation_count": len(decisions),
         "score_source": "average_all_recommendation_overall_priority_scores",
+        "score_inputs": scores,
     }
 
 def generate_decision_support(db: Session, *, society_id: int | None = None, include_debug: bool = False) -> dict[str, Any]:
