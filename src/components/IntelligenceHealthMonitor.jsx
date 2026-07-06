@@ -515,6 +515,53 @@ export default function IntelligenceHealthMonitor() {
   const highestOpportunity = initiatives[0]?.why_it_matters || priorityQueue[0]?.impact || "Convert diagnostics into leadership-ready initiative execution.";
   const expectedHealthAfterCompletion = executiveDiagnosticCopy(sprint.expected_health_after_sprint_completion || sprint.expected_health_after_completion || forecastScenarios[1]?.projected_health_score, hasDiagnosticResult ? "Improvement will be calculated after verification." : "Health projection not measured until a diagnostic run exists.");
   const executiveTimeline = (timeline.length ? timeline : (hasActiveRegression ? ["Diagnostic Started", "Opportunity Regression Detected", "Root Cause Identified", "Recommendation Generated", "Mission Status Updated", "Executive Report Published"] : ["Diagnostic Started", "No Active Regression Confirmed", "Warnings Identified", "Release Readiness Review Queued", "Mission Status Updated", "Executive Report Published"]).map((label, index) => ({ time: `09:${String(26 + index).padStart(2, "0")}`, label }))).map((item, index) => ({ time: item.time || item.timestamp || `09:${String(26 + index).padStart(2, "0")}`, label: item.label || item.event || item.title || item.status || `Mission event ${index + 1}` }));
+
+  const executiveOperationMetricGains = {
+    platformHealth: Math.min(8, warningCount * 1 + regressionCount * 3 + failureCount * 5 + (browserVerified ? 0 : 2)),
+    releaseReadiness: Math.min(18, warningCount * 4 + regressionCount * 8 + failureCount * 10 + (baselineVerified ? 0 : 3) + (deploymentEvidenceVerified ? 0 : 3)),
+    productionConfidence: Math.min(12, warningCount * 2 + regressionCount * 5 + failureCount * 8 + (browserVerified ? 0 : 3) + (deploymentEvidenceVerified ? 0 : 2)),
+  };
+  const projectedPlatformHealth = clampPercent((numericHealthScore ?? 0) + executiveOperationMetricGains.platformHealth);
+  const projectedReleaseReadiness = clampPercent(releaseReadiness + executiveOperationMetricGains.releaseReadiness);
+  const projectedProductionConfidence = clampPercent(productionConfidence + executiveOperationMetricGains.productionConfidence);
+  const projectedExecutiveRisk = deriveExecutiveRisk({ failureCount: 0, regressionCount: 0, warningCount: 0, releaseReadiness: projectedReleaseReadiness, productionConfidence: projectedProductionConfidence });
+  const projectedMissionStatus = deriveMissionStatus({ executiveRisk: projectedExecutiveRisk, releaseReadiness: projectedReleaseReadiness, productionConfidence: projectedProductionConfidence });
+  const executiveObjectives = [
+    { id: "release-readiness-objective", text: `Raise Release Readiness from ${releaseReadiness}% to ${Math.max(releaseReadiness, projectedReleaseReadiness)}%`, completed: releaseReadiness >= 95 },
+    { id: "warning-objective", text: warningCount ? `Remove ${warningCount} operational warning${warningCount === 1 ? "" : "s"}` : "Maintain zero operational warnings", completed: warningCount === 0 },
+    { id: "platform-health-objective", text: `Maintain Platform Health above ${Math.max(90, Math.min(95, numericHealthScore ?? 90))}%`, completed: (numericHealthScore ?? 0) >= 90 },
+    { id: "production-confidence-objective", text: `Preserve Production Confidence above ${productionConfidence >= 95 ? 95 : projectedProductionConfidence}%`, completed: productionConfidence >= 95 },
+  ];
+  const executiveWorkQueue = priorityQueue.slice(0, Math.max(3, Math.min(5, priorityQueue.length || 3))).map((action, index) => ({
+    ...action,
+    priorityLabel: `Priority ${index + 1}`,
+    businessValue: action.impact || (index === 0 ? "Unlocks release approval and executive confidence." : "Reduces operational ambiguity before deployment."),
+    estimatedTime: action.effort || ["15 minutes", "30 minutes", "45 minutes"][index] || timeToResolution,
+    dependencies: index === 0 ? (hasActiveRegression ? operationalLayerName(rootCauseLayer) : "Decision Support") : (priorityQueue[index - 1]?.layers || "Prior queue item"),
+    expectedMetricImprovement: `Platform Health +${Math.max(1, Math.ceil(executiveOperationMetricGains.platformHealth / Math.max(1, priorityQueue.length || 1)))}%; Release Readiness +${Math.max(1, Math.ceil(executiveOperationMetricGains.releaseReadiness / Math.max(1, priorityQueue.length || 1)))}%; Production Confidence +${Math.max(1, Math.ceil(executiveOperationMetricGains.productionConfidence / Math.max(1, priorityQueue.length || 1)))}%`,
+    responsibleLayer: action.layers || (hasActiveRegression ? operationalLayerName(rootCauseLayer) : "Execution Intelligence"),
+  }));
+  const completedExecutiveObjectives = executiveObjectives.filter((objective) => objective.completed).length;
+  const inProgressExecutiveObjectives = executiveObjectives.length && completedExecutiveObjectives < executiveObjectives.length ? 1 : 0;
+  const blockedExecutiveObjectives = executiveObjectives.filter((objective) => !objective.completed && (failureCount || regressionCount)).length;
+  const remainingExecutiveObjectives = Math.max(0, executiveObjectives.length - completedExecutiveObjectives - inProgressExecutiveObjectives);
+  const executiveProgressPercent = Math.round((completedExecutiveObjectives / Math.max(1, executiveObjectives.length)) * 100);
+  const executiveProgressBar = `${"█".repeat(Math.round(executiveProgressPercent / 10))}${"░".repeat(10 - Math.round(executiveProgressPercent / 10))}`;
+  const deploymentGates = [
+    { label: "Regression Gate", status: regressionCount === 0 ? "PASS" : `${regressionCount} regression${regressionCount === 1 ? "" : "s"}` },
+    { label: "Verification Gate", status: diagnosticsPassed ? "PASS" : "NEEDS VERIFICATION" },
+    { label: "Baseline Gate", status: baselineVerified ? "PASS" : "NEEDS BASELINE" },
+    { label: "Warning Gate", status: warningCount === 0 ? "PASS" : `${warningCount} remaining` },
+    { label: "Evidence Gate", status: deploymentEvidenceVerified || browserVerified ? "PASS" : "NEEDS EVIDENCE" },
+  ];
+  const releaseApproved = deploymentGates.every((gate) => gate.status === "PASS") && releaseReadiness >= 95 && productionConfidence >= 95;
+  const releaseApproval = releaseApproved ? "APPROVED" : "NOT READY";
+  const executiveOperationsNarrative = `${failureCount || regressionCount ? "The platform requires executive attention before release approval." : "The platform is operationally healthy."} ${regressionCount ? `${regressionCount} regression${regressionCount === 1 ? " is" : "s are"} present.` : "No regressions are present."} ${warningCount ? `Release approval is currently blocked by ${warningCount} verification warning${warningCount === 1 ? "" : "s"}.` : "No verification warnings are blocking the queue."} Completing the executive work queue is expected to raise Release Readiness from ${releaseReadiness}% to ${projectedReleaseReadiness}% while reducing Executive Risk from ${executiveRisk} to ${projectedExecutiveRisk}. ${hasActiveRegression ? "Software repair may be required for the selected regression path." : "No software repairs are currently recommended."}`;
+  const executiveOperationsTimeline = ["Diagnostic", "Verification", "Evidence", "Executive Review", "Release Approval", "Deployment"].map((label, index) => {
+    const historical = executiveTimeline[index] || {};
+    return { time: historical.time || `09:${String(26 + index).padStart(2, "0")}`, label, historicalLabel: historical.label || "Awaiting historical event" };
+  });
+
   const ecosystemCommandSystems = asArray(ecosystemIntelligence.subsystems);
   const executiveInitiatives = hasActiveRegression && initiatives.length ? initiatives : priorityQueue.slice(0, 3).map((action, index) => ({
     id: action.id,
@@ -628,6 +675,18 @@ export default function IntelligenceHealthMonitor() {
       <h3>Automatic Executive Summary</h3>
       <article className="stat-card wide-card ai-coo-recommendation"><p>{dailyBriefing.cooSummary}</p></article>
 
+      <h3>Executive Operations</h3>
+      <article className="stat-card wide-card ai-coo-recommendation" aria-label="AI COO Narrative"><h4>AI COO Narrative</h4><p>{executiveOperationsNarrative}</p></article>
+      <div className="dashboard-grid executive-operations-grid">
+        <article className="stat-card"><h4>Today's Objectives</h4><ul>{executiveObjectives.map((objective) => <li key={objective.id}>{objective.completed ? "✅" : "□"} {objective.text}</li>)}</ul></article>
+        <article className="stat-card"><h4>Executive Progress Tracker</h4><pre aria-label="Executive progress bar">{executiveProgressBar} {executiveProgressPercent}%</pre><p><strong>Completed Today:</strong> {completedExecutiveObjectives}</p><p><strong>In Progress:</strong> {inProgressExecutiveObjectives}</p><p><strong>Remaining:</strong> {remainingExecutiveObjectives}</p><p><strong>Blocked:</strong> {blockedExecutiveObjectives}</p><p>{completedExecutiveObjectives} of {executiveObjectives.length} executive objectives completed</p></article>
+      </div>
+      <article className="stat-card wide-card" aria-label="Executive Work Queue"><h4>Executive Work Queue</h4><table className="admin-table"><thead><tr><th>Priority</th><th>Work Item</th><th>Business Value</th><th>Estimated Time</th><th>Dependencies</th><th>Expected Metric Improvement</th><th>Responsible Intelligence Layer</th></tr></thead><tbody>{executiveWorkQueue.map((item) => <tr key={item.id}><td><strong>{item.priorityLabel}</strong></td><td>{item.title}</td><td>{item.businessValue}</td><td>{item.estimatedTime}</td><td>{item.dependencies}</td><td>{item.expectedMetricImprovement}</td><td>{item.responsibleLayer}</td></tr>)}</tbody></table></article>
+      <div className="dashboard-grid executive-operations-grid">
+        <article className="stat-card"><h4>Success Projection</h4><p><strong>Current:</strong> Platform Health {healthScore}%; Release Readiness {releaseReadiness}%; Production Confidence {formatProductionConfidence(productionConfidence)}; Executive Risk {executiveRisk}; Mission Status {missionStatus}</p><p><strong>Projected:</strong> Platform Health {projectedPlatformHealth}%; Release Readiness {projectedReleaseReadiness}%; Production Confidence {projectedProductionConfidence}%; Executive Risk {executiveRisk} → {projectedExecutiveRisk}; Mission Status {missionStatus} → {projectedMissionStatus}</p></article>
+        <article className="stat-card"><h4>Deployment Gate</h4>{deploymentGates.map((gate) => <p key={gate.label}><strong>{gate.label}:</strong> {gate.status}</p>)}<h4>Overall</h4><p><strong>Release Approval:</strong> {releaseApproval}</p></article>
+      </div>
+
       <h3>Today's Leadership Agenda</h3>
       <div className="dashboard-grid daily-agenda-grid">{dailyAgenda.map((item, index) => <article className="stat-card" key={item.title}><h4>{index + 1}. {item.title}</h4><p><strong>Estimated Time:</strong> {item.time}</p><p><strong>Priority:</strong> {item.priority}</p><button type="button">Start Agenda Item</button></article>)}</div>
 
@@ -656,7 +715,7 @@ export default function IntelligenceHealthMonitor() {
       <div className="action-strip executive-command-strip">{executiveCommands.map((command) => <button key={command} type="button" onClick={command === "Run Full Diagnostic" ? run : command === "Generate Executive Report" ? generateReport : undefined} disabled={actionDisabled && ["Run Full Diagnostic", "Generate Executive Report"].includes(command)}>{command}</button>)}</div>
 
       <h3>Executive Timeline</h3>
-      <article className="stat-card wide-card executive-timeline">{executiveTimeline.slice(0, 8).map((event) => <div className="timeline-row" key={`${event.time}-${event.label}`}><time>{event.time}</time><span>{event.label}</span></div>)}</article>
+      <article className="stat-card wide-card executive-timeline">{executiveOperationsTimeline.map((event) => <div className="timeline-row" key={`${event.time}-${event.label}`}><time>{event.time}</time><span>{event.label}</span><small>Historical: {event.historicalLabel}</small></div>)}</article>
 
       <h3>Executive Alerts</h3>
       <div className="executive-alert-feed">{executiveAlerts.map((alert) => <article className="stat-card alert-card" key={alert}><strong>{alert}</strong><span>{alert === "Critical Drift" ? "Requires immediate executive attention" : "Logged in Mission Control"}</span></article>)}</div>
