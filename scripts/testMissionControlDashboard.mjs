@@ -12,6 +12,7 @@ const checks = [
   ['Mission Control health surfaces avoid placeholder health percentages', !/(45%|47%|71%|73%|75%|77%|78%|80%|90%\+|91%|92%|94%)/.test(component)],
   ['Ecosystem Command Center only renders diagnostic subsystems', /const ecosystemCommandSystems = asArray\(ecosystemIntelligence\.subsystems\);/.test(component) && !component.includes('Math.max(72, Number(healthScore)')],
   ['Mobile responsiveness covers tables and pipeline components', css.includes('@media (max-width: 700px)') && css.includes('.runtime-evidence-table') && css.includes('.mission-pipeline .pipeline-node')],
+  ['Root Cause Evidence exposes the selection trace and View Evidence navigation', component.includes('root_cause_selection_trace') && component.includes('Root Cause Evidence') && component.includes('rootCauseTraceCandidates') && component.includes('selection_boolean_or_comparison') && component.includes('selected_layer_mismatches') && component.includes('no_mismatch_explanation') && component.includes('showRootCauseEvidence') && /View Evidence[\s\S]*showRootCauseEvidence/.test(component)],
 ];
 let failed = false;
 for (const [name, pass] of checks) {
