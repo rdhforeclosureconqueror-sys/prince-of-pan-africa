@@ -659,7 +659,7 @@ def _extract(layer: str, output: dict[str, Any]) -> dict[str, Any]:
     elif layer == "Decision Support":
         recommendations = output.get("recommendations", [])
         diagnostic = output.get("diagnostic") if isinstance(output.get("diagnostic"), dict) else {}
-        recs = diagnostic.get("recommendation_count", len(recommendations))
+        recs = diagnostic.get("recommendation_count", diagnostic.get("recommendations", len(recommendations)))
         score = diagnostic.get("score")
         if score is None:
             score = round(mean([r["scores"]["overall_priority"]["score"] for r in recommendations])) if recommendations else 0
