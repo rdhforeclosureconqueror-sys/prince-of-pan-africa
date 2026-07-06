@@ -171,7 +171,20 @@ const average = (values) => {
   return Math.round(numeric.reduce((sum, value) => sum + value, 0) / numeric.length);
 };
 const formatMetric = (value, unit = "") => value === null || value === undefined || value === "" ? "—" : `${value}${unit}`;
-const formatProductionConfidence = (value) => value === null || value === undefined || value === "" ? "not measured" : `${value}%`;
+const formatProductionConfidence = (value) => value === null || value === undefined || value === "" ? "—" : `${value}%`;
+const clampPercent = (value) => Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
+const deriveExecutiveRisk = ({ failureCount, regressionCount, warningCount, releaseReadiness, productionConfidence }) => {
+  if (failureCount > 0 || releaseReadiness < 55 || productionConfidence < 60) return "Critical";
+  if (regressionCount > 0 || releaseReadiness < 75 || productionConfidence < 75) return "High";
+  if (warningCount > 0 || releaseReadiness < 90 || productionConfidence < 90) return "Medium";
+  return "Low";
+};
+const deriveMissionStatus = ({ executiveRisk, releaseReadiness, productionConfidence }) => {
+  if (executiveRisk === "Critical" || releaseReadiness < 55 || productionConfidence < 60) return "Intervention Required";
+  if (executiveRisk === "High" || releaseReadiness < 75 || productionConfidence < 75) return "Intervention Required";
+  if (executiveRisk === "Medium" || releaseReadiness < 95 || productionConfidence < 90) return "Needs Verification";
+  return "Ready for Deployment";
+};
 const formatList = (value) => asArray(value).length ? asArray(value).join(", ") : "—";
 const formatBoolean = (value) => value === true ? "true" : value === false ? "false" : "—";
 
@@ -384,11 +397,8 @@ export default function IntelligenceHealthMonitor() {
   const highestBusinessLayer = blastRadius.find((layer) => ["Decision Support", "Execution Planning", "Execution Intelligence", "Institutional Memory", "Institutional Learning"].includes(layer)) || blastRadius[blastRadius.length - 1] || "";
   const rootCauseSummary = hasActiveRegression && rootCauseLayer ? `One upstream regression is affecting ${blastRadius.length} downstream systems.` : warningCount ? `${warningCount} operational warning${warningCount === 1 ? "" : "s"} remain for verification before release readiness.` : "No active regression or downstream regression impact detected.";
   const downstreamSystemsSummary = blastRadius.length ? blastRadius.map(operationalLayerName).join(", ") : "No downstream systems affected by an active regression.";
-  const missionStatus = commandCenter.mission_status || (failureCount ? "Critical" : regressionCount || warningCount ? "At Risk" : layers.length ? "Healthy" : "At Risk");
-  const riskLevel = commandCenter.risk_level || (failureCount ? "High" : regressionCount ? "Elevated" : warningCount ? "Moderate" : "Low");
   const highestPriority = hasActiveRegression ? (commandCenter.todays_highest_priority || commandCenter.todays_recommendation || aiOperationsAdvisor[0]?.title || recommendedNextActions[0] || "Run a diagnostic and preserve current baselines until evidence is available.") : (warningCount ? "Clear remaining operational warnings" : "Verify release readiness");
   const timeToResolution = commandCenter.estimated_time_to_resolution || aiOperationsAdvisor[0]?.estimated_time || aiChiefOperatingOfficer.suggested_sprint?.estimated_completion || "1–2 hours after the highest-priority fix is selected.";
-  const cooRecommendation = executiveDiagnosticCopy(commandCenter.ai_coo_recommendation || aiChiefOperatingOfficer.recommendation, "") || `Current diagnostic indicates ${missionStatus} mission posture with ${healthScore}% overall health. ${highestPriority} should be handled first because it has the greatest leadership impact on the intelligence chain; trend review, public-report polishing, and lower-risk baseline cleanup can wait until the priority queue is resolved and verified against diagnostic ${diagnosticId}.`;
   const basePriorityQueue = (aiOperationsAdvisor.length ? aiOperationsAdvisor : recommendedNextActions.map((action, index) => ({ title: action, priority: index === 0 ? "HIGH" : "MEDIUM" }))).map((action, index) => ({
     id: action.id || `priority-action-${index}`,
     priority: action.priority || (index === 0 ? "HIGH" : "MEDIUM"),
@@ -456,6 +466,16 @@ export default function IntelligenceHealthMonitor() {
   ];
   const displayedPipelineSteps = browserVerificationStarted ? browserDrivenPipelineSteps : pipelineSteps;
   const displayedPipelineOverallStatus = displayedPipelineSteps.length ? (displayedPipelineSteps.some((step) => step.status === "FAIL") ? "Pipeline Failure" : displayedPipelineSteps.some((step) => step.status === "WARNING") ? "Pipeline Warning" : "Intelligence Pipeline Healthy") : (pipeline.overall_status || "Pipeline Warning");
+  const baselineVerified = Boolean(result?.last_successful_diagnostic || safeObject(result?.verification_source_of_truth).baseline_verified || safeObject(result?.validation_suite).baseline_verified || safeObject(result?.system_readiness_report).overall_operational_readiness === "PRODUCTION_READY");
+  const deploymentEvidenceVerified = Number(result?.production_writes || 0) === 0 && !result?.workflow_execution && (Boolean(result?.pipeline) || browserVerified || safeObject(result?.runtime_propagation).status === "VERIFIED");
+  const diagnosticsPassed = (result?.overall_status === "PASS" || displayedPipelineOverallStatus === "Intelligence Pipeline Healthy") && failureCount === 0;
+  const verifiedReruns = history.filter((run) => (run.overall_status === "PASS" || safeObject(run.pipeline).overall_status === "Intelligence Pipeline Healthy") && (run.regression_count ?? safeObject(run.regression_summary).count ?? 0) === 0).length;
+  const releaseReadiness = clampPercent(commandCenter.release_readiness ?? (numericHealthScore === null ? 0 : numericHealthScore) - regressionCount * 22 - failureCount * 30 - warningCount * 4 + (diagnosticsPassed ? 8 : 0) + (browserVerified ? 8 : 0) + (baselineVerified ? 5 : 0) + (deploymentEvidenceVerified ? 5 : 0));
+  const productionConfidence = clampPercent(commandCenter.production_confidence ?? (numericHealthScore === null ? 0 : numericHealthScore) - failureCount * 25 - regressionCount * 15 - warningCount * 2 + (diagnosticsPassed ? 5 : 0) + (browserVerified ? 10 : 0) + (deploymentEvidenceVerified ? 5 : 0) + Math.min(8, verifiedReruns * 2));
+  const executiveRisk = commandCenter.executive_risk || deriveExecutiveRisk({ failureCount, regressionCount, warningCount, releaseReadiness, productionConfidence });
+  const missionStatus = deriveMissionStatus({ executiveRisk, releaseReadiness, productionConfidence });
+  const riskLevel = executiveRisk;
+  const cooRecommendation = executiveDiagnosticCopy(commandCenter.ai_coo_recommendation || aiChiefOperatingOfficer.recommendation, "") || `Current diagnostic indicates ${missionStatus} mission posture with ${healthScore}% overall health. ${highestPriority} should be handled first because it has the greatest leadership impact on the intelligence chain; trend review, public-report polishing, and lower-risk baseline cleanup can wait until the priority queue is resolved and verified against diagnostic ${diagnosticId}.`;
   const previousRun = history.find((run) => run !== result) || history[1] || null;
   const getRunHealth = (run) => run?.overall_health_percent ?? run?.overall_health?.percent ?? null;
   const getRunWarnings = (run) => asArray(run?.warnings).length || safeObject(run?.pass_fail_summary).warnings || safeObject(run?.status_counts).warning || 0;
@@ -479,14 +499,13 @@ export default function IntelligenceHealthMonitor() {
     fastestImprovingLayer: layers.find((layer) => numberOrNull(safeObject(layer.actual).score) > numberOrNull(safeObject(layer.expected).score))?.layer || "Awaiting score movement",
   };
   const readinessScores = [
-    ["Deployment Readiness", commandCenter.deployment_readiness ?? historyStats.averageDeploymentQuality ?? healthScore],
-    ["Release Readiness", commandCenter.release_readiness ?? (numericHealthScore === null ? null : Math.max(0, numericHealthScore - warningCount * 2 - regressionCount * 5))],
+    ["Deployment Readiness", commandCenter.deployment_readiness ?? releaseReadiness],
+    ["Release Readiness", releaseReadiness],
     ["Operational Readiness", commandCenter.operational_readiness ?? (numericHealthScore === null ? null : Math.max(0, numericHealthScore - failureCount * 10))],
     ["Institutional Readiness", commandCenter.institutional_readiness ?? historyStats.averageHealth ?? healthScore],
-    ["Production Confidence", commandCenter.production_confidence ?? historyStats.averageVerificationScore ?? (browserVerified ? numericHealthScore : null)],
+    ["Production Confidence", productionConfidence],
   ];
   const actionButtons = ["Review", "Investigate", "View Evidence", "Open Layer", "Compare Previous Run", "Create Sprint Task", "Assign Owner", "Mark Resolved", "Run Diagnostic Again"];
-  const productionConfidence = commandCenter.production_confidence ?? historyStats.averageVerificationScore ?? (browserVerified ? numericHealthScore : null);
   const operationalReadiness = commandCenter.operational_readiness ?? (numericHealthScore === null ? null : Math.max(0, numericHealthScore - failureCount * 10));
   const institutionalReadiness = commandCenter.institutional_readiness ?? historyStats.averageHealth ?? healthScore;
   const currentMission = commandCenter.current_mission || "Operate the Simba ecosystem with verified intelligence, clear priorities, and safe deployment evidence.";
@@ -550,7 +569,7 @@ export default function IntelligenceHealthMonitor() {
     workOrder: priorityQueue.slice(0, 3).map((action) => action.title).join(" → ") || "Run diagnostic → review evidence → assign owner",
     expectedOutcome: executiveDiagnosticCopy(sprint.expected_health_after_sprint_completion || sprint.expected_health_after_completion, hasDiagnosticResult ? "Improvement will be calculated after verification." : "Health projection not measured until a diagnostic run exists."),
     confidence: sprint.confidence || sprint.estimated_confidence || aiOperationsAdvisor[0]?.confidence || "—",
-    cooSummary: `Good Morning. The platform completed ${(performanceSummary.total_completed_checks ?? layers.length) || 10} diagnostic checks. Production confidence is ${formatProductionConfidence(productionConfidence)}. ${failureCount ? `${failureCount} critical failures require attention.` : "No critical failures occurred."} ${String(expectedHealthAfterCompletion).includes("not measured") || String(expectedHealthAfterCompletion).includes("calculated after verification") || String(expectedHealthAfterCompletion).includes("unavailable") ? expectedHealthAfterCompletion : `If today's sprint is completed, projected platform health increases to ${expectedHealthAfterCompletion}.`} Estimated executive attention required today: ${Math.floor(executiveAttentionMinutes / 60) ? `${Math.floor(executiveAttentionMinutes / 60)} hour ` : ""}${executiveAttentionMinutes % 60} minutes.`,
+    cooSummary: `Good Morning. The platform completed ${(performanceSummary.total_completed_checks ?? layers.length) || 10} diagnostic checks. Production confidence is ${formatProductionConfidence(productionConfidence)}. ${failureCount ? `${failureCount} critical failures require attention.` : "No critical failures occurred."} ${String(expectedHealthAfterCompletion).includes("calculated after verification") || String(expectedHealthAfterCompletion).includes("unavailable") ? expectedHealthAfterCompletion : `If today's sprint is completed, projected platform health increases to ${expectedHealthAfterCompletion}.`} Estimated executive attention required today: ${Math.floor(executiveAttentionMinutes / 60) ? `${Math.floor(executiveAttentionMinutes / 60)} hour ` : ""}${executiveAttentionMinutes % 60} minutes.`,
   };
 
   return (
@@ -578,11 +597,11 @@ export default function IntelligenceHealthMonitor() {
         </article>
         <h3>Executive Focus · Mission Status</h3>
         <div className="executive-focus-grid">
-          {[ ["Overall Health", `${healthScore}%`], ["Production Confidence", formatProductionConfidence(productionConfidence)], ["Current Mission", currentMission], ["Current Sprint", currentSprint], ["Top Initiative", topInitiative], ["Highest Risk", highestRisk], ["Highest Opportunity", highestOpportunity], ["Today's Recommendation", highestPriority], ["Expected Health After Completion", expectedHealthAfterCompletion], ["Time to Completion", timeToResolution], ["Confidence", `${dailyBriefing.confidence}%`] ].map(([label, value]) => <article className="focus-tile" key={label}><span>{label}</span><strong>{value}</strong></article>)}
+          {[ ["Platform Health", `${healthScore}%`], ["Release Readiness", `${releaseReadiness}%`], ["Production Confidence", formatProductionConfidence(productionConfidence)], ["Executive Risk", executiveRisk], ["Current Mission", currentMission], ["Current Sprint", currentSprint], ["Top Initiative", topInitiative], ["Highest Risk", highestRisk], ["Highest Opportunity", highestOpportunity], ["Today's Recommendation", highestPriority], ["Expected Health After Completion", expectedHealthAfterCompletion], ["Time to Completion", timeToResolution], ["Confidence", `${dailyBriefing.confidence}%`] ].map(([label, value]) => <article className="focus-tile" key={label}><span>{label}</span><strong>{value}</strong></article>)}
         </div>
         <div className="dashboard-grid executive-brief-grid">
           <article className={`stat-card state-${missionStatus.toLowerCase().replace(/\s+/g, "-")}`}><h3>Mission Status</h3><h2>{missionStatus}</h2></article>
-          <article className="stat-card"><h3>Overall Health Score</h3><h2>{healthScore}%</h2></article>
+          <article className="stat-card"><h3>Platform Health</h3><h2>{healthScore}%</h2></article><article className="stat-card"><h3>Release Readiness</h3><h2>{releaseReadiness}%</h2></article><article className="stat-card"><h3>Production Confidence</h3><h2>{formatProductionConfidence(productionConfidence)}</h2></article>
           <article className="stat-card"><h3>Deployment Status</h3><p>{commandCenter.deployment_status || pipeline.overall_status || "Pending diagnostic"}</p></article>
           <article className="stat-card"><h3>Risk Level</h3><p>{riskLevel}</p></article>
           <article className="stat-card executive-priority"><h3>Root Cause</h3><p>{rootCauseSummary}</p><p>{hasActiveRegression && rootCauseLayer ? `${operationalLayerName(rootCauseLayer)} is the first point of failure.` : "No active regression selected."}</p></article>
@@ -590,8 +609,9 @@ export default function IntelligenceHealthMonitor() {
         </div>
         <div className="executive-kpi-grid">
           {[
-            ["Overall Health", `${healthScore}%`, healthTrend.available ? `▲ ${healthTrend.health_trend > 0 ? "+" : ""}${healthTrend.health_trend} this week` : trendCopy(healthDirection), healthDirection],
-            ["Production Confidence", formatProductionConfidence(productionConfidence), productionConfidence === null ? "Not measured" : browserVerified ? "▲ Verified" : "Latest diagnostic value", productionConfidence === null ? "stable" : browserVerified ? "improved" : "stable"],
+            ["Platform Health", `${healthScore}%`, healthTrend.available ? `▲ ${healthTrend.health_trend > 0 ? "+" : ""}${healthTrend.health_trend} this week` : trendCopy(healthDirection), healthDirection],
+            ["Release Readiness", `${releaseReadiness}%`, releaseReadiness >= 95 ? "Approved by evidence" : "Needs verification evidence", releaseReadiness >= 95 ? "improved" : "stable"],
+            ["Production Confidence", formatProductionConfidence(productionConfidence), browserVerified || deploymentEvidenceVerified ? "▲ Evidence verified" : "Diagnostic evidence only", browserVerified || deploymentEvidenceVerified ? "improved" : "stable"],
             ["Regression Risk", regressionCount ? "Elevated" : "Low", regressionCount ? "▼ Improving after priority sprint" : "▼ Improving", regressionCount ? "worse" : "improved"],
             ["Technical Debt", warningCount > 2 ? "Medium" : "Low", warningCount ? "▼ Decreasing" : "Stable", warningCount ? "improved" : "stable"],
             ["Operational Readiness", formatMetric(operationalReadiness, "%"), "▲ Improving", "improved"],
@@ -683,7 +703,7 @@ export default function IntelligenceHealthMonitor() {
 
       <h3>AI Forecast</h3>
       <div className="dashboard-grid" aria-label="AI Forecast">
-        {forecastScenarios.length ? forecastScenarios.map((scenario) => <article className="stat-card" key={scenario.scenario}><h3>{scenario.scenario}</h3><p><strong>Projected health score:</strong> {scenario.projected_health_score}</p><p><strong>Regression risk:</strong> {scenario.regression_risk}</p><p><strong>Technical debt trend:</strong> {scenario.technical_debt_trend}</p><p><strong>Confidence:</strong> {scenario.confidence}%</p><p><strong>Primary reason:</strong> {scenario.primary_reason}</p></article>) : <><article className="stat-card"><h3>If no action is taken</h3><p><strong>Projected health score:</strong> {healthScore}%</p><p><strong>Regression risk:</strong> {forecast.future_regression_likelihood || forecast.regression_likelihood || (regressionCount ? "Moderate" : "Low")}</p><p><strong>Technical debt trend:</strong> {forecast.technical_debt_trend || (warningCount || regressionCount ? "Increasing" : "Stable")}</p><p><strong>Confidence:</strong> {forecast.confidence ?? aiOperationsAdvisor[0]?.confidence ?? "—"}%</p><p><strong>Primary reason:</strong> Current warnings remain unresolved.</p></article><article className="stat-card"><h3>If completed today</h3><p><strong>Health:</strong> {sprint.expected_health_after_sprint_completion || sprint.expected_health_after_completion || (hasDiagnosticResult ? "Projection unavailable until unresolved diagnostics pass." : "Projection not measured until a diagnostic run exists.")}</p><p><strong>Regression risk:</strong> Reduced</p><p><strong>Production Confidence:</strong> {formatProductionConfidence(productionConfidence)}</p><p><strong>Deployment Readiness:</strong> Ready</p><p><strong>Estimated Time Saved:</strong> 3 hours/week</p><p><strong>Confidence:</strong> {sprint.confidence || sprint.estimated_confidence || "—"}%</p><p><strong>Primary reason:</strong> Highest-ROI sprint tasks are completed and re-verified.</p></article></>}
+        {forecastScenarios.length ? forecastScenarios.map((scenario) => { const projectedReadiness = clampPercent(scenario.projected_release_readiness ?? releaseReadiness + (String(scenario.scenario).toLowerCase().includes("completed") ? 10 : -Math.max(0, warningCount * 2 + regressionCount * 8))); return <article className="stat-card" key={scenario.scenario}><h3>{scenario.scenario}</h3><p><strong>Projected health score:</strong> {scenario.projected_health_score}</p><p><strong>Projected release readiness:</strong> {projectedReadiness}%</p><p><strong>Regression risk:</strong> {scenario.regression_risk}</p><p><strong>Technical debt trend:</strong> {scenario.technical_debt_trend}</p><p><strong>Confidence:</strong> {scenario.confidence}%</p><p><strong>Primary reason:</strong> {scenario.primary_reason}</p></article>; }) : <><article className="stat-card"><h3>If no action is taken</h3><p><strong>Projected health score:</strong> {healthScore}%</p><p><strong>Projected release readiness:</strong> {clampPercent(releaseReadiness - warningCount * 2 - regressionCount * 8)}%</p><p><strong>Regression risk:</strong> {forecast.future_regression_likelihood || forecast.regression_likelihood || (regressionCount ? "Moderate" : "Low")}</p><p><strong>Technical debt trend:</strong> {forecast.technical_debt_trend || (warningCount || regressionCount ? "Increasing" : "Stable")}</p><p><strong>Confidence:</strong> {forecast.confidence ?? aiOperationsAdvisor[0]?.confidence ?? "—"}%</p><p><strong>Primary reason:</strong> Current warnings remain unresolved.</p></article><article className="stat-card"><h3>If completed today</h3><p><strong>Projected health score:</strong> {sprint.expected_health_after_sprint_completion || sprint.expected_health_after_completion || (hasDiagnosticResult ? "Projection unavailable until unresolved diagnostics pass." : "Projection not measured until a diagnostic run exists.")}</p><p><strong>Regression risk:</strong> Reduced</p><p><strong>Projected release readiness:</strong> {clampPercent(releaseReadiness + 10)}%</p><p><strong>Production Confidence:</strong> {formatProductionConfidence(productionConfidence)}</p><p><strong>Estimated Time Saved:</strong> 3 hours/week</p><p><strong>Confidence:</strong> {sprint.confidence || sprint.estimated_confidence || "—"}%</p><p><strong>Primary reason:</strong> Highest-ROI sprint tasks are completed and re-verified.</p></article></>}
       </div>
 
       <h3>Ecosystem Command Center</h3>

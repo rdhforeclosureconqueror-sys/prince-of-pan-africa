@@ -1377,6 +1377,48 @@ def executive_summary(layers: list[dict[str, Any]], run: dict[str, Any] | None =
 def recommended_next_actions(layers: list[dict[str, Any]]) -> list[str]:
     return list(ADMIN_RECOMMENDED_ACTIONS)
 
+
+def _clamp_percent(value: float | int) -> int:
+    return max(0, min(100, round(float(value or 0))))
+
+
+def build_executive_metrics(run: dict[str, Any]) -> dict[str, Any]:
+    health = float(run.get("overall_health_percent") or 0)
+    failures = len(run.get("critical_failures") or [])
+    regressions = int(run.get("regression_count") or 0)
+    warnings = len(run.get("warnings") or [])
+    pipeline_status = (run.get("pipeline") or {}).get("overall_status") or run.get("overall_status")
+    diagnostics_passed = run.get("overall_status") == "PASS" and failures == 0
+    verification_status = 1 if pipeline_status == "Intelligence Pipeline Healthy" else 0
+    baseline_verified = bool(run.get("last_successful_diagnostic") or (run.get("verification_source_of_truth") or {}).get("baseline_verified"))
+    deployment_evidence = bool(run.get("production_writes") == 0 and not run.get("workflow_execution") and (run.get("runtime_propagation") or {}).get("status") == "VERIFIED")
+    release_readiness = _clamp_percent(health - regressions * 22 - failures * 30 - warnings * 4 + (8 if diagnostics_passed else 0) + verification_status * 8 + (5 if baseline_verified else 0) + (5 if deployment_evidence else 0))
+    successful_history = len([item for item in _DIAGNOSTIC_HISTORY[-10:] if item.get("overall_status") == "PASS" and int(item.get("regression_count") or 0) == 0])
+    production_confidence = _clamp_percent(health - failures * 25 - regressions * 15 - warnings * 2 + (5 if diagnostics_passed else 0) + verification_status * 10 + (5 if deployment_evidence else 0) + min(8, successful_history * 2))
+    if failures or release_readiness < 55 or production_confidence < 60:
+        executive_risk = "Critical"
+    elif regressions or release_readiness < 75 or production_confidence < 75:
+        executive_risk = "High"
+    elif warnings or release_readiness < 90 or production_confidence < 90:
+        executive_risk = "Medium"
+    else:
+        executive_risk = "Low"
+    if executive_risk in {"Critical", "High"}:
+        mission_status = "Intervention Required"
+    elif executive_risk == "Medium" or release_readiness < 95 or production_confidence < 90:
+        mission_status = "Needs Verification"
+    else:
+        mission_status = "Ready for Deployment"
+    return {
+        "platform_health": _clamp_percent(health),
+        "release_readiness": release_readiness,
+        "production_confidence": production_confidence,
+        "executive_risk": executive_risk,
+        "risk_level": executive_risk,
+        "mission_status": mission_status,
+        "deployment_status": "Approved" if release_readiness >= 95 and executive_risk == "Low" else "Verification Required",
+    }
+
 def run_full_intelligence_diagnostic(db: Session | None = None) -> dict[str, Any]:
     _load_diagnostic_history_from_disk()
     start = time.perf_counter(); db = _isolated_session(); ids = _seed_fixture(db); writes: list[str] = []
@@ -1438,7 +1480,7 @@ def run_full_intelligence_diagnostic(db: Session | None = None) -> dict[str, Any
     run["predictive_intelligence"] = predictive_intelligence(run, _DIAGNOSTIC_HISTORY)
     run["ecosystem_intelligence"] = ecosystem_intelligence(layers)
     run["ai_chief_operating_officer"] = ai_chief_operating_officer(run, run["ai_operations_advisor"])
-    run["command_center"] = {"mission_status": "Operational" if run["overall_status"] == "PASS" and run["overall_health_percent"] >= 90 else "Needs intervention", "deployment_status": "Pending", "risk_level": run["ai_operations_advisor"][0]["priority"] if run["ai_operations_advisor"] else "LOW", "todays_recommendation": run["ai_operations_advisor"][0]["suggested_fix"] if run["ai_operations_advisor"] else "No administrator action required."}
+    run["command_center"] = {**build_executive_metrics(run), "todays_recommendation": run["ai_operations_advisor"][0]["suggested_fix"] if run["ai_operations_advisor"] else "No administrator action required."}
     run["discord_configuration_warnings"] = discord_configuration_warnings()
     run["repair_briefs"] = build_repair_briefs(layers, run["discord_configuration_warnings"])
     repair_by_layer = {brief.get("layer_name"): brief for brief in run["repair_briefs"]}
@@ -1451,7 +1493,7 @@ def run_full_intelligence_diagnostic(db: Session | None = None) -> dict[str, Any
     ]
     run["pipeline"] = build_intelligence_pipeline(run)
     run["verification_source_of_truth"] = run["pipeline"].get("verification_source_of_truth", verification_source_of_truth(run))
-    run["command_center"]["deployment_status"] = run["pipeline"].get("overall_status", "Pending")
+    run["command_center"] = {**run["command_center"], **build_executive_metrics(run)}
     run["performance_summary"] = performance_summary(run)
     run["timeline"] = intelligence_timeline(run)
     run["ai_summary"] = ai_readable_summary(run)
