@@ -152,11 +152,45 @@ def _stable_fingerprint(value: Any) -> str:
     return hashlib.sha256(json.dumps(value, sort_keys=True, default=str).encode("utf-8")).hexdigest()[:16]
 
 def _decision_model(layers: list[dict[str, Any]]) -> dict[str, Any]:
+    trace_candidates = []
+    excluded_categories = {"downstream_impacted", "blocked_by_upstream", "needs_rerun_after_upstream_fix"}
+    for name in DIAGNOSTIC_LAYER_ORDER:
+        layer = next((l for l in layers if l.get("layer") == name), {})
+        status = layer.get("status")
+        category = layer.get("diagnostic_category")
+        non_pass = status != "PASS"
+        category_allowed = category not in excluded_categories
+        passed_primary_filter = bool(non_pass and category_allowed)
+        owned_mismatches = layer.get("owned_field_mismatches") or []
+        trace_candidates.append({
+            "layer": name,
+            "status": status,
+            "display_status": layer.get("display_status"),
+            "diagnostic_category": category,
+            "regression": layer.get("regression"),
+            "owned_field_mismatches": owned_mismatches,
+            "field_mismatch_count": len(owned_mismatches),
+            "passed": passed_primary_filter,
+            "failed": not passed_primary_filter,
+            "pass_fail_boolean": "status != 'PASS' and diagnostic_category not in {'downstream_impacted', 'blocked_by_upstream', 'needs_rerun_after_upstream_fix'}",
+            "pass_fail_values": {
+                "status != 'PASS'": non_pass,
+                "diagnostic_category not excluded": category_allowed,
+                "combined_result": passed_primary_filter,
+            },
+            "why": (
+                "passed because the layer is non-PASS and is not excluded as downstream-only"
+                if passed_primary_filter
+                else f"failed because status != 'PASS' is {non_pass} and diagnostic_category not excluded is {category_allowed}"
+            ),
+        })
     impacted = [
         l for l in layers
-        if l.get("status") != "PASS" and l.get("diagnostic_category") not in {"downstream_impacted", "blocked_by_upstream", "needs_rerun_after_upstream_fix"}
+        if l.get("status") != "PASS" and l.get("diagnostic_category") not in excluded_categories
     ]
+    fallback_used = False
     if not impacted:
+        fallback_used = True
         impacted = [l for l in layers if l.get("status") != "PASS"]
     first = next((name for name in DIAGNOSTIC_LAYER_ORDER if any(l.get("layer") == name for l in impacted)), None)
     downstream = set(DIAGNOSTIC_LAYER_ORDER[DIAGNOSTIC_LAYER_ORDER.index(first)+1:]) if first in DIAGNOSTIC_LAYER_ORDER else set()
@@ -171,6 +205,27 @@ def _decision_model(layers: list[dict[str, Any]]) -> dict[str, Any]:
         "affected_layers": affected,
         "downstream_affected_layers": [name for name in affected if name != first],
         "decision_rule": "Earliest non-PASS layer in dependency order owns root cause, highest priority, sprint focus, and downstream impact until rerun proves otherwise.",
+        "root_cause_selection_trace": {
+            "candidate_layers": trace_candidates,
+            "excluded_downstream_categories": sorted(excluded_categories),
+            "primary_filter": "status != 'PASS' and diagnostic_category not in excluded_downstream_categories",
+            "fallback_filter": "status != 'PASS'",
+            "fallback_used": fallback_used,
+            "selected_layer": first,
+            "selection_boolean_or_comparison": "next(name for name in DIAGNOSTIC_LAYER_ORDER if any(layer.layer == name for layer in impacted))",
+            "selected_because": (
+                f"{first} is the earliest DIAGNOSTIC_LAYER_ORDER entry whose impacted candidate passed "
+                f"the {'fallback' if fallback_used else 'primary'} filter."
+                if first else "No impacted candidates passed either filter."
+            ),
+            "selected_layer_mismatches": (next((l.get("owned_field_mismatches") for l in layers if l.get("layer") == first), []) or []) if first else [],
+            "selected_layer_mismatch_exists": bool((next((l.get("owned_field_mismatches") for l in layers if l.get("layer") == first), []) or []) if first else []),
+            "no_mismatch_explanation": (
+                "Selection was driven by non-PASS status/regression/runtime category, not by an owned field mismatch."
+                if first and not (next((l.get("owned_field_mismatches") for l in layers if l.get("layer") == first), []) or [])
+                else None
+            ),
+        },
     }
 
 
@@ -1342,7 +1397,8 @@ def run_full_intelligence_diagnostic(db: Session | None = None) -> dict[str, Any
         validation_suite["system_readiness_report"]["real_data_readiness"] = "NOT_VERIFIED: live runtime propagation did not verify every required object and layer."
         validation_suite["system_readiness_report"]["overall_operational_readiness"] = "NOT_PRODUCTION_READY"
     runtime_evidence = _runtime_evidence_by_layer(runtime_propagation)
-    run = {"ok": True, "runtime_propagation": runtime_propagation, "runtime_evidence": runtime_evidence, "validation_suite": validation_suite, "system_readiness_report": validation_suite["system_readiness_report"], "verification_source_of_truth": {}, "diagnostic_id": f"intel-health-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}", "created_at": datetime.utcnow().isoformat(), "admin_only": True, "isolated_fixture": True, "fixture_name": FIXTURE_NAME, "fixture_version": FIXTURE_VERSION, "environment": _environment_name(), "build_commit": _build_commit(), "report_token": None, "production_writes": 0, "workflow_execution": False, "notification_count": 0, "assignment_count": 0, "persistence_of_intelligence_outputs": False, "execution_order": [l["layer"] for l in layers], "overall_health_percent": health, "overall_status": _overall_status(layers), "status_counts": status_counts, "pass_fail_summary": {"passed": status_counts["pass"], "warnings": status_counts["warning"], "failed": status_counts["fail"], "regressions": status_counts["regression"]}, "layers": layers, "regression_count": len(regressions), "warnings": [l for l in layers if l["status"] == "WARNING"], "critical_failures": failures, "last_successful_diagnostic": None, "performance": {"total_execution_time_ms": total, "memory_usage": "unavailable", "api_response_time_ms": total, "largest_payload_layer": max(layers, key=lambda l: len(str(l["debug_payload"]))) ["layer"], "slowest_layer": max(layers, key=lambda l: l["execution_time_ms"])["layer"], "fastest_layer": min(layers, key=lambda l: l["execution_time_ms"])["layer"]}, "root_cause_analysis": _root_cause(layers), "stabilization_report": build_stabilization_report(layers), "root_cause_classification": _classify_root_cause(" ".join(_root_cause(layers))), "dependency_impact": dependency_impact(layers), "executive_summary": executive_summary(layers), "recommended_next_actions": recommended_next_actions(layers), "health_trend": "stable"}
+    dependency = dependency_impact(layers)
+    run = {"ok": True, "runtime_propagation": runtime_propagation, "runtime_evidence": runtime_evidence, "validation_suite": validation_suite, "system_readiness_report": validation_suite["system_readiness_report"], "verification_source_of_truth": {}, "diagnostic_id": f"intel-health-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}", "created_at": datetime.utcnow().isoformat(), "admin_only": True, "isolated_fixture": True, "fixture_name": FIXTURE_NAME, "fixture_version": FIXTURE_VERSION, "environment": _environment_name(), "build_commit": _build_commit(), "report_token": None, "production_writes": 0, "workflow_execution": False, "notification_count": 0, "assignment_count": 0, "persistence_of_intelligence_outputs": False, "execution_order": [l["layer"] for l in layers], "overall_health_percent": health, "overall_status": _overall_status(layers), "status_counts": status_counts, "pass_fail_summary": {"passed": status_counts["pass"], "warnings": status_counts["warning"], "failed": status_counts["fail"], "regressions": status_counts["regression"]}, "layers": layers, "regression_count": len(regressions), "warnings": [l for l in layers if l["status"] == "WARNING"], "critical_failures": failures, "last_successful_diagnostic": None, "performance": {"total_execution_time_ms": total, "memory_usage": "unavailable", "api_response_time_ms": total, "largest_payload_layer": max(layers, key=lambda l: len(str(l["debug_payload"]))) ["layer"], "slowest_layer": max(layers, key=lambda l: l["execution_time_ms"])["layer"], "fastest_layer": min(layers, key=lambda l: l["execution_time_ms"])["layer"]}, "root_cause_analysis": _root_cause(layers), "root_cause_selection_trace": dependency.get("decision_model", {}).get("root_cause_selection_trace"), "stabilization_report": build_stabilization_report(layers), "root_cause_classification": _classify_root_cause(" ".join(_root_cause(layers))), "dependency_impact": dependency, "executive_summary": executive_summary(layers), "recommended_next_actions": recommended_next_actions(layers), "health_trend": "stable"}
     previous = _DIAGNOSTIC_HISTORY[-1] if _DIAGNOSTIC_HISTORY else None
     run["last_successful_diagnostic"] = previous["created_at"] if previous and previous["overall_health_percent"] >= 90 else None
     run["comparison_to_previous"] = compare_diagnostics(run, previous)

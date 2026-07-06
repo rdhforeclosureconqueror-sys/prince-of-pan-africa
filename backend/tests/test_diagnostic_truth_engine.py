@@ -95,6 +95,36 @@ def test_first_point_of_failure_uses_dependency_graph_rule():
     assert "First drift appears in Society Intelligence" in executive_summary(layers)
 
 
+def test_root_cause_selection_trace_prints_each_candidate_and_mismatch_reason():
+    layers = [
+        {"layer": "Member Intelligence", "status": "PASS", "regression": None, "owned_field_mismatches": []},
+        {"layer": "Decision Support", "status": "WARNING", "regression": None, "diagnostic_category": "baseline_drift", "display_status": "Connected with actionable drift", "owned_field_mismatches": [{"field": "recommendations", "expected": 12, "actual": 11}]},
+        {"layer": "Execution Planning", "status": "WARNING", "regression": None, "diagnostic_category": "downstream_impacted", "owned_field_mismatches": []},
+    ]
+
+    trace = _decision_model(layers)["root_cause_selection_trace"]
+
+    assert trace["selected_layer"] == "Decision Support"
+    assert trace["selection_boolean_or_comparison"] == "next(name for name in DIAGNOSTIC_LAYER_ORDER if any(layer.layer == name for layer in impacted))"
+    assert [candidate["layer"] for candidate in trace["candidate_layers"]] == [
+        "Member Intelligence",
+        "Society Intelligence",
+        "Institution Intelligence",
+        "Opportunity Intelligence",
+        "Predictive Intelligence",
+        "Decision Support",
+        "Execution Planning",
+        "Execution Intelligence",
+        "Institutional Memory",
+        "Institutional Learning",
+    ]
+    selected = next(candidate for candidate in trace["candidate_layers"] if candidate["layer"] == "Decision Support")
+    downstream = next(candidate for candidate in trace["candidate_layers"] if candidate["layer"] == "Execution Planning")
+    assert selected["pass_fail_values"]["combined_result"] is True
+    assert trace["selected_layer_mismatches"] == [{"field": "recommendations", "expected": 12, "actual": 11}]
+    assert downstream["pass_fail_values"]["diagnostic_category not excluded"] is False
+
+
 def test_downstream_warnings_are_classified_not_independent_when_no_owned_mismatch():
     layers = [
         {"layer": "Society Intelligence", "status": "WARNING", "owned_field_mismatches": [{"field": "missing_count"}], "diagnostic_resolution": {}},
