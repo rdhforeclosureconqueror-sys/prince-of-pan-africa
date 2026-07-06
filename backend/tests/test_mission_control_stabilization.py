@@ -55,3 +55,50 @@ def test_actionable_diagnostic_resolution_engine_is_exposed():
         assert text in SERVICE
     for text in ["Diagnostic Resolution Engine", "What is wrong?", "Why is it wrong?", "What fixes it?", "Who owns it?", "How do we prove it is fixed?", "Learning Memory"]:
         assert text in MONITOR
+
+
+def test_warning_verification_center_model_and_actions_are_exposed():
+    for text in [
+        "build_warning_verification_center",
+        "WARNING_VERIFICATION_ACTIONS",
+        "evidence_required_to_clear",
+        "why_it_is_still_a_warning",
+        "expected_cleared_state",
+        "release_readiness_impact",
+        "baseline_review_required",
+        "rerun_required",
+        "code_change_required",
+        "Review runtime evidence",
+        "Compare baseline",
+        "Confirm no regression",
+        "Rerun diagnostic",
+        "Mark warning verified only if evidence passes",
+    ]:
+        assert text in SERVICE
+    for text in ["Warning Verification Center", "Evidence required to clear", "Owner", "Specific verification actions", "Missing warning evidence degrades gracefully"]:
+        assert text in MONITOR
+
+
+def test_release_readiness_checklist_keeps_warning_gates_pending_until_evidence_clears():
+    for text in [
+        "build_release_readiness_checklist",
+        "Regression Gate",
+        "Runtime Evidence Gate",
+        "Warning Verification Gate",
+        "Baseline Review Gate",
+        "Public Report Gate",
+        "Read-only Safety Gate",
+        "Deployment Evidence Gate",
+        "Discord Config Gate",
+        "Release readiness remains NOT READY",
+    ]:
+        assert text in SERVICE
+    for text in ["Release Readiness Checklist", "Regression Gate", "Discord Config Gate", "Zero regressions means no root-cause layer is selected"]:
+        assert text in MONITOR
+
+
+def test_discord_config_gate_is_separate_from_simbabrain_health():
+    assert "Discord webhook/config health is tracked as operational integration health, separate from SimbaBrain intelligence health" in SERVICE
+    assert "Discord webhook/config health is separate from SimbaBrain intelligence health" in MONITOR
+    assert "discord_configuration_warnings" in SERVICE
+    assert "ecosystem_intelligence(layers)" in SERVICE
