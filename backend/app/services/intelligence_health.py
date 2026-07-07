@@ -63,6 +63,62 @@ PUBLIC_DIAGNOSTIC_BASE_URL = os.getenv("PUBLIC_DIAGNOSTIC_BASE_URL", "https://si
 FIXTURE_NAME = "intelligence-health-fixture"
 FIXTURE_VERSION = "v1"
 
+
+
+class IntelligenceDiagnosticRunError(RuntimeError):
+    """Raised when a Mission Control diagnostic stage fails with structured context."""
+
+    def __init__(self, stage: str, message: str, *, layer: str | None = None, function: str | None = None, cause: Exception | None = None):
+        super().__init__(message)
+        self.stage = stage
+        self.layer = layer
+        self.function = function
+        self.cause = cause
+
+    def to_payload(self) -> dict[str, Any]:
+        cause = self.cause
+        return {
+            "ok": False,
+            "error": {
+                "code": "intelligence_diagnostic_run_failed",
+                "message": str(self),
+                "stage": self.stage,
+                "layer": self.layer,
+                "function": self.function,
+                "exception_type": type(cause).__name__ if cause else type(self).__name__,
+                "exception_message": str(cause) if cause else str(self),
+                "read_only": True,
+            },
+            "diagnostic": {
+                "stage": self.stage,
+                "layer": self.layer,
+                "function": self.function,
+            },
+        }
+
+
+def _run_stage(stage: str, fn: Callable[[], Any], *, layer: str | None = None, function: str | None = None) -> Any:
+    try:
+        return fn()
+    except IntelligenceDiagnosticRunError:
+        raise
+    except Exception as exc:
+        logger.exception(
+            "Mission Control diagnostic failed at stage=%s layer=%s function=%s",
+            stage,
+            layer,
+            function,
+        )
+        label = layer or stage
+        raise IntelligenceDiagnosticRunError(
+            stage,
+            f"Mission Control diagnostic failed during {label}.",
+            layer=layer,
+            function=function,
+            cause=exc,
+        ) from exc
+
+
 ADMIN_RECOMMENDED_ACTIONS = [
     "Review scoring logic",
     "Review expected baselines",
@@ -1545,8 +1601,11 @@ def build_executive_metrics(run: dict[str, Any]) -> dict[str, Any]:
     }
 
 def run_full_intelligence_diagnostic(db: Session | None = None) -> dict[str, Any]:
-    _load_diagnostic_history_from_disk()
-    start = time.perf_counter(); db = _isolated_session(); ids = _seed_fixture(db); writes: list[str] = []
+    _run_stage("history_load", _load_diagnostic_history_from_disk, function="_load_diagnostic_history_from_disk")
+    start = time.perf_counter()
+    db = _run_stage("isolated_session_create", _isolated_session, function="_isolated_session")
+    ids = _run_stage("fixture_seed", lambda: _seed_fixture(db), function="_seed_fixture")
+    writes: list[str] = []
     def guard(conn, cursor, statement, parameters, context, executemany):
         if statement.lstrip().upper().startswith(("INSERT", "UPDATE", "DELETE")): writes.append(statement.split()[0].upper())
     event.listen(db.bind, "before_cursor_execute", guard)
@@ -1566,9 +1625,15 @@ def run_full_intelligence_diagnostic(db: Session | None = None) -> dict[str, Any
         ]
         layers = []
         for name, fn in calls:
-            t = time.perf_counter(); output = fn(); elapsed = (time.perf_counter() - t) * 1000; outputs[name] = output
-            layers.append(_compare(name, _extract(name, output), elapsed, output))
-        layers = apply_dependency_classification(layers)
+            t = time.perf_counter()
+            function = LAYER_REPAIR_TARGETS.get(name, {}).get("function")
+            output = _run_stage("layer_run", fn, layer=name, function=function)
+            elapsed = (time.perf_counter() - t) * 1000
+            outputs[name] = output
+            extracted = _run_stage("layer_extract", lambda name=name, output=output: _extract(name, output), layer=name, function="_extract")
+            layers.append(_run_stage("layer_compare", lambda name=name, extracted=extracted, elapsed=elapsed, output=output: _compare(name, extracted, elapsed, output), layer=name, function="_compare"))
+        layers = _run_stage("dependency_classification", lambda: apply_dependency_classification(layers), function="apply_dependency_classification")
+        runtime_propagation = _run_stage("runtime_propagation", lambda: build_runtime_propagation_report(db), function="build_runtime_propagation_report")
     finally:
         event.remove(db.bind, "before_cursor_execute", guard); db.close()
     total = round((time.perf_counter() - start) * 1000, 2)
@@ -1582,8 +1647,7 @@ def run_full_intelligence_diagnostic(db: Session | None = None) -> dict[str, Any
     failures = [l for l in layers if l["status"] == "FAIL"]
     health = max(0, round(100 - len(failures) * 18 - len(regressions) * 8 - len([l for l in layers if l["status"] == "WARNING"]) * 3))
     status_counts = _status_counts(layers)
-    validation_suite = build_validation_suite(outputs, layers)
-    runtime_propagation = build_runtime_propagation_report(db)
+    validation_suite = _run_stage("validation_suite", lambda: build_validation_suite(outputs, layers), function="build_validation_suite")
     if runtime_propagation.get("status") != "VERIFIED":
         validation_suite["system_readiness_report"]["real_data_readiness"] = "NOT_VERIFIED: live runtime propagation did not verify every required object and layer."
         validation_suite["system_readiness_report"]["overall_operational_readiness"] = "NOT_PRODUCTION_READY"
@@ -1626,8 +1690,8 @@ def run_full_intelligence_diagnostic(db: Session | None = None) -> dict[str, Any
     run["ai_summary"] = ai_readable_summary(run)
     history_entry = {k: v for k, v in run.items() if k != "layers"} | {"layers": layers}
     _DIAGNOSTIC_HISTORY.append(history_entry)
-    _persist_diagnostic_history()
-    run["trends"] = {str(limit): trend_analysis(_DIAGNOSTIC_HISTORY, limit) for limit in (10, 30, 100)}
+    _run_stage("history_persist", _persist_diagnostic_history, function="_persist_diagnostic_history")
+    run["trends"] = _run_stage("trend_analysis", lambda: {str(limit): trend_analysis(_DIAGNOSTIC_HISTORY, limit) for limit in (10, 30, 100)}, function="trend_analysis")
     return run
 
 

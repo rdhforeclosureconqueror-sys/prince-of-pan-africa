@@ -15,7 +15,13 @@ const withTimeout = (promise, message = "Diagnostic request timed out. Please tr
 
 const asArray = (value) => (Array.isArray(value) ? value : []);
 const safeObject = (value) => (value && typeof value === "object" && !Array.isArray(value) ? value : {});
-const adminErrorMessage = (fallback, err) => `${fallback}${DEBUG_ERRORS && err?.message ? ` (${err.message})` : ""}`;
+const diagnosticErrorPayload = (err) => err?.payload?.detail?.error || err?.payload?.error || null;
+const adminErrorMessage = (fallback, err) => {
+  const diagnosticError = diagnosticErrorPayload(err);
+  const message = diagnosticError?.message || err?.message;
+  const stage = diagnosticError?.stage ? ` at ${diagnosticError.stage}` : "";
+  return `${fallback}${message ? ` (${message}${stage})` : ""}`;
+};
 const normalizeHistory = (payload) => asArray(payload?.history).filter((run) => run && typeof run === "object");
 const normalizeReport = (payload) => safeObject(payload?.report || payload?.public_report || payload);
 const isNonEmptyString = (value) => typeof value === "string" && value.trim().length > 0;
@@ -240,6 +246,7 @@ export default function IntelligenceHealthMonitor() {
   const [diagnosticRunState, setDiagnosticRunState] = useState(null);
   const [history, setHistory] = useState([]);
   const [error, setError] = useState("");
+  const [diagnosticErrorDetails, setDiagnosticErrorDetails] = useState(null);
   const [historyError, setHistoryError] = useState("");
   const [publicReportError, setPublicReportError] = useState("");
   const [publicReportState, setPublicReportState] = useState(null);
@@ -290,14 +297,17 @@ export default function IntelligenceHealthMonitor() {
 
   const run = async () => {
     if (running || generatingReport) return;
-    setRunning(true); setError(""); setPublicReportError(""); setPublicReportCopyMessage("");
+    setRunning(true); setError(""); setDiagnosticErrorDetails(null); setPublicReportError(""); setPublicReportCopyMessage("");
     try {
       const res = await withTimeout(runIntelligenceHealthDiagnostic());
       if (!mountedRef.current) return;
       setDiagnosticRunState(safeObject(res));
       await loadHistory();
     } catch (err) {
-      if (mountedRef.current) setError(adminErrorMessage("Diagnostics unavailable", err));
+      if (mountedRef.current) {
+        setDiagnosticErrorDetails(err?.payload?.detail || err?.payload || { error: { message: err?.message || "Diagnostic run failed" } });
+        setError(adminErrorMessage("Diagnostic run failed", err));
+      }
     } finally {
       if (mountedRef.current) setRunning(false);
     }
@@ -1008,6 +1018,8 @@ export default function IntelligenceHealthMonitor() {
 
       <h3>Compare Previous Run</h3>
       <pre className="data-note">{JSON.stringify(healthTrend, null, 2)}</pre>
+      <h3>Diagnostic Run Error Details</h3>
+      <pre className="data-note">{JSON.stringify(diagnosticErrorDetails || { ok: true, message: "No backend diagnostic run error is currently recorded." }, null, 2)}</pre>
       {DEBUG_ERRORS && <><h3>Debug Output</h3><pre className="data-note">{JSON.stringify(layers.map(({ layer, debug_payload }) => ({ layer, debug_payload })), null, 2)}</pre><h3>Public Report Debug Output</h3><pre className="data-note">{JSON.stringify({ publicReportState, publicReportError, publicReportVerification }, null, 2)}</pre></>}
       </>}
     </section>
