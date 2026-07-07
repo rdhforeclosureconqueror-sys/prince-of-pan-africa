@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies.auth import require_permission
-from app.services.intelligence_health import diagnostic_history, generate_public_diagnostic_report, inspect_public_diagnostic_report, public_diagnostic_error, public_report_to_html, public_report_to_markdown, run_full_intelligence_diagnostic
+from app.services.intelligence_health import IntelligenceDiagnosticRunError, diagnostic_history, generate_public_diagnostic_report, inspect_public_diagnostic_report, public_diagnostic_error, public_report_to_html, public_report_to_markdown, run_full_intelligence_diagnostic
 from app.models import (
     ActivityLog,
     Audiobook,
@@ -188,7 +188,10 @@ def run_intelligence_health_diagnostic(
     _: None = Depends(require_permission("admin:read_dashboard")),
     db: Session = Depends(get_db),
 ):
-    return run_full_intelligence_diagnostic(db)
+    try:
+        return run_full_intelligence_diagnostic(db)
+    except IntelligenceDiagnosticRunError as exc:
+        raise HTTPException(status_code=500, detail=exc.to_payload()) from exc
 
 
 @legacy_router.get("/intelligence-health/history")
