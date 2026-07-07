@@ -3,10 +3,11 @@ import logging
 import subprocess
 import asyncio
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi import Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
 
 from app.database import (
     SessionLocal,
@@ -60,6 +61,11 @@ def _log_custom_api_domain_status() -> None:
             custom_domain_bases,
         )
 
+PRODUCTION_PUBLIC_ORIGINS = [
+    "https://simbawaujamaa.com",
+    "https://www.simbawaujamaa.com",
+]
+
 default_origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
@@ -68,8 +74,6 @@ default_origins = [
     "https://prince-of-pan-africa.onrender.com",
     "https://prince-of-pan-africa-frontend.onrender.com",
     "https://mufasa-knowledge-bank.onrender.com",
-    "https://simbawaujamaa.com",
-    "https://www.simbawaujamaa.com",
     "https://simbawajamaa.com",
     "https://www.simbawajamaa.com",
 ]
@@ -96,7 +100,10 @@ elif raw_cors_allowed_origins.strip():
     raw_origins = raw_cors_allowed_origins
     origins_source = "CORS_ALLOWED_ORIGINS"
 
-allowed_origins = _parse_origins(raw_origins) if raw_origins else default_origins
+allowed_origins = _parse_origins(raw_origins) if raw_origins else list(default_origins)
+for production_origin in PRODUCTION_PUBLIC_ORIGINS:
+    if production_origin not in allowed_origins:
+        allowed_origins.append(production_origin)
 
 app.add_middleware(
     CORSMiddleware,
@@ -106,6 +113,44 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+
+def _apply_cors_headers_for_origin(request: Request, response):
+    """Attach credentialed CORS headers to explicit error responses.
+
+    Starlette's CORSMiddleware handles normal responses and preflights, but
+    unhandled production exceptions can be converted to 500 responses outside
+    that middleware path. Adding the headers here prevents the browser from
+    hiding the JSON error behind a missing CORS header.
+    """
+    origin = request.headers.get("origin", "").rstrip("/")
+    if origin in allowed_origins:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Allow-Methods"] = "*"
+        response.headers["Access-Control-Allow-Headers"] = request.headers.get(
+            "access-control-request-headers", "*"
+        )
+        response.headers.add_vary_header("Origin")
+    return response
+
+
+@app.exception_handler(HTTPException)
+async def cors_http_exception_handler(request: Request, exc: HTTPException):
+    response = JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+    for header, value in getattr(exc, "headers", None) or {}.items():
+        response.headers[header] = value
+    return _apply_cors_headers_for_origin(request, response)
+
+
+@app.exception_handler(Exception)
+async def cors_unhandled_exception_handler(request: Request, exc: Exception):
+    logger.exception("Unhandled API exception path=%s method=%s", request.url.path, request.method)
+    response = JSONResponse(
+        status_code=500,
+        content={"detail": "Internal Server Error", "error": "internal_server_error"},
+    )
+    return _apply_cors_headers_for_origin(request, response)
 
 
 @app.middleware("http")
@@ -164,6 +209,7 @@ async def log_admin_request_context(request: Request, call_next):
         "/auth/me",
         "/member/overview",
         "/member/activity",
+        "/admin/intelligence-health/run",
     }
     if request.url.path in tracked_paths:
         user_id = None
